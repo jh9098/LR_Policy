@@ -1,9 +1,11 @@
 // frontend/src/pages/AdminPage.jsx
 import { useState } from 'react';
+import { API_BASE_URL } from '../config.js';
 
 const initialFormState = {
   title: '',
   date: '',
+  summary: '',
   summaryFacts: '',
   progressiveFrame: '',
   conservativeFrame: '',
@@ -11,8 +13,16 @@ const initialFormState = {
   sources: ''
 };
 
+function parseMultiline(value) {
+  return value
+    .split(/\r?\n|\r|\u2028/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function AdminPage() {
   const [formData, setFormData] = useState(initialFormState);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -23,16 +33,60 @@ function AdminPage() {
     setFormData(initialFormState);
   };
 
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
+
+    const payload = {
+      title: formData.title.trim(),
+      date: formData.date,
+      summary: formData.summary.trim(),
+      summaryFacts: parseMultiline(formData.summaryFacts),
+      progressiveFrame: parseMultiline(formData.progressiveFrame),
+      conservativeFrame: parseMultiline(formData.conservativeFrame),
+      impactToLife: parseMultiline(formData.impactToLife),
+      sources: parseMultiline(formData.sources)
+    };
+
+    try {
+      setIsSubmitting(true);
+      const response = await fetch(`${API_BASE_URL}/issues`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('서버에 정보를 저장하지 못했습니다.');
+      }
+
+      alert('등록 완료');
+      handleReset();
+    } catch (error) {
+      alert(error.message || '등록 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <section className="mx-auto max-w-3xl space-y-6">
       <header className="space-y-1">
         <h1 className="text-3xl font-bold text-slate-900">새 사건 등록</h1>
         <p className="text-sm text-slate-600">
-          아래 폼에 사건 정보를 입력하세요. 현재는 미리보기 용도로만 작동하며, 추후 백엔드 연동 시 Firestore에 저장됩니다.
+          아래 폼에 사건 정보를 입력하세요. 입력된 내용은 백엔드 API를 통해 Firestore에 저장됩니다.
         </p>
       </header>
 
-      <form className="space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <form
+        className="space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+        onSubmit={handleSubmit}
+      >
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2 text-sm font-medium text-slate-700">
             제목
@@ -43,6 +97,7 @@ function AdminPage() {
               onChange={handleChange}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
               placeholder="사건 제목을 입력하세요"
+              required
             />
           </label>
           <label className="space-y-2 text-sm font-medium text-slate-700">
@@ -53,9 +108,23 @@ function AdminPage() {
               value={formData.date}
               onChange={handleChange}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              required
             />
           </label>
         </div>
+
+        <label className="space-y-2 text-sm font-medium text-slate-700">
+          요약 (카드에 표시)
+          <textarea
+            name="summary"
+            value={formData.summary}
+            onChange={handleChange}
+            rows="3"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            placeholder="카드에 표시될 간략한 요약을 작성하세요"
+            required
+          />
+        </label>
 
         <label className="space-y-2 text-sm font-medium text-slate-700">
           확실한 사실
@@ -122,14 +191,16 @@ function AdminPage() {
             type="button"
             onClick={handleReset}
             className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+            disabled={isSubmitting}
           >
             초기화
           </button>
           <button
-            type="button"
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+            type="submit"
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-400"
+            disabled={isSubmitting}
           >
-            저장 (준비 중)
+            {isSubmitting ? '저장 중...' : '저장하기'}
           </button>
         </div>
       </form>
