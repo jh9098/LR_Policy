@@ -4,26 +4,27 @@ import { Link } from 'react-router-dom';
 
 const cardClassName = [
   'group block rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition',
-  'hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50'
+  'hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50',
+  'dark:border-slate-700 dark:bg-slate-800 dark:hover:border-indigo-400/60 dark:focus-visible:ring-offset-slate-900'
 ].join(' ');
 
 function IssueCard({ issue }) {
   return (
     <Link to={`/issue/${issue.id}`} className={cardClassName}>
-      <div className="flex items-center justify-between text-xs text-slate-500">
+      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
         <span aria-label="사건 발생일자" className="font-medium uppercase tracking-wide">
           {issue.date}
         </span>
         {issue.category && (
-          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 ring-1 ring-inset ring-slate-300">
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-500">
             {issue.category}
           </span>
         )}
       </div>
-      <h3 className="mt-3 text-lg font-semibold text-slate-900 group-hover:text-indigo-700">
+      <h3 className="mt-3 text-lg font-semibold text-slate-900 transition group-hover:text-indigo-700 dark:text-slate-100 dark:group-hover:text-indigo-300">
         {issue.title}
       </h3>
-      <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-600">
+      <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
         {issue.summary}
       </p>
     </Link>
