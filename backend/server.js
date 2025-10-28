@@ -1,3 +1,4 @@
+// backend/server.js
 require('dotenv').config();
 
 const express = require('express');
@@ -7,8 +8,17 @@ const issuesRouter = require('./routes/issues');
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+// CORS 정책: 개발/배포 환경에서 접근할 도메인만 명시적으로 허용한다.
+const corsOptions = {
+  origin: ['http://localhost:5173', 'https://lrissues.netlify.app'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-admin-secret'],
+  credentials: false
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => {
   res.json({ message: 'LR Policy 백엔드 API가 정상 동작 중입니다.' });
