@@ -13,22 +13,34 @@ const CONSERVATIVE_NOTE =
   '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
 
-const initialForm = {
-  title: '',
-  date: '',
-  category: CATEGORY_OPTIONS[0],
-  summaryCard: '',
-  background: '',
-  keyPoints: '',
-  progressiveHeadline: '',
-  progressiveBullets: '',
-  progressiveIntensity: '',
-  conservativeHeadline: '',
-  conservativeBullets: '',
-  conservativeIntensity: '',
-  impactToLifeText: '',
-  sources: ''
-};
+function getTodayKstDateString() {
+  const now = new Date();
+  const seoulNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  const year = seoulNow.getFullYear();
+  const month = String(seoulNow.getMonth() + 1).padStart(2, '0');
+  const day = String(seoulNow.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function createInitialForm() {
+  const today = getTodayKstDateString();
+  return {
+    title: '',
+    date: today,
+    category: CATEGORY_OPTIONS[0],
+    summaryCard: '',
+    background: '',
+    keyPoints: '',
+    progressiveHeadline: '',
+    progressiveBullets: '',
+    progressiveIntensity: '',
+    conservativeHeadline: '',
+    conservativeBullets: '',
+    conservativeIntensity: '',
+    impactToLifeText: '',
+    sources: ''
+  };
+}
 
 function splitLines(value) {
   if (!value || typeof value !== 'string') {
@@ -53,19 +65,24 @@ function parseIntensity(value) {
 
 function AdminPage() {
   const [formData, setFormData] = useState(() => {
+    const baseForm = createInitialForm();
     if (typeof window === 'undefined') {
-      return initialForm;
+      return baseForm;
     }
     try {
       const stored = window.localStorage.getItem(DRAFT_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        return { ...initialForm, ...parsed };
+        const merged = { ...baseForm, ...parsed };
+        if (!parsed?.date) {
+          merged.date = baseForm.date;
+        }
+        return merged;
       }
     } catch (error) {
       console.warn('로컬 draft 복원 실패:', error);
     }
-    return initialForm;
+    return baseForm;
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -87,10 +104,16 @@ function AdminPage() {
   };
 
   const handleReset = () => {
-    setFormData(initialForm);
+    const freshForm = createInitialForm();
+    setFormData(freshForm);
     setSubmitError('');
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      try {
+        window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(freshForm));
+      } catch (error) {
+        console.warn('로컬 draft 초기화 저장 실패:', error);
+      }
     }
   };
 
