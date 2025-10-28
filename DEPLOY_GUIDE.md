@@ -1,45 +1,50 @@
-# 배포 가이드
+# 배포 가이드 (v3)
 
-## 1. GitHub 레포 구조
+## 1. 개요
+- 프론트엔드: `frontend/` (Vite + React + Tailwind). 다크 모드 토글과 Open Graph 메타 태그가 포함되어 있습니다.
+- 백엔드: `backend/` (Express + Firebase Admin). `/api/issues/search` 검색 API와 조회수 로깅이 추가되었습니다.
+- 데이터베이스: Firestore. `issues`, `metrics` 컬렉션을 사용합니다.
+
+## 2. Netlify 설정 (프론트엔드)
+1. Netlify에서 **Add new site → Import an existing project**를 선택한 뒤 저장소를 연결합니다.
+2. Build command: `npm run build`, Publish directory: `dist` (루트는 `frontend/`).
+3. **Environment variables**에서 다음 값을 설정합니다.
+   - `VITE_API_BASE_URL`: Render에 배포된 백엔드의 베이스 URL 예) `https://your-render-app.onrender.com/api`
+   - `VITE_ADMIN_SECRET`: 임시 관리자 키. ⚠️ Vite 빌드 결과에 포함되므로 민감한 키를 여기 두면 누구나 확인할 수 있습니다.
+4. Deploy 후, 다크 모드 토글 상태는 `localStorage`에 저장되어 방문자가 새로고침해도 유지됩니다.
+5. TODO: 현재는 클라이언트에서 메타 태그를 삽입하므로, 일부 SNS 크롤러가 OG 정보를 읽지 못할 수 있습니다. 추후 SSR/프리렌더링 도입을 검토하세요.
+
+## 3. Render 설정 (백엔드)
+1. Render에서 **New + → Web Service**를 선택하고 `backend/` 디렉터리를 지정합니다.
+2. Build Command: `npm install`, Start Command: `npm start`.
+3. **Environment** 섹션에 다음 변수를 추가합니다.
+   - `PORT`: Render가 자동으로 할당하므로 별도 값 없이 두거나 `${PORT}`를 사용합니다.
+   - `FIREBASE_SERVICE_ACCOUNT`: Firebase 서비스 계정 JSON 전체 문자열.
+   - `ADMIN_SECRET`: 서버에서 검증할 관리자 비밀 값 (추후 `x-admin-secret` 검사에 활용 예정).
+4. 배포 후 API 엔드포인트는 `https://<render-domain>/api` 형식으로 접근합니다.
+
+## 4. Tailwind & 다크 모드 메모
+- `frontend/tailwind.config.js`에 `darkMode: 'class'`가 설정되어 있습니다. 다크 모드는 `<html>` 요소에 `dark` 클래스를 추가/제거하여 동작합니다.
+- `SiteHeader` 컴포넌트가 테마 토글을 담당하며, 사용자 선택을 `localStorage`에 저장합니다.
+
+## 5. Open Graph 메타 태그
+- `MetaTags` 컴포넌트가 react-helmet-async를 사용해 `<head>`에 메타 태그를 삽입합니다.
+- Netlify는 SPA 호스팅이므로, 일부 SNS에서 미리보기를 생성하려면 SSR 또는 Netlify Edge Functions 기반의 프리렌더링을 추가로 구성해야 합니다.
+
+## 6. 로컬 개발
+```bash
+# 백엔드
+cd backend
+npm install
+npm start
+
+# 프론트엔드
+cd frontend
+npm install
+npm run dev
 ```
-/
-├── frontend/  # Vite + React + Tailwind 기반 프론트엔드
-└── backend/   # Node.js + Express 백엔드 (Firestore 연동)
-```
+- 로컬 환경에서는 `.env` 또는 `frontend/src/config.js`를 통해 `API_BASE_URL`을 `http://localhost:5000/api`로 설정합니다.
 
-## 2. Netlify 배포 절차
-1. Netlify에 로그인한 뒤 **Add new site → Import an existing project**를 선택합니다.
-2. GitHub 저장소를 연결한 다음, `frontend/` 디렉터리를 배포 대상으로 지정합니다.
-3. Build command에는 `npm run build`, Publish directory에는 `dist`를 입력합니다.
-4. **Site settings → Build & deploy → Environment → Edit variables**로 이동해 환경 변수를 추가합니다.
-   - `API_BASE_URL` 키에 Render로 배포된 백엔드의 `https://<render-domain>/api` 값을 입력합니다.
-5. 저장 후 배포를 실행하면, 프론트엔드가 Netlify에 호스팅됩니다.
-
-## 3. Render 배포 절차
-1. Render에 로그인 후 **New + → Web Service**를 선택하고 GitHub 저장소를 연결합니다.
-2. `backend/` 디렉터리를 선택해 Node.js 웹 서비스로 배포를 진행합니다.
-3. Build Command는 `npm install`, Start Command는 `npm start`(또는 `node server.js`)로 설정합니다.
-4. **Environment** 섹션에서 다음 환경 변수를 추가합니다.
-   - `PORT`: Render에서 할당한 포트를 사용하도록 그대로 비워두면 자동으로 주입됩니다. 필요 시 `${PORT}` 값을 사용하세요.
-   - `FIREBASE_SERVICE_ACCOUNT`: Firebase 콘솔에서 발급받은 서비스 계정 JSON 전체를 문자열로 복사해 그대로 입력합니다. (줄바꿈과 공백을 모두 포함)
-5. `serviceAccountKey.json` 파일은 GitHub에 업로드하지 말고, 반드시 `FIREBASE_SERVICE_ACCOUNT` 환경 변수에 JSON 문자열을 직접 넣어 안전하게 관리합니다.
-6. Deploy를 완료하면 Render가 `https://<render-domain>` 주소를 제공하며, API는 `https://<render-domain>/api` 형태로 접근 가능합니다.
-
-## 4. 로컬 개발 방법
-1. **백엔드**
-   ```bash
-   cd backend
-   npm install
-   npm start # 또는 node server.js
-   ```
-2. **프론트엔드**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-3. 프론트엔드의 `.env` 또는 `src/config.js`에서 `API_BASE_URL`을 `http://localhost:5000/api`로 설정하면 로컬 개발 환경에서 API가 연동됩니다.
-
-## 5. 보안 및 주의사항
-- 현재 `POST /api/issues` 엔드포인트는 별도의 인증이 없어 외부에서 임의 호출이 가능합니다. 추후 AdminPage에서만 사용할 수 있도록 비밀 토큰 헤더 등 간단한 보호 장치를 추가할 예정임을 명시하고, 운영 시에는 반드시 보안 대책을 마련하세요.
-- 정치/시사 이슈를 다루는 서비스 특성상, 각 프레임 설명에 "확실하지 않은 사실" 등과 같은 라벨을 항상 노출해 사용자가 주장과 사실을 명확히 구분할 수 있도록 해야 합니다. 이는 잘못된 정보 확산을 최소화하고, 서비스의 객관성을 유지하기 위한 중요한 장치입니다.
+## 7. 주의사항
+- 관리자 기능 보호를 위해 `x-admin-secret` 기반 검증을 백엔드에서 반드시 구현하세요. 현재는 주석만 존재하며 실제 검증은 비활성화 상태입니다.
+- Firestore `metrics` 컬렉션은 단순 카운터이므로, 악성 반복 호출을 막기 위한 rate limiting/인증 로직을 추가해야 합니다.

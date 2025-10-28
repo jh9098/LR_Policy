@@ -15,8 +15,10 @@ const initialFormState = {
   summaryFacts: '',
   progressiveHeadline: '',
   progressivePoints: '',
+  progressiveIntensity: '',
   conservativeHeadline: '',
   conservativePoints: '',
+  conservativeIntensity: '',
   impactToLife: '',
   sources: ''
 };
@@ -30,6 +32,17 @@ function parseMultiline(value) {
     .split(/\r?\n|\r|\u2028/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function parseIntensity(value) {
+  if (value === null || value === undefined || value === '') {
+    return undefined;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return undefined;
+  }
+  return Math.min(100, Math.max(0, Math.round(numeric)));
 }
 
 function AdminPage() {
@@ -94,12 +107,14 @@ function AdminPage() {
       progressiveFrame: {
         headline: formData.progressiveHeadline,
         points: progressivePoints,
-        note: '이 내용은 진보 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음'
+        note: '이 내용은 진보 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음',
+        intensity: parseIntensity(formData.progressiveIntensity)
       },
       conservativeFrame: {
         headline: formData.conservativeHeadline,
         points: conservativePoints,
-        note: '이 내용은 보수 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음'
+        note: '이 내용은 보수 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음',
+        intensity: parseIntensity(formData.conservativeIntensity)
       },
       impactToLife: {
         text: formData.impactToLife,
@@ -127,12 +142,14 @@ function AdminPage() {
       progressiveFrame: {
         headline: formData.progressiveHeadline.trim(),
         points: parseMultiline(formData.progressivePoints),
-        note: '이 내용은 진보 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음'
+        note: '이 내용은 진보 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음',
+        intensity: parseIntensity(formData.progressiveIntensity)
       },
       conservativeFrame: {
         headline: formData.conservativeHeadline.trim(),
         points: parseMultiline(formData.conservativePoints),
-        note: '이 내용은 보수 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음'
+        note: '이 내용은 보수 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음',
+        intensity: parseIntensity(formData.conservativeIntensity)
       },
       impactToLife: {
         text: formData.impactToLife.trim(),
@@ -169,19 +186,19 @@ function AdminPage() {
   return (
     <section className="space-y-8">
       <header className="space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">새 사건 등록</h1>
-        <p className="text-sm text-slate-600">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">새 사건 등록</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
           입력 중인 내용은 자동으로 저장됩니다. 새로고침해도 작성 중인 초안이 사라지지 않으며, 저장 시 Firestore에 전송됩니다.
         </p>
       </header>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,360px)]">
         <form
-          className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800"
           onSubmit={handleSubmit}
         >
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               제목
               <input
                 type="text"
@@ -190,10 +207,10 @@ function AdminPage() {
                 onChange={handleChange}
                 required
                 placeholder="사건 제목을 입력하세요"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               날짜
               <input
                 type="date"
@@ -201,18 +218,18 @@ function AdminPage() {
                 value={formData.date}
                 onChange={handleChange}
                 required
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
               />
             </label>
           </div>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
             카테고리
             <select
               name="category"
               value={formData.category}
               onChange={handleChange}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
             >
               {CATEGORY_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -222,165 +239,173 @@ function AdminPage() {
             </select>
           </label>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            카드 요약 문장
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+            사건 요약
             <textarea
               name="summary"
               value={formData.summary}
               onChange={handleChange}
               rows={3}
-              placeholder="홈 화면 카드에 노출될 짧은 요약"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              required
+              placeholder="사건 전체 요약을 2~3문장으로 정리"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
             />
           </label>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
             확실한 사실 (줄바꿈으로 구분)
             <textarea
               name="summaryFacts"
               value={formData.summaryFacts}
               onChange={handleChange}
               rows={4}
-              placeholder="정부 발표, 공식 문서 등 객관적 사실을 줄바꿈으로 나열"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="사실로 확인된 정보만 입력"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
             />
           </label>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-              진보 프레임 제목
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              진보 프레임 헤드라인
               <input
                 type="text"
                 name="progressiveHeadline"
                 value={formData.progressiveHeadline}
                 onChange={handleChange}
-                placeholder="예: 정부 개입이 필요하다"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-              보수 프레임 제목
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              보수 프레임 헤드라인
               <input
                 type="text"
                 name="conservativeHeadline"
                 value={formData.conservativeHeadline}
                 onChange={handleChange}
-                placeholder="예: 시장 자율이 우선이다"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
               />
             </label>
           </div>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            진보 프레임 Bullet (줄바꿈)
-            <textarea
-              name="progressivePoints"
-              value={formData.progressivePoints}
-              onChange={handleChange}
-              rows={4}
-              placeholder="진보 진영 주장/전망을 줄바꿈으로 입력"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            />
-          </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              진보 프레임 포인트 (줄바꿈)
+              <textarea
+                name="progressivePoints"
+                value={formData.progressivePoints}
+                onChange={handleChange}
+                rows={4}
+                placeholder="진보 성향 채널들의 주장 요약"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              보수 프레임 포인트 (줄바꿈)
+              <textarea
+                name="conservativePoints"
+                value={formData.conservativePoints}
+                onChange={handleChange}
+                rows={4}
+                placeholder="보수 성향 채널들의 주장 요약"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
+              />
+            </label>
+          </div>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            보수 프레임 Bullet (줄바꿈)
-            <textarea
-              name="conservativePoints"
-              value={formData.conservativePoints}
-              onChange={handleChange}
-              rows={4}
-              placeholder="보수 진영 주장/전망을 줄바꿈으로 입력"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            />
-          </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              진보 프레임 강도 (0~100)
+              <input
+                type="number"
+                name="progressiveIntensity"
+                value={formData.progressiveIntensity}
+                onChange={handleChange}
+                min="0"
+                max="100"
+                placeholder="예: 70"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              보수 프레임 강도 (0~100)
+              <input
+                type="number"
+                name="conservativeIntensity"
+                value={formData.conservativeIntensity}
+                onChange={handleChange}
+                min="0"
+                max="100"
+                placeholder="예: 60"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
+              />
+            </label>
+          </div>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            이게 내 삶에 뭐가 변함? (ChatGPT 의견)
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+            생활/시장 영향 요약
             <textarea
               name="impactToLife"
               value={formData.impactToLife}
               onChange={handleChange}
               rows={4}
-              placeholder="생활/시장 영향 요약을 작성"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="ChatGPT 의견으로 중립적 영향 분석"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
             />
           </label>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            출처 (type|channel|date|timestamp|note)
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+            출처 정보 (JSON 또는 지정 포맷)
             <textarea
               name="sources"
               value={formData.sources}
               onChange={handleChange}
-              rows={4}
-              placeholder="youtube|삼프로TV|2024-03-01|12:30|주요 분석 구간"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              rows={6}
+              placeholder="채널명, 영상 날짜 등"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
             />
           </label>
 
-          {submitError && <p className="text-sm text-rose-600">{submitError}</p>}
+          {submitError && <p className="text-sm text-rose-500">{submitError}</p>}
 
-          <div className="flex justify-end gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-70 dark:focus-visible:ring-offset-slate-900"
+            >
+              {isSubmitting ? '저장 중...' : 'Firestore 저장'}
+            </button>
             <button
               type="button"
               onClick={handleReset}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              disabled={isSubmitting}
+              className="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:text-indigo-300 dark:focus-visible:ring-offset-slate-900"
             >
               초기화
-            </button>
-            <button
-              type="submit"
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-indigo-400"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? '저장 중...' : '저장하기'}
             </button>
           </div>
         </form>
 
-        <aside className="space-y-5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50 p-5">
-          <h2 className="text-base font-semibold text-indigo-800">실시간 미리보기</h2>
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>{previewData.date || 'YYYY-MM-DD'}</span>
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 ring-1 ring-inset ring-slate-300">
-                {previewData.category}
-              </span>
-            </div>
-            <h3 className="mt-3 text-lg font-semibold text-slate-900">{previewData.title || '사건 제목 미입력'}</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              {previewData.summary || '홈 화면 카드에 표시될 요약이 여기 노출됩니다.'}
-            </p>
+        <aside className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">미리보기</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            실제 카드가 어떻게 렌더링되는지 확인하세요. 강도 값은 0~100 범위에서만 저장됩니다.
+          </p>
+          <div className="space-y-4">
+            <InfoBlock
+              title="진보 프레임"
+              badgeType="left"
+              headline={previewData.progressiveFrame.headline}
+              body={previewData.progressiveFrame.points}
+              note={previewData.progressiveFrame.note}
+            />
+            <InfoBlock
+              title="보수 프레임"
+              badgeType="right"
+              headline={previewData.conservativeFrame.headline}
+              body={previewData.conservativeFrame.points}
+              note={previewData.conservativeFrame.note}
+            />
           </div>
-
-          <InfoBlock
-            title="확실한 사실"
-            badgeType="fact"
-            body={previewData.summaryFacts}
-            note="프리뷰 전용 가상 카드"
-          />
-          <InfoBlock
-            title="진보 프레임"
-            badgeType="left"
-            headline={previewData.progressiveFrame.headline}
-            body={previewData.progressiveFrame.points}
-            note={previewData.progressiveFrame.note}
-          />
-          <InfoBlock
-            title="보수 프레임"
-            badgeType="right"
-            headline={previewData.conservativeFrame.headline}
-            body={previewData.conservativeFrame.points}
-            note={previewData.conservativeFrame.note}
-          />
-          <InfoBlock
-            title="이게 내 삶에 뭐가 변함?"
-            badgeType="impact"
-            body={previewData.impactToLife}
-            note="ChatGPT 의견 미리보기"
-          />
         </aside>
       </div>
     </section>

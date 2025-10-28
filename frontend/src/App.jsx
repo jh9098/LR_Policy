@@ -8,7 +8,7 @@ import AdminPage from './pages/AdminPage.jsx';
 
 function App() {
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="flex min-h-screen flex-col bg-slate-50 transition-colors dark:bg-slate-900">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-12 pt-20 sm:px-6">
         <Routes>
