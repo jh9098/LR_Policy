@@ -10,7 +10,7 @@ const app = express();
 
 // CORS 정책: 로컬 개발 도메인과 실제 배포 도메인(Netlify)을 명시적으로 허용한다.
 const corsOptions = {
-  origin: ['http://localhost:5173', 'https://your-netlify-domain.netlify.app'],
+  origin: ['http://localhost:5173', 'https://lrissues.netlify.app'],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-admin-secret'],
   credentials: false

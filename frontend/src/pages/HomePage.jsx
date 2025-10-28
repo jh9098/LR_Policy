@@ -1,6 +1,7 @@
 // frontend/src/pages/HomePage.jsx
 import { useCallback, useEffect, useState } from 'react';
 import IssueCard from '../components/IssueCard.jsx';
+import MediaLandscapeSection from '../components/MediaLandscapeSection.jsx';
 import MetaTags from '../components/MetaTags.jsx';
 import { API_BASE_URL } from '../config.js';
 
@@ -180,6 +181,8 @@ function HomePage() {
           최근 20건 다시 보기
         </button>
       </div>
+
+      <MediaLandscapeSection />
     </section>
   );
 }
