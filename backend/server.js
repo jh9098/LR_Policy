@@ -8,9 +8,9 @@ const issuesRouter = require('./routes/issues');
 
 const app = express();
 
-// CORS 정책: 개발/배포 환경에서 접근할 도메인만 명시적으로 허용한다.
+// CORS 정책: 로컬 개발 도메인과 실제 배포 도메인(Netlify)을 명시적으로 허용한다.
 const corsOptions = {
-  origin: ['http://localhost:5173', 'https://lrissues.netlify.app'],
+  origin: ['http://localhost:5173', 'https://your-netlify-domain.netlify.app'],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-admin-secret'],
   credentials: false

@@ -4,12 +4,22 @@ const { db, FieldValue } = require('../firebaseAdmin');
 
 const router = express.Router();
 
-function ensureArray(value) {
+const PROGRESSIVE_NOTE =
+  '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+const CONSERVATIVE_NOTE =
+  '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
+
+function toSafeString(value) {
+  return typeof value === 'string' ? value.trim() : String(value ?? '').trim();
+}
+
+function splitLines(value) {
   if (!value) {
     return [];
   }
   if (Array.isArray(value)) {
-    return value.map((item) => String(item)).filter(Boolean);
+    return value.map((item) => toSafeString(item)).filter(Boolean);
   }
   if (typeof value === 'string') {
     return value
@@ -20,57 +30,50 @@ function ensureArray(value) {
   return [];
 }
 
-function normalizeIntensity(rawIntensity) {
-  // 프레임 강도는 0~100 범위의 숫자로 관리한다. 숫자가 없으면 undefined 로 남겨 저장하지 않는다.
-  if (rawIntensity === null || rawIntensity === undefined) {
+function normalizeIntensity(raw) {
+  if (raw === null || raw === undefined || raw === '') {
     return undefined;
   }
-
-  const parsed = Number(rawIntensity);
-  if (!Number.isFinite(parsed)) {
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) {
     return undefined;
   }
-
-  return Math.min(100, Math.max(0, Math.round(parsed)));
+  return Math.min(100, Math.max(0, Math.round(numeric)));
 }
 
-function normalizeFrame(frame, fallbackNote) {
-  if (!frame || typeof frame !== 'object') {
-    return {
-      headline: '',
-      points: [],
-      note: fallbackNote,
-      // intensity 는 선택 항목이라 없는 경우에는 저장하지 않는다.
-    };
+function normalizeView(view, fallbackNote) {
+  if (!view || typeof view !== 'object') {
+    return null;
   }
 
-  const points = ensureArray(frame.points ?? frame.items ?? frame.list);
-  const normalized = {
-    headline: frame.headline ? String(frame.headline) : '',
-    points,
-    note: frame.note ? String(frame.note) : fallbackNote
+  const headline = view.headline ? toSafeString(view.headline) : '';
+  const bullets = splitLines(view.bullets ?? view.points);
+  const note = view.note ? toSafeString(view.note) : fallbackNote;
+
+  if (!headline && bullets.length === 0) {
+    return null;
+  }
+
+  return {
+    headline,
+    bullets,
+    note
   };
-
-  const intensity = normalizeIntensity(frame.intensity);
-  if (intensity !== undefined) {
-    normalized.intensity = intensity;
-  }
-
-  return normalized;
 }
 
 function normalizeImpact(impact) {
   if (!impact || typeof impact !== 'object') {
-    return {
-      text: '',
-      points: []
-    };
+    return null;
   }
 
-  return {
-    text: impact.text ? String(impact.text) : '',
-    points: ensureArray(impact.points ?? impact.list)
-  };
+  const text = impact.text ? toSafeString(impact.text) : '';
+  const note = impact.note ? toSafeString(impact.note) : IMPACT_NOTE;
+
+  if (!text) {
+    return null;
+  }
+
+  return { text, note };
 }
 
 function normalizeSources(sources) {
@@ -79,80 +82,79 @@ function normalizeSources(sources) {
   }
 
   return sources
-    .map((source) => ({
-      type: source?.type ? String(source.type) : '기타',
-      channelName: source?.channelName ? String(source.channelName) : '',
-      videoDate: source?.videoDate ? String(source.videoDate) : '',
-      timestamp: source?.timestamp ? String(source.timestamp) : '',
-      note: source?.note ? String(source.note) : ''
-    }))
-    .filter((item) => item.channelName);
+    .map((source) => {
+      const channelName = toSafeString(source.channelName ?? '');
+      if (!channelName) {
+        return null;
+      }
+
+      const timestampRaw = source.timestamp ?? null;
+      let timestamp = null;
+      if (timestampRaw !== null && timestampRaw !== undefined && timestampRaw !== '') {
+        timestamp = toSafeString(timestampRaw);
+      }
+
+      return {
+        type: toSafeString(source.type ?? 'etc') || 'etc',
+        channelName,
+        sourceDate: source.sourceDate ? toSafeString(source.sourceDate) : '',
+        timestamp,
+        note: source.note ? toSafeString(source.note) : ''
+      };
+    })
+    .filter(Boolean);
 }
 
-// TODO: 현재 검색 API 는 Firestore 의 복합 인덱스를 적극 활용하지 않고, 최근 문서 50개를 불러온 뒤 메모리에서 추가 필터링한다.
-//       MVP 단계라 허용하지만, 향후 데이터가 증가하면 Firestore 의 정교한 쿼리/Algolia 같은 검색 인프라 도입이 필요하다.
+// TODO: 현재 검색 구현은 최근 50건을 불러와 메모리에서 필터링한다. 데이터가 늘어나면 Firestore 복합 색인 또는 전용 검색 인프라 도입이 필요하다.
 router.get('/search', async (req, res) => {
   try {
     const { category, query } = req.query;
 
-    const snapshot = await db
-      .collection('issues')
-      .orderBy('createdAt', 'desc')
-      .limit(50)
-      .get();
+    const snapshot = await db.collection('issues').orderBy('createdAt', 'desc').limit(50).get();
 
-    const keyword = typeof query === 'string' ? query.trim().toLowerCase() : '';
     const categoryFilter = typeof category === 'string' ? category.trim() : '';
+    const keyword = typeof query === 'string' ? query.trim().toLowerCase() : '';
 
-    const filtered = snapshot.docs
+    const issues = snapshot.docs
       .map((doc) => {
         const data = doc.data();
         return {
           id: doc.id,
           title: data.title || '',
           date: data.date || '',
-          summary: data.summary || '',
-          category: data.category || '기타'
+          category: data.category || '기타',
+          summaryCard: data.summaryCard || ''
         };
       })
       .filter((issue) => {
         const matchCategory = !categoryFilter || issue.category === categoryFilter;
-
         if (!keyword) {
           return matchCategory;
         }
+        return (
+          matchCategory &&
+          (issue.title.toLowerCase().includes(keyword) || issue.summaryCard.toLowerCase().includes(keyword))
+        );
+      });
 
-        const combined = `${issue.title} ${issue.summary}`.toLowerCase();
-        const matchKeyword = combined.includes(keyword);
-        return matchCategory && matchKeyword;
-      })
-      .slice(0, 20);
-
-    res.json(filtered);
+    res.json(issues);
   } catch (error) {
     console.error('GET /api/issues/search 오류:', error);
-    res
-      .status(500)
-      .json({ message: '이슈를 검색하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
+    res.status(500).json({ message: '검색 중 오류가 발생했습니다.' });
   }
 });
 
 router.get('/', async (req, res) => {
   try {
-    const snapshot = await db
-      .collection('issues')
-      .orderBy('createdAt', 'desc')
-      .limit(20)
-      .get();
-
+    const snapshot = await db.collection('issues').orderBy('createdAt', 'desc').limit(20).get();
     const issues = snapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
         title: data.title || '',
         date: data.date || '',
-        summary: data.summary || '',
-        category: data.category || '기타'
+        category: data.category || '기타',
+        summaryCard: data.summaryCard || ''
       };
     });
 
@@ -166,14 +168,14 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const docRef = db.collection('issues').doc(req.params.id);
-    const doc = await docRef.get();
+    const docSnap = await docRef.get();
 
-    if (!doc.exists) {
+    if (!docSnap.exists) {
       return res.status(404).json({ message: '해당 ID의 이슈를 찾을 수 없습니다.' });
     }
 
-    const metricsRef = db.collection('metrics').doc(doc.id);
-    // TODO: 현재는 단순 증가 방식이라 악성 반복 호출에 취약하다. 추후 rate limiting 과 인증 보강이 필수다.
+    const metricsRef = db.collection('metrics').doc(docSnap.id);
+    // TODO: 단순 증분 방식이라 악의적 반복 호출 방어가 어렵다. 추후 rate limiting 과 인증을 강화해야 한다.
     await metricsRef.set(
       {
         views: FieldValue.increment ? FieldValue.increment(1) : 1,
@@ -182,10 +184,7 @@ router.get('/:id', async (req, res) => {
       { merge: true }
     );
 
-    // Firestore 문서 구조 주석:
-    // - progressiveFrame.intensity, conservativeFrame.intensity 는 선택 필드로 0~100 사이 값만 저장한다.
-    // - metrics 컬렉션은 issueId 를 키로 { views, lastViewedAt } 를 저장한다.
-    res.json({ id: doc.id, ...doc.data() });
+    res.json({ id: docSnap.id, ...docSnap.data() });
   } catch (error) {
     console.error(`GET /api/issues/${req.params.id} 오류:`, error);
     res.status(500).json({ message: '이슈를 불러오는 중 오류가 발생했습니다.' });
@@ -194,63 +193,94 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ message: '요청 본문에 JSON 객체가 필요합니다.' });
+    const adminSecretFromHeader = req.header('x-admin-secret');
+    const adminSecretEnv = process.env.ADMIN_SECRET;
+
+    // TODO: 현재는 단순 헤더 기반 비밀번호 검증만 수행한다. 실제 운영 시에는 인증 서버 혹은 OAuth 기반 보호 장치가 필요하다.
+    if (!adminSecretEnv || adminSecretFromHeader !== adminSecretEnv) {
+      return res.status(401).json({ message: '인증에 실패했습니다.' });
     }
 
-    // TODO: production 환경에서는 x-admin-secret 헤더를 검사하여 관리자만 등록 가능하도록 보호한다.
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ message: '요청 본문이 비어 있습니다.' });
+    }
 
     const {
       id,
       title,
       date,
       category,
-      summary,
-      summaryFacts,
-      progressiveFrame,
-      conservativeFrame,
+      summaryCard,
+      background,
+      keyPoints,
+      progressiveView,
+      progressiveIntensity,
+      conservativeView,
+      conservativeIntensity,
       impactToLife,
       sources
     } = req.body;
 
-    if (!title || !date || !summary || !category) {
-      return res.status(400).json({ message: 'title, date, summary, category 필드는 필수입니다.' });
+    if (!title || !date || !summaryCard || !background) {
+      return res.status(400).json({ message: 'title, date, summaryCard, background 필드는 필수입니다.' });
+    }
+
+    const normalizedKeyPoints = splitLines(keyPoints);
+    if (normalizedKeyPoints.length === 0) {
+      return res.status(400).json({ message: 'keyPoints 는 최소 1개 이상의 bullet 이 필요합니다.' });
+    }
+
+    const normalizedSources = normalizeSources(sources);
+    if (normalizedSources.length === 0) {
+      return res.status(400).json({ message: 'sources 배열에 최소 1개의 출처를 입력해야 합니다.' });
     }
 
     const payload = {
-      title: String(title),
-      date: String(date),
-      category: String(category),
-      summary: String(summary),
-      summaryFacts: ensureArray(summaryFacts),
-      progressiveFrame: normalizeFrame(
-        progressiveFrame,
-        '이 내용은 진보 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음'
-      ),
-      conservativeFrame: normalizeFrame(
-        conservativeFrame,
-        '이 내용은 보수 성향 채널들의 주장/전망이며, 확실하지 않은 사실일 수 있음'
-      ),
-      impactToLife: normalizeImpact(impactToLife),
-      sources: normalizeSources(sources),
-      updatedAt: FieldValue.serverTimestamp()
+      title: toSafeString(title),
+      date: toSafeString(date),
+      category: category ? toSafeString(category) : '기타',
+      summaryCard: toSafeString(summaryCard),
+      background: toSafeString(background),
+      keyPoints: normalizedKeyPoints,
+      sources: normalizedSources
     };
 
-    const collection = db.collection('issues');
-    let docRef;
-
-    if (id) {
-      docRef = collection.doc(String(id));
-      await docRef.set(payload, { merge: true });
-    } else {
-      docRef = await collection.add({
-        ...payload,
-        createdAt: FieldValue.serverTimestamp()
-      });
+    const normalizedProgressiveView = normalizeView(progressiveView, PROGRESSIVE_NOTE);
+    const normalizedProgressiveIntensity = normalizeIntensity(progressiveIntensity);
+    if (normalizedProgressiveView) {
+      payload.progressiveView = normalizedProgressiveView;
+    }
+    if (normalizedProgressiveIntensity !== undefined) {
+      payload.progressiveIntensity = normalizedProgressiveIntensity;
     }
 
-    const savedDoc = await docRef.get();
+    const normalizedConservativeView = normalizeView(conservativeView, CONSERVATIVE_NOTE);
+    const normalizedConservativeIntensity = normalizeIntensity(conservativeIntensity);
+    if (normalizedConservativeView) {
+      payload.conservativeView = normalizedConservativeView;
+    }
+    if (normalizedConservativeIntensity !== undefined) {
+      payload.conservativeIntensity = normalizedConservativeIntensity;
+    }
 
+    const normalizedImpact = normalizeImpact(impactToLife);
+    if (normalizedImpact) {
+      payload.impactToLife = normalizedImpact;
+    }
+
+    const collection = db.collection('issues');
+    const docRef = id ? collection.doc(String(id)) : collection.doc();
+
+    const timestamps = {
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    if (!id) {
+      timestamps.createdAt = FieldValue.serverTimestamp();
+    }
+
+    await docRef.set({ ...payload, ...timestamps }, { merge: Boolean(id) });
+
+    const savedDoc = await docRef.get();
     res.status(201).json({ id: docRef.id, ...savedDoc.data() });
   } catch (error) {
     console.error('POST /api/issues 오류:', error);
