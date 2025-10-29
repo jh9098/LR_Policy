@@ -4,6 +4,7 @@ import IssueCard from '../components/IssueCard.jsx';
 import MediaLandscapeSection from '../components/MediaLandscapeSection.jsx';
 import MetaTags from '../components/MetaTags.jsx';
 import { API_BASE_URL } from '../config.js';
+import { sortIssuesByDate } from '../utils/issueSorting.js';
 
 const CATEGORY_OPTIONS = ['전체', '부동산', '노동/노조', '사법/검찰', '외교/안보', '기타'];
 
@@ -38,7 +39,8 @@ function HomePage() {
 
       const data = await response.json();
       const normalized = Array.isArray(data) ? data.map(normalizeIssue).filter((item) => item.id) : [];
-      setIssues(normalized);
+      const sorted = sortIssuesByDate(normalized);
+      setIssues(sorted);
       setActiveFilters({ category: '전체', query: '' });
     } catch (err) {
       console.error('최근 이슈 불러오기 실패:', err);
@@ -73,7 +75,8 @@ function HomePage() {
 
       const data = await response.json();
       const normalized = Array.isArray(data) ? data.map(normalizeIssue).filter((item) => item.id) : [];
-      setIssues(normalized);
+      const sorted = sortIssuesByDate(normalized);
+      setIssues(sorted);
       setActiveFilters({ category: categoryDraft, query: queryDraft.trim() });
     } catch (err) {
       console.error('검색 실패:', err);

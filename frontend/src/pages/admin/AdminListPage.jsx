@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL, ADMIN_SECRET } from '../../config.js';
+import { sortIssuesByDate } from '../../utils/issueSorting.js';
 
 function AdminListPage() {
   const [items, setItems] = useState([]);
@@ -24,7 +25,8 @@ function AdminListPage() {
         if (!isMounted) {
           return;
         }
-        setItems(Array.isArray(data) ? data : []);
+        const normalized = Array.isArray(data) ? data : [];
+        setItems(sortIssuesByDate(normalized));
       } catch (err) {
         if (!isMounted) {
           return;
@@ -65,7 +67,7 @@ function AdminListPage() {
       if (!response.ok) {
         throw new Error('삭제에 실패했습니다. 잠시 후 다시 시도하세요.');
       }
-      setItems((prev) => prev.filter((item) => item.id !== id));
+      setItems((prev) => sortIssuesByDate(prev.filter((item) => item.id !== id)));
       alert('삭제 완료');
     } catch (err) {
       console.error('삭제 실패:', err);
