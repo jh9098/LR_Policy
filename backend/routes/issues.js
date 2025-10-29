@@ -1,5 +1,5 @@
 // backend/routes/issues.js
-// Step 11B에 맞춰 issueDraft 스키마 그대로를 Firestore에 저장하고, null 섹션은 필드를 생략한다.
+// Step 12: easySummary 필드를 포함해 issueDraft 스키마를 Firestore에 저장/조회한다. null 섹션은 필드를 생략한다.
 
 const express = require('express');
 const { db, FieldValue } = require('../firebaseAdmin');
@@ -96,6 +96,7 @@ function normalizeSourcesForSave(sources) {
 
 function buildIssueDocument(body) {
   const base = {
+    easySummary: toSafeString(body.easySummary),
     title: toSafeString(body.title),
     date: toSafeString(body.date),
     category: toSafeCategory(body.category),
@@ -198,6 +199,7 @@ function toIssueSummary(doc) {
   const data = doc.data();
   return {
     id: doc.id,
+    easySummary: toSafeString(data.easySummary),
     title: toSafeString(data.title),
     date: toSafeString(data.date),
     category: toSafeCategory(data.category),
@@ -209,6 +211,7 @@ function toIssueDetail(doc) {
   const data = doc.data();
   const issue = {
     id: doc.id,
+    easySummary: toSafeString(data.easySummary),
     title: toSafeString(data.title),
     date: toSafeString(data.date),
     category: toSafeCategory(data.category),
@@ -269,6 +272,7 @@ router.get('/search', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const snapshot = await db.collection('issues').orderBy('createdAt', 'desc').limit(20).get();
+    // 목록에서도 easySummary를 제공하면 홈 카드와 상세 링크에서 동일한 문구를 재사용할 수 있다.
     const issues = snapshot.docs.map((doc) => toIssueSummary(doc));
     res.json(issues);
   } catch (error) {

@@ -1,4 +1,6 @@
 // frontend/src/pages/IssuePage.jsx
+// 상세 페이지는 Firestore에서 가져온 issue 데이터를 easySummary 포함해 보여준다.
+
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import IntensityBar from '../components/IntensityBar.jsx';
@@ -14,6 +16,7 @@ const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약�
 
 const EMPTY_ISSUE = {
   id: '',
+  easySummary: '',
   title: '',
   date: '',
   category: '기타',
@@ -145,6 +148,7 @@ function IssuePage() {
         const data = await response.json();
         const normalizedIssue = {
           id: data.id ?? id,
+          easySummary: data.easySummary ? String(data.easySummary) : '',
           title: data.title ?? '',
           date: data.date ?? '',
           category: data.category ?? '기타',
@@ -254,7 +258,7 @@ function IssuePage() {
 
   return (
     <article className="space-y-10">
-      <MetaTags title={issue.title} description={issue.summaryCard} url={pageUrl} />
+      <MetaTags title={issue.title} description={issue.summaryCard || issue.easySummary} url={pageUrl} />
 
       <header className="rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-300">
@@ -284,6 +288,13 @@ function IssuePage() {
           </p>
         )}
       </header>
+
+      {issue.easySummary && (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-6 shadow-sm dark:border-emerald-600/60 dark:bg-emerald-950/40">
+          <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">한 줄로 말하면?</h2>
+          <p className="mt-2 text-base leading-relaxed text-emerald-900 dark:text-emerald-100">{issue.easySummary}</p>
+        </section>
+      )}
 
       <SectionCard title="이 사건/정책은 무엇인가?" tone="neutral">
         {backgroundParagraphs.length > 0 ? (
