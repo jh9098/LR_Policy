@@ -1,5 +1,6 @@
 // frontend/src/utils/emptyDraft.js
-// issueDraft 기본 구조를 정의한다. 이 객체는 폼 초기화와 로컬스토리지 복구 시 기준값으로 사용된다.
+// issueDraft 스키마 전체를 기본값으로 정의한다.
+// 모든 필드는 AdminNewPage.jsx에서 useState로 관리되며, localStorage('adminDraftV3') 백업에도 동일하게 사용된다.
 export const emptyDraft = {
   title: '',
   date: '',
@@ -7,8 +8,8 @@ export const emptyDraft = {
   summaryCard: '',
   background: '',
   keyPoints: [],
-  progressiveView: undefined,
-  conservativeView: undefined,
-  impactToLife: undefined,
+  progressiveView: null,
+  conservativeView: null,
+  impactToLife: null,
   sources: []
 };
