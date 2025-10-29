@@ -93,20 +93,20 @@ function HomePage() {
         url={siteUrl}
       />
 
-      <header className="rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">최근 정책/사건</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+      <header className="rounded-2xl border border-slate-200 bg-white px-5 py-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:px-6 sm:py-8">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 sm:text-3xl">최근 정책/사건</h1>
+        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-slate-600 dark:text-slate-300">
           핵심 내용을 먼저 이해하고, 마지막에 쟁점과 시각 차이를 확인하세요. 이 서비스는 사실과 맥락을 기반으로 정보를 정리한 후,
           선택적으로 진영별 주장을 덧붙입니다.
         </p>
       </header>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">필터 · 검색</h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+        <p className="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">
           카테고리와 키워드로 궁금한 정책/사건을 찾아보세요. 검색 버튼을 누르면 서버에서 조건에 맞춰 다시 불러옵니다.
         </p>
-        <div className="mt-5 grid gap-4 md:grid-cols-[180px,1fr,auto]">
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-[180px,1fr,auto]">
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
             카테고리
             <select
@@ -133,7 +133,7 @@ function HomePage() {
             />
           </label>
 
-          <div className="flex items-end">
+          <div className="flex items-end sm:justify-end">
             <button
               type="button"
               onClick={handleSearch}
@@ -144,7 +144,7 @@ function HomePage() {
             </button>
           </div>
         </div>
-        <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
           ※ 현재는 Firestore에서 최대 50건을 불러온 뒤 메모리에서 필터링합니다. 데이터가 많아지면 별도의 검색 인덱스 도입이 필요합니다.
         </p>
       </section>
@@ -158,7 +158,7 @@ function HomePage() {
       )}
 
       {!isLoading && !error && (
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-5 sm:gap-6 md:grid-cols-2">
           {issues.length === 0 ? (
             <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
               조건에 맞는 정책/사건이 없습니다. 검색 조건을 조정하거나 최근 목록을 다시 불러오세요.
