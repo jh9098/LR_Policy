@@ -1,79 +1,84 @@
 // frontend/src/utils/loadDraftFromJson.js
-// 운영자가 AI가 제공한 JSON 문자열을 붙여넣으면 issueDraft 구조체로 변환한다.
-// 파싱에 실패하면 호출자에게 오류를 던져 상단 경고 문구로 표시한다.
+// 운영자가 상단 textarea에 붙여넣은 JSON 문자열을 엄격하게 파싱해 issueDraft 상태로 변환한다.
+// JSON.parse 단계에서 오류가 발생하면 예외를 그대로 던져 상단 UI에서 사용자에게 알려준다.
 import { emptyDraft } from './emptyDraft.js';
 
 const CATEGORY_OPTIONS = new Set(['부동산', '노동/노조', '사법/검찰', '외교/안보', '기타']);
+const SOURCE_TYPE_OPTIONS = new Set(['official', 'youtube', 'media', 'etc']);
 
-function toTrimmedString(value) {
-  if (typeof value !== 'string') {
-    return '';
+const PROGRESSIVE_NOTE =
+  '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+const CONSERVATIVE_NOTE =
+  '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
+
+function toSafeString(value, fallback = '') {
+  if (typeof value === 'string') {
+    return value;
   }
-  return value.trim();
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  return String(value);
 }
 
 function toStringArray(raw) {
-  if (!raw) {
+  if (!Array.isArray(raw)) {
     return [];
   }
-  if (Array.isArray(raw)) {
-    return raw.map((item) => toTrimmedString(String(item ?? '')));
-  }
-  if (typeof raw === 'string') {
-    return raw
-      .split(/\r?\n|\r|\u2028/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-  return [];
+  return raw.map((item) => toSafeString(item, ''));
 }
 
-function parseIntensity(value) {
+function toSafeCategory(rawCategory) {
+  if (typeof rawCategory !== 'string') {
+    return '기타';
+  }
+  return CATEGORY_OPTIONS.has(rawCategory) ? rawCategory : '기타';
+}
+
+function toSafeSourceType(rawType) {
+  if (typeof rawType !== 'string') {
+    return 'etc';
+  }
+  return SOURCE_TYPE_OPTIONS.has(rawType) ? rawType : 'etc';
+}
+
+function toSafeIntensity(value) {
   if (value === null || value === undefined || value === '') {
-    return undefined;
+    return -1;
   }
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
-    return undefined;
+    return -1;
+  }
+  if (numeric === -1) {
+    return -1;
   }
   return Math.min(100, Math.max(0, Math.round(numeric)));
 }
 
-function normalizePerspective(rawView) {
+function normalizePerspective(rawView, defaultNote) {
   if (!rawView || typeof rawView !== 'object') {
-    return undefined;
+    return null;
   }
 
-  const headline = toTrimmedString(rawView.headline ?? '');
-  const bullets = toStringArray(rawView.bullets ?? rawView.points);
-  const note = typeof rawView.note === 'string' ? rawView.note : '';
-  const intensity = parseIntensity(rawView.intensity);
-
-  if (!headline && bullets.length === 0 && !note && intensity === undefined) {
-    return undefined;
-  }
-
-  const normalized = { headline, bullets, note };
-  if (intensity !== undefined) {
-    normalized.intensity = intensity;
-  }
-
-  return normalized;
+  return {
+    headline: toSafeString(rawView.headline, ''),
+    bullets: toStringArray(rawView.bullets ?? rawView.points ?? []),
+    intensity: toSafeIntensity(rawView.intensity),
+    note: toSafeString(rawView.note, defaultNote) || defaultNote
+  };
 }
 
 function normalizeImpact(rawImpact) {
   if (!rawImpact || typeof rawImpact !== 'object') {
-    return undefined;
+    return null;
   }
 
-  const text = toTrimmedString(rawImpact.text ?? '');
-  const note = typeof rawImpact.note === 'string' ? rawImpact.note : '';
-
-  if (!text && !note) {
-    return undefined;
-  }
-
-  return { text, note };
+  return {
+    text: toSafeString(rawImpact.text, ''),
+    note: toSafeString(rawImpact.note, IMPACT_NOTE) || IMPACT_NOTE
+  };
 }
 
 function normalizeSources(rawSources) {
@@ -81,58 +86,51 @@ function normalizeSources(rawSources) {
     return [];
   }
 
-  return rawSources.map((source) => {
-    const timestampRaw = source?.timestamp;
-    let timestamp = null;
-    if (timestampRaw !== null && timestampRaw !== undefined && timestampRaw !== '') {
-      timestamp = toTrimmedString(String(timestampRaw));
-    }
-
-    return {
-      type: typeof source?.type === 'string' ? source.type : 'etc',
-      channelName: toTrimmedString(source?.channelName ?? ''),
-      sourceDate: toTrimmedString(source?.sourceDate ?? ''),
-      timestamp,
-      note: typeof source?.note === 'string' ? source.note : ''
-    };
-  });
+  return rawSources.map((source) => ({
+    type: toSafeSourceType(source?.type),
+    channelName: toSafeString(source?.channelName, ''),
+    sourceDate: toSafeString(source?.sourceDate, ''),
+    timestamp: toSafeString(source?.timestamp, ''),
+    note: toSafeString(source?.note, '')
+  }));
 }
 
 export function loadDraftFromJson(rawText) {
   if (typeof rawText !== 'string' || rawText.trim().length === 0) {
-    throw new Error('JSON 문자열을 입력해 주세요.');
+    throw new Error('JSON 문자열을 먼저 입력해 주세요.');
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch (error) {
-    throw new Error('JSON 파싱에 실패했습니다. 괄호나 따옴표를 다시 확인해 주세요.');
-  }
+  const parsed = JSON.parse(rawText);
 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('최상위 구조는 객체여야 합니다.');
+    throw new Error('issueDraft JSON은 객체 형태여야 합니다.');
   }
 
-  const base = {
+  const merged = {
     ...emptyDraft,
-    keyPoints: [...emptyDraft.keyPoints],
-    sources: [...emptyDraft.sources]
+    ...parsed
   };
 
-  const draft = {
-    ...base,
-    title: toTrimmedString(parsed.title ?? ''),
-    date: toTrimmedString(parsed.date ?? ''),
-    category: CATEGORY_OPTIONS.has(parsed.category) ? parsed.category : '기타',
-    summaryCard: toTrimmedString(parsed.summaryCard ?? ''),
-    background: toTrimmedString(parsed.background ?? ''),
-    keyPoints: toStringArray(parsed.keyPoints),
-    progressiveView: normalizePerspective(parsed.progressiveView),
-    conservativeView: normalizePerspective(parsed.conservativeView),
-    impactToLife: normalizeImpact(parsed.impactToLife),
-    sources: normalizeSources(parsed.sources)
-  };
+  merged.title = toSafeString(parsed.title, '');
+  merged.date = toSafeString(parsed.date, '');
+  merged.category = toSafeCategory(parsed.category);
+  merged.summaryCard = toSafeString(parsed.summaryCard, '');
+  merged.background = toSafeString(parsed.background, '');
+  merged.keyPoints = toStringArray(parsed.keyPoints ?? []);
+  merged.sources = normalizeSources(parsed.sources ?? []);
 
-  return draft;
+  merged.progressiveView =
+    parsed.progressiveView === undefined
+      ? null
+      : normalizePerspective(parsed.progressiveView, PROGRESSIVE_NOTE);
+
+  merged.conservativeView =
+    parsed.conservativeView === undefined
+      ? null
+      : normalizePerspective(parsed.conservativeView, CONSERVATIVE_NOTE);
+
+  merged.impactToLife =
+    parsed.impactToLife === undefined ? null : normalizeImpact(parsed.impactToLife);
+
+  return merged;
 }

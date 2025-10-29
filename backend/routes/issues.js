@@ -1,4 +1,6 @@
 // backend/routes/issues.js
+// Step 11B에 맞춰 issueDraft 스키마 그대로를 Firestore에 저장하고, null 섹션은 필드를 생략한다.
+
 const express = require('express');
 const { db, FieldValue } = require('../firebaseAdmin');
 
@@ -13,221 +15,131 @@ const CONSERVATIVE_NOTE =
   '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
 
-function toTrimmedString(value) {
-  if (typeof value !== 'string') {
+function toSafeString(value) {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value === null || value === undefined) {
     return '';
   }
-  return value.trim();
+  return String(value);
 }
 
-function ensureArrayOfStrings(raw) {
-  if (!raw) {
+function toStringArray(raw) {
+  if (!Array.isArray(raw)) {
     return [];
   }
-  if (Array.isArray(raw)) {
-    return raw.map((item) => toTrimmedString(String(item ?? ''))).filter(Boolean);
-  }
-  if (typeof raw === 'string') {
-    return raw
-      .split(/\r?\n|\r|\u2028/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-  return [];
+  return raw.map((item) => toSafeString(item));
 }
 
-function normalizeIntensity(raw) {
-  if (raw === null || raw === undefined || raw === '') {
-    return undefined;
+function toSafeCategory(value) {
+  const candidate = toSafeString(value);
+  return CATEGORY_OPTIONS.has(candidate) ? candidate : '기타';
+}
+
+function toSafeSourceType(value) {
+  const candidate = toSafeString(value);
+  return SOURCE_TYPE_OPTIONS.has(candidate) ? candidate : 'etc';
+}
+
+function toSafeIntensity(value) {
+  if (value === '' || value === null || value === undefined) {
+    return -1;
   }
-  const numeric = Number(raw);
+  const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
-    return undefined;
+    return -1;
+  }
+  if (numeric === -1) {
+    return -1;
   }
   return Math.min(100, Math.max(0, Math.round(numeric)));
 }
 
-function normalizePerspectiveInput(view) {
+function normalizePerspectiveForSave(view, defaultNote) {
   if (!view || typeof view !== 'object') {
-    return undefined;
+    return null;
   }
 
-  const headline = toTrimmedString(view.headline ?? '');
-  const bullets = ensureArrayOfStrings(view.bullets ?? view.points);
-  const note = typeof view.note === 'string' ? view.note : '';
-  const intensity = normalizeIntensity(view.intensity);
-
-  if (!headline && bullets.length === 0 && !note && intensity === undefined) {
-    return undefined;
-  }
-
-  const normalized = { headline, bullets };
-  if (note) {
-    normalized.note = note;
-  }
-  if (intensity !== undefined) {
-    normalized.intensity = intensity;
-  }
-
-  return normalized;
-}
-
-function normalizeImpactInput(impact) {
-  if (!impact || typeof impact !== 'object') {
-    return undefined;
-  }
-  const text = toTrimmedString(impact.text ?? '');
-  const note = typeof impact.note === 'string' ? impact.note : '';
-
-  if (!text && !note) {
-    return undefined;
-  }
-
-  const normalized = { text };
-  if (note) {
-    normalized.note = note;
-  }
-  return normalized;
-}
-
-function normalizeSourcesInput(sources) {
-  if (!Array.isArray(sources)) {
-    return { error: 'sources 필드는 배열 형태여야 합니다.' };
-  }
-
-  const normalized = sources
-    .map((source) => {
-      const channelName = toTrimmedString(source?.channelName ?? '');
-      if (!channelName) {
-        return null;
-      }
-
-      const sourceDate = toTrimmedString(source?.sourceDate ?? '');
-      const timestampRaw = source?.timestamp;
-      const timestamp =
-        timestampRaw === null || timestampRaw === undefined || timestampRaw === ''
-          ? null
-          : toTrimmedString(String(timestampRaw));
-
-      return {
-        type: SOURCE_TYPE_OPTIONS.has(source?.type) ? source.type : 'etc',
-        channelName,
-        sourceDate,
-        timestamp,
-        note: typeof source?.note === 'string' ? source.note : ''
-      };
-    })
-    .filter(Boolean);
-
-  if (normalized.length === 0) {
-    return { error: 'sources 배열에 최소 1개 이상의 출처를 입력해야 합니다.' };
-  }
-
-  return { sources: normalized };
-}
-
-function normalizeIssueDraftInput(body) {
-  if (!body || typeof body !== 'object') {
-    return { error: '요청 본문이 비어 있습니다.' };
-  }
-
-  const title = toTrimmedString(body.title ?? '');
-  const date = toTrimmedString(body.date ?? '');
-  const rawCategory = toTrimmedString(body.category ?? '');
-  const category = CATEGORY_OPTIONS.has(rawCategory) ? rawCategory : '기타';
-  const summaryCard = toTrimmedString(body.summaryCard ?? '');
-  const background = toTrimmedString(body.background ?? '');
-  const keyPoints = ensureArrayOfStrings(body.keyPoints);
-
-  if (!title || !date || !summaryCard || !background) {
-    return { error: 'title, date, summaryCard, background 필드는 필수입니다.' };
-  }
-  if (keyPoints.length === 0) {
-    return { error: 'keyPoints 는 최소 1개 이상의 bullet 이 필요합니다.' };
-  }
-
-  const { sources, error: sourcesError } = normalizeSourcesInput(body.sources);
-  if (sourcesError) {
-    return { error: sourcesError };
-  }
-
-  const draft = {
-    title,
-    date,
-    category,
-    summaryCard,
-    background,
-    keyPoints,
-    sources
+  return {
+    headline: toSafeString(view.headline),
+    bullets: toStringArray(view.bullets),
+    intensity: toSafeIntensity(view.intensity),
+    note: toSafeString(view.note) || defaultNote
   };
-
-  const progressiveView = normalizePerspectiveInput(body.progressiveView);
-  if (progressiveView) {
-    draft.progressiveView = progressiveView;
-  }
-
-  const conservativeView = normalizePerspectiveInput(body.conservativeView);
-  if (conservativeView) {
-    draft.conservativeView = conservativeView;
-  }
-
-  const impactToLife = normalizeImpactInput(body.impactToLife);
-  if (impactToLife) {
-    draft.impactToLife = impactToLife;
-  }
-
-  return { draft };
 }
 
-function normalizePerspectiveOutput(view, fallbackNote) {
-  if (!view || typeof view !== 'object') {
-    return null;
-  }
-
-  const headline = toTrimmedString(view.headline ?? '');
-  const bullets = ensureArrayOfStrings(view.bullets ?? view.points);
-  const note = typeof view.note === 'string' && view.note ? view.note : fallbackNote;
-  const intensity = normalizeIntensity(view.intensity);
-
-  if (!headline && bullets.length === 0) {
-    return null;
-  }
-
-  const normalized = { headline, bullets, note };
-  if (intensity !== undefined) {
-    normalized.intensity = intensity;
-  }
-  return normalized;
-}
-
-function normalizeImpactOutput(impact) {
+function normalizeImpactForSave(impact) {
   if (!impact || typeof impact !== 'object') {
     return null;
   }
-  const text = toTrimmedString(impact.text ?? '');
-  const note = typeof impact.note === 'string' && impact.note ? impact.note : IMPACT_NOTE;
-  if (!text) {
-    return null;
-  }
-  return { text, note };
+
+  return {
+    text: toSafeString(impact.text),
+    note: toSafeString(impact.note) || IMPACT_NOTE
+  };
 }
 
-function normalizeSourcesOutput(sources) {
+function normalizeSourcesForSave(sources) {
   if (!Array.isArray(sources)) {
     return [];
   }
-  return sources
-    .map((source) => ({
-      type: SOURCE_TYPE_OPTIONS.has(source?.type) ? source.type : 'etc',
-      channelName: toTrimmedString(source?.channelName ?? ''),
-      sourceDate: toTrimmedString(source?.sourceDate ?? ''),
-      timestamp:
-        source?.timestamp === null || source?.timestamp === undefined || source?.timestamp === ''
-          ? null
-          : toTrimmedString(String(source.timestamp)),
-      note: typeof source?.note === 'string' ? source.note : ''
-    }))
-    .filter((source) => source.channelName);
+
+  return sources.map((source) => ({
+    type: toSafeSourceType(source?.type),
+    channelName: toSafeString(source?.channelName),
+    sourceDate: toSafeString(source?.sourceDate),
+    timestamp: toSafeString(source?.timestamp),
+    note: toSafeString(source?.note)
+  }));
+}
+
+function buildIssueDocument(body) {
+  const base = {
+    title: toSafeString(body.title),
+    date: toSafeString(body.date),
+    category: toSafeCategory(body.category),
+    summaryCard: toSafeString(body.summaryCard),
+    background: toSafeString(body.background),
+    keyPoints: toStringArray(body.keyPoints),
+    sources: normalizeSourcesForSave(body.sources)
+  };
+
+  if (body.progressiveView !== null && body.progressiveView !== undefined) {
+    const progressiveView = normalizePerspectiveForSave(body.progressiveView, PROGRESSIVE_NOTE);
+    if (progressiveView) {
+      base.progressiveView = progressiveView;
+    }
+  }
+
+  if (body.conservativeView !== null && body.conservativeView !== undefined) {
+    const conservativeView = normalizePerspectiveForSave(body.conservativeView, CONSERVATIVE_NOTE);
+    if (conservativeView) {
+      base.conservativeView = conservativeView;
+    }
+  }
+
+  if (body.impactToLife !== null && body.impactToLife !== undefined) {
+    const impactToLife = normalizeImpactForSave(body.impactToLife);
+    if (impactToLife) {
+      base.impactToLife = impactToLife;
+    }
+  }
+
+  return base;
+}
+
+function validateIssueDocument(document) {
+  if (!document.title || !document.date || !document.summaryCard || !document.background) {
+    return 'title, date, summaryCard, background 필드는 비워둘 수 없습니다.';
+  }
+  if (!Array.isArray(document.keyPoints) || document.keyPoints.length === 0) {
+    return 'keyPoints 배열에 최소 1개 이상의 항목이 필요합니다.';
+  }
+  if (!Array.isArray(document.sources) || document.sources.length === 0) {
+    return 'sources 배열에 최소 1개 이상의 출처가 필요합니다.';
+  }
+  return null;
 }
 
 function convertTimestamp(value) {
@@ -240,14 +152,56 @@ function convertTimestamp(value) {
   return value;
 }
 
+function normalizePerspectiveForOutput(view, defaultNote) {
+  if (!view || typeof view !== 'object') {
+    return undefined;
+  }
+
+  const headline = toSafeString(view.headline);
+  const bullets = toStringArray(view.bullets);
+  const intensity = toSafeIntensity(view.intensity);
+  const note = toSafeString(view.note) || defaultNote;
+
+  if (!headline && bullets.length === 0 && intensity === -1) {
+    return undefined;
+  }
+
+  return { headline, bullets, intensity, note };
+}
+
+function normalizeImpactForOutput(impact) {
+  if (!impact || typeof impact !== 'object') {
+    return undefined;
+  }
+  const text = toSafeString(impact.text);
+  const note = toSafeString(impact.note) || IMPACT_NOTE;
+  if (!text) {
+    return undefined;
+  }
+  return { text, note };
+}
+
+function normalizeSourcesForOutput(sources) {
+  if (!Array.isArray(sources)) {
+    return [];
+  }
+  return sources.map((source) => ({
+    type: toSafeSourceType(source?.type),
+    channelName: toSafeString(source?.channelName),
+    sourceDate: toSafeString(source?.sourceDate),
+    timestamp: toSafeString(source?.timestamp),
+    note: toSafeString(source?.note)
+  }));
+}
+
 function toIssueSummary(doc) {
   const data = doc.data();
   return {
     id: doc.id,
-    title: data.title || '',
-    date: data.date || '',
-    category: data.category || '기타',
-    summaryCard: data.summaryCard || ''
+    title: toSafeString(data.title),
+    date: toSafeString(data.date),
+    category: toSafeCategory(data.category),
+    summaryCard: toSafeString(data.summaryCard)
   };
 }
 
@@ -255,28 +209,28 @@ function toIssueDetail(doc) {
   const data = doc.data();
   const issue = {
     id: doc.id,
-    title: data.title || '',
-    date: data.date || '',
-    category: data.category || '기타',
-    summaryCard: data.summaryCard || '',
-    background: data.background || '',
-    keyPoints: ensureArrayOfStrings(data.keyPoints),
-    sources: normalizeSourcesOutput(data.sources),
+    title: toSafeString(data.title),
+    date: toSafeString(data.date),
+    category: toSafeCategory(data.category),
+    summaryCard: toSafeString(data.summaryCard),
+    background: toSafeString(data.background),
+    keyPoints: toStringArray(data.keyPoints),
+    sources: normalizeSourcesForOutput(data.sources),
     createdAt: convertTimestamp(data.createdAt),
     updatedAt: convertTimestamp(data.updatedAt)
   };
 
-  const progressiveView = normalizePerspectiveOutput(data.progressiveView, PROGRESSIVE_NOTE);
+  const progressiveView = normalizePerspectiveForOutput(data.progressiveView, PROGRESSIVE_NOTE);
   if (progressiveView) {
     issue.progressiveView = progressiveView;
   }
 
-  const conservativeView = normalizePerspectiveOutput(data.conservativeView, CONSERVATIVE_NOTE);
+  const conservativeView = normalizePerspectiveForOutput(data.conservativeView, CONSERVATIVE_NOTE);
   if (conservativeView) {
     issue.conservativeView = conservativeView;
   }
 
-  const impactToLife = normalizeImpactOutput(data.impactToLife);
+  const impactToLife = normalizeImpactForOutput(data.impactToLife);
   if (impactToLife) {
     issue.impactToLife = impactToLife;
   }
@@ -284,12 +238,10 @@ function toIssueDetail(doc) {
   return issue;
 }
 
-// TODO: 현재 검색 구현은 최근 50건을 불러와 메모리에서 필터링한다.
-//       데이터가 늘어나면 Firestore 복합 색인 또는 전용 검색 인프라도입이 필요하다.
+// TODO: 현재 검색 구현은 최근 50건만 대상으로 하므로, 데이터가 늘어나면 Firestore 색인과 검색 인프라 확장이 필요하다.
 router.get('/search', async (req, res) => {
   try {
     const { category, query } = req.query;
-
     const snapshot = await db.collection('issues').orderBy('createdAt', 'desc').limit(50).get();
 
     const categoryFilter = typeof category === 'string' ? category.trim() : '';
@@ -327,15 +279,16 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
-    const docRef = db.collection('issues').doc(req.params.id);
+    const issueId = req.params.id;
+    const docRef = db.collection('issues').doc(issueId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
       return res.status(404).json({ message: '해당 ID의 이슈를 찾을 수 없습니다.' });
     }
 
-    const metricsRef = db.collection('metrics').doc(docSnap.id);
-    // TODO: 단순 증분 방식이라 악의적 반복 호출 방어가 어렵다. 추후 rate limiting 과 인증을 강화해야 한다.
+    const metricsRef = db.collection('metrics').doc(issueId);
+    // TODO: 지금은 인증이 없으므로 악의적 호출 방지가 어렵다. 추후 rate limiting 과 인증을 강화해야 한다.
     await metricsRef.set(
       {
         views: FieldValue.increment ? FieldValue.increment(1) : 1,
@@ -353,10 +306,15 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    // TODO: 운영 단계에서는 x-admin-secret 같은 관리자 검증을 다시 활성화하고, 더 강력한 인증 방식을 도입해야 한다.
-    const { draft, error } = normalizeIssueDraftInput(req.body);
-    if (error) {
-      return res.status(400).json({ message: error });
+    // TODO: 운영 단계에서는 x-admin-secret 같은 관리자 인증을 반드시 붙여야 한다.
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({ message: 'issueDraft 객체를 JSON으로 전달해 주세요.' });
+    }
+
+    const document = buildIssueDocument(req.body);
+    const validationError = validateIssueDocument(document);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
     }
 
     const collection = db.collection('issues');
@@ -364,7 +322,7 @@ router.post('/', async (req, res) => {
 
     await docRef.set(
       {
-        ...draft,
+        ...document,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       },
@@ -381,10 +339,14 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    // TODO: 운영 단계에서는 PUT 요청에도 관리자 인증과 세부 권한 검증을 추가해야 한다.
+    // TODO: 운영 단계에서는 PUT 요청에도 관리자 인증과 권한 검증을 적용해야 한다.
     const issueId = req.params.id;
     if (!issueId) {
       return res.status(400).json({ message: '문서 ID가 필요합니다.' });
+    }
+
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({ message: 'issueDraft 객체를 JSON으로 전달해 주세요.' });
     }
 
     const docRef = db.collection('issues').doc(issueId);
@@ -393,14 +355,15 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ message: '해당 ID의 이슈를 찾을 수 없습니다.' });
     }
 
-    const { draft, error } = normalizeIssueDraftInput(req.body);
-    if (error) {
-      return res.status(400).json({ message: error });
+    const document = buildIssueDocument(req.body);
+    const validationError = validateIssueDocument(document);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
     }
 
     await docRef.set(
       {
-        ...draft,
+        ...document,
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: false }
@@ -416,7 +379,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    // TODO: 운영 단계에서는 DELETE 요청을 실행하기 전에 관리자 인증을 필수로 걸어야 한다.
+    // TODO: 운영 단계에서는 DELETE 요청에도 관리자 인증을 강제해야 한다.
     const issueId = req.params.id;
     if (!issueId) {
       return res.status(400).json({ message: '문서 ID가 필요합니다.' });
