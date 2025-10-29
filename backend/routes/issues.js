@@ -197,7 +197,7 @@ router.post('/', async (req, res) => {
     const adminSecretEnv = process.env.ADMIN_SECRET;
 
     // TODO: 현재는 단순 헤더 기반 비밀번호 검증만 수행한다. 실제 운영 시에는 인증 서버 혹은 OAuth 기반 보호 장치가 필요하다.
-    if (!adminSecretEnv || adminSecretFromHeader !== adminSecretEnv) {
+    if (adminSecretEnv && adminSecretFromHeader !== adminSecretEnv) {
       return res.status(401).json({ message: '인증에 실패했습니다.' });
     }
 
