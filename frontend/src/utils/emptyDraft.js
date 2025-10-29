@@ -7,8 +7,8 @@ export const emptyDraft = {
   summaryCard: '',
   background: '',
   keyPoints: [],
-  progressiveView: undefined,
-  conservativeView: undefined,
-  impactToLife: undefined,
+  progressiveView: null,
+  conservativeView: null,
+  impactToLife: null,
   sources: []
 };
