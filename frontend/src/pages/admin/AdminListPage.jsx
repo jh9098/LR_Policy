@@ -1,8 +1,10 @@
 // frontend/src/pages/admin/AdminListPage.jsx
+// Firestore Web SDK로 직접 목록을 불러오고 삭제한다. Render 백엔드를 호출하지 않는다.
+// 현재 누구나 /admin/list 에 접근하면 Firestore 문서를 삭제할 수 있다. TODO: 프로덕션에서는 접근 제한과 보안 규칙 강화가 필요하다.
+
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API_BASE_URL, ADMIN_SECRET } from '../../config.js';
-import { sortIssuesByDate } from '../../utils/issueSorting.js';
+import { deleteIssue, getRecentIssues } from '../../firebaseClient.js';
 
 function AdminListPage() {
   const [items, setItems] = useState([]);
@@ -17,22 +19,17 @@ function AdminListPage() {
       setIsLoading(true);
       setError('');
       try {
-        const response = await fetch(`${API_BASE_URL}/issues`);
-        if (!response.ok) {
-          throw new Error('이슈 목록을 불러오지 못했습니다.');
-        }
-        const data = await response.json();
+        const data = await getRecentIssues(50);
         if (!isMounted) {
           return;
         }
-        const normalized = Array.isArray(data) ? data : [];
-        setItems(sortIssuesByDate(normalized));
+        setItems(data);
       } catch (err) {
         if (!isMounted) {
           return;
         }
-        console.error('목록 로드 실패:', err);
-        setError(err.message || '알 수 없는 오류가 발생했습니다.');
+        console.error('Firestore 목록 불러오기 실패:', err);
+        setError('Firestore에서 이슈 목록을 불러오지 못했습니다. 네트워크와 권한을 확인하세요.');
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -41,7 +38,6 @@ function AdminListPage() {
     }
 
     load();
-
     return () => {
       isMounted = false;
     };
@@ -57,21 +53,12 @@ function AdminListPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/issues/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-secret': ADMIN_SECRET
-        }
-      });
-      if (!response.ok) {
-        throw new Error('삭제에 실패했습니다. 잠시 후 다시 시도하세요.');
-      }
-      setItems((prev) => sortIssuesByDate(prev.filter((item) => item.id !== id)));
-      alert('삭제 완료');
+      await deleteIssue(id);
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      window.alert('삭제 완료');
     } catch (err) {
-      console.error('삭제 실패:', err);
-      setError(err.message || '삭제 중 오류가 발생했습니다.');
+      console.error('Firestore 삭제 실패:', err);
+      setError(err?.message || '삭제 중 오류가 발생했습니다. Firestore 설정을 확인하세요.');
     }
   };
 
@@ -81,7 +68,7 @@ function AdminListPage() {
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">등록된 글 목록</h2>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            최근 Firestore에 저장된 20개 문서를 보여줍니다. 삭제 버튼은 즉시 DB에서 제거하므로 주의하세요.
+            Firestore에서 직접 불러온 최근 문서를 확인합니다. 삭제 버튼을 누르면 즉시 Firestore에서 제거되므로 주의하세요.
           </p>
         </div>
         <button
@@ -126,14 +113,14 @@ function AdminListPage() {
             ) : (
               items.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/60">
-                  <td className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">{item.date}</td>
+                  <td className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">{item.date || '정보 부족'}</td>
                   <td className="px-4 py-4">
                     <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200">
-                      {item.category}
+                      {item.category || '기타'}
                     </span>
                   </td>
-                  <td className="px-4 py-4 font-semibold text-slate-900 dark:text-slate-100">{item.title}</td>
-                  <td className="px-4 py-4 text-slate-600 dark:text-slate-300">{item.summaryCard}</td>
+                  <td className="px-4 py-4 font-semibold text-slate-900 dark:text-slate-100">{item.title || '제목 없음'}</td>
+                  <td className="px-4 py-4 text-slate-600 dark:text-slate-300">{item.easySummary || item.summaryCard || ''}</td>
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap justify-center gap-2">
                       <Link

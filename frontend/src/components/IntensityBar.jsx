@@ -1,56 +1,36 @@
 // frontend/src/components/IntensityBar.jsx
+// 진보/보수 시각에서 주장 강도를 시각화하기 위한 바 컴포넌트.
+// intensity 값이 -1이면 "자료 없음"으로 해석하고 회색으로 표시한다.
+
 import PropTypes from 'prop-types';
 
-function clampValue(value) {
-  // 시각적 일관성을 위해 0~100 범위로 제한한다.
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return 0;
-  }
-  return Math.min(100, Math.max(0, Math.round(numeric)));
-}
-
-const AVAILABLE_CLASSES = [
-  'bg-indigo-500',
-  'bg-emerald-500',
-  'bg-rose-500',
-  'bg-amber-500',
-  'bg-sky-500',
-  'bg-violet-500'
-];
-
-function IntensityBar({ value, label, colorClass }) {
-  const safeValue = clampValue(value);
-  const safeColor = AVAILABLE_CLASSES.includes(colorClass) ? colorClass : 'bg-indigo-500';
+function IntensityBar({ intensity }) {
+  const clamped = typeof intensity === 'number' ? Math.max(-1, Math.min(100, intensity)) : -1;
+  const isUnknown = clamped < 0;
+  const width = isUnknown ? '0%' : `${clamped}%`;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
-        <span className="font-semibold">{label}</span>
-        <span className="tabular-nums">{safeValue}</span>
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+        <span>강도 지표</span>
+        <span>{isUnknown ? '자료 없음' : `${clamped} / 100`}</span>
       </div>
-      <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
         <div
-          className={`h-2 rounded-full transition-all duration-300 ease-out ${safeColor}`}
-          style={{ width: `${safeValue}%` }}
+          className={`h-full rounded-full transition-all ${isUnknown ? 'bg-slate-400/50 dark:bg-slate-500/50' : 'bg-indigo-500 dark:bg-indigo-400'}`}
+          style={{ width }}
         />
       </div>
-      <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400">
-        주장 어조 강도(참고용) · 수치는 진영별 주장에 담긴 감정, 경고 수위, 단정적 표현 정도를 주관적으로 환산한 값입니다.
-      </p>
     </div>
   );
 }
 
 IntensityBar.propTypes = {
-  value: PropTypes.number.isRequired,
-  label: PropTypes.string,
-  colorClass: PropTypes.oneOf(AVAILABLE_CLASSES)
+  intensity: PropTypes.number
 };
 
 IntensityBar.defaultProps = {
-  label: '주장 강도(참고용)',
-  colorClass: 'bg-indigo-500'
+  intensity: -1
 };
 
 export default IntensityBar;

@@ -1,4 +1,7 @@
 // frontend/src/components/SiteHeader.jsx
+// 공용 상단 헤더. 다크 모드 토글과 /admin 링크를 제공한다.
+// 지금은 누구나 /admin에 들어와 Firestore에 직접 쓰기 때문에 URL 노출에 주의해야 한다.
+
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
@@ -7,11 +10,9 @@ const navBaseClass =
 const THEME_STORAGE_KEY = 'efa-theme-preference';
 
 function applyTheme(theme) {
-  // Tailwind 의 dark 모드는 HTML 루트 요소에 class="dark"를 붙이는 방식으로 제어한다.
   if (typeof document === 'undefined') {
     return;
   }
-
   if (theme === 'dark') {
     document.documentElement.classList.add('dark');
   } else {
@@ -25,11 +26,9 @@ function SiteHeader() {
   const location = useLocation();
 
   useEffect(() => {
-    // 초기 진입 시 로컬 저장소 혹은 OS 모드에서 기본값을 찾는다.
     if (typeof window === 'undefined') {
       return;
     }
-
     try {
       const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
       if (stored === 'dark' || stored === 'light') {
@@ -40,7 +39,6 @@ function SiteHeader() {
     } catch (error) {
       console.warn('테마 선호도 불러오기 실패:', error);
     }
-
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setTheme('dark');
       applyTheme('dark');
@@ -48,11 +46,9 @@ function SiteHeader() {
   }, []);
 
   useEffect(() => {
-    // 사용자가 테마를 변경하면 HTML 클래스와 로컬 저장소 모두를 갱신한다.
     if (typeof window === 'undefined') {
       return;
     }
-
     applyTheme(theme);
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, theme);
@@ -61,14 +57,13 @@ function SiteHeader() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname]);
+
   const handleToggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
-
-  useEffect(() => {
-    // 경로가 바뀔 때마다 모바일 내비게이션을 닫아 화면 낭독기 혼선을 줄인다.
-    setIsMenuOpen(false);
-  }, [location.pathname]);
 
   const handleToggleMenu = () => {
     setIsMenuOpen((prev) => !prev);
@@ -130,7 +125,9 @@ function SiteHeader() {
       <nav
         id="site-header-mobile-nav"
         className={`md:hidden transition-all duration-200 ease-out ${
-          isMenuOpen ? 'max-h-40 border-t border-slate-200 bg-white/95 opacity-100 dark:border-slate-700 dark:bg-slate-900/95' : 'max-h-0 overflow-hidden opacity-0'
+          isMenuOpen
+            ? 'max-h-40 border-t border-slate-200 bg-white/95 opacity-100 dark:border-slate-700 dark:bg-slate-900/95'
+            : 'max-h-0 overflow-hidden opacity-0'
         }`}
       >
         <div className="space-y-1 px-4 pb-4 pt-3 text-sm font-medium sm:px-6">

@@ -1,4 +1,7 @@
 // frontend/src/components/MetaTags.jsx
+// SPA 환경에서 Helmet을 사용해 문서 메타 태그를 주입한다.
+// Firestore 직행 구조와 무관하지만, SNS 공유 시 설명이 제대로 노출되도록 유지한다.
+
 import PropTypes from 'prop-types';
 import { Helmet } from 'react-helmet-async';
 
@@ -11,7 +14,7 @@ function MetaTags({ title, description, url }) {
 
   return (
     <Helmet>
-      {/* TODO: SPA 클라이언트에서 메타 태그를 주입하므로 일부 SNS/메신저 미리보기에는 반영되지 않을 수 있다. 장기적으로는 SSR 또는 프리렌더 전략을 도입해야 한다. */}
+      {/* TODO: 클라이언트 렌더링만으로는 일부 SNS 미리보기에 반영되지 않으니 장기적으로는 프리렌더/SSR을 검토한다. */}
       <title>{resolvedTitle}</title>
       <meta name="description" content={resolvedDescription} />
 

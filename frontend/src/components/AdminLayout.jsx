@@ -1,11 +1,14 @@
 // frontend/src/components/AdminLayout.jsx
-import { NavLink, Outlet } from 'react-router-dom';
+// 현재 /admin/* 페이지는 인증 없이 누구나 접근 가능하다.
+// TODO(프로덕션): 관리자 인증, Firestore 보안 규칙 잠금, 접근 제한을 반드시 구현해야 한다.
+
 import { useMemo, useState } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
 
 const NAV_ITEMS = [
-  { type: 'route', label: '새 글 작성', to: '/admin/new', description: '운영용 초안 작성 및 실시간 미리보기' },
-  { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: '최근 등록된 콘텐츠 관리' },
-  { type: 'placeholder', label: '환경/설정 (준비 중)', description: 'TODO: 향후 운영 환경 설정 페이지' }
+  { type: 'route', label: '새 글 작성', to: '/admin/new', description: 'AI JSON 붙여넣기 + Firestore 등록' },
+  { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: 'Firestore에서 직접 불러온 목록 관리' },
+  { type: 'placeholder', label: '환경/설정 (준비 중)', description: 'TODO: 향후 접근 제한 및 감사 로그' }
 ];
 
 function AdminLayout() {
@@ -55,7 +58,6 @@ function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
-      {/* TODO: 실서비스 도입 시 /admin 전체에 인증 및 접근 제어가 필요하다. */}
       <div className="flex min-h-screen flex-col lg:flex-row">
         <aside className="w-full border-b border-slate-200 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80 lg:h-auto lg:w-72 lg:border-r lg:px-6 lg:py-8">
           <div className="flex items-center justify-between lg:block">
@@ -63,7 +65,8 @@ function AdminLayout() {
               <p className="text-sm font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-300">운영 도구</p>
               <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">관리자 대시보드</h1>
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                개발 단계에서는 비밀번호 없이 누구나 접근할 수 있습니다. 배포 시 인증을 추가해야 합니다.
+                현재는 개발 편의를 위해 누구나 /admin에 접근할 수 있으며 Firestore에 직접 쓰기까지 가능하다.
+                {' '}TODO: 실제 서비스에서는 접근 자체를 보호해야 한다.
               </p>
             </div>
             <button
@@ -86,7 +89,7 @@ function AdminLayout() {
             <header className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <h2 className="text-xl font-semibold">운영 대시보드</h2>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                새 정책/사건을 등록하고 기존 콘텐츠를 관리하는 내부 도구입니다. 지금은 인증이 없으니 URL을 외부에 공개하지 마세요.
+                모든 CRUD 작업이 Firestore Web SDK를 통해 브라우저에서 직접 이루어진다. 지금은 누구나 데이터를 변경할 수 있으니 URL을 외부에 공유하지 마라.
               </p>
             </header>
             <div className="pb-16">

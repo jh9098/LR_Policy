@@ -1,4 +1,6 @@
 // frontend/src/App.jsx
+// 라우팅 구성. 모든 CRUD는 firebaseClient.js를 통해 Firestore에 직접 접근한다.
+
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import SiteHeader from './components/SiteHeader.jsx';
 import SiteFooter from './components/SiteFooter.jsx';
@@ -29,7 +31,7 @@ function App() {
         <Route path="/issue/:id" element={<IssuePage />} />
       </Route>
 
-      {/* 관리자는 별도 레이아웃을 사용한다. SiteHeader/SiteFooter를 중복 렌더링하지 않기 위해 옵션 B를 채택했다. */}
+      {/* 관리자는 별도 레이아웃을 사용한다. TODO: 실제 서비스에서는 /admin 전체에 인증을 붙여야 한다. */}
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<Navigate to="new" replace />} />
         <Route path="new" element={<AdminNewPage />} />

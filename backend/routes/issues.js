@@ -1,3 +1,11 @@
+/*
+  현재 프론트엔드는 Firestore Web SDK를 통해 직접
+  issues 문서에 대해 create / update / delete 까지 수행한다.
+  즉 이 Express 서버(Render)는 런타임에서 더 이상 사용되지 않고 있다.
+  이 서버 코드는 향후 "보안 강화/권한 제어"를 위해 남겨둔 레거시 초안일 뿐이다.
+  TODO(프로덕션): /admin 접근 제한 + Firestore 보안 규칙 잠그기 + 이 서버에서만 쓰기 허용하는 구조로 전환해야 한다.
+*/
+
 // backend/routes/issues.js
 // Step 12: easySummary 필드를 포함해 issueDraft 스키마를 Firestore에 저장/조회한다. null 섹션은 필드를 생략한다.
 
@@ -242,6 +250,7 @@ function toIssueDetail(doc) {
 }
 
 // TODO: 현재 검색 구현은 최근 50건만 대상으로 하므로, 데이터가 늘어나면 Firestore 색인과 검색 인프라 확장이 필요하다.
+// 현재 프런트는 Firestore Web SDK로 직접 CRUD를 수행하므로, 아래 라우트는 레거시 참고용이다.
 router.get('/search', async (req, res) => {
   try {
     const { category, query } = req.query;
@@ -269,6 +278,7 @@ router.get('/search', async (req, res) => {
   }
 });
 
+// 현재 프런트는 Firestore Web SDK로 직접 CRUD를 수행하므로, 아래 라우트는 레거시 참고용이다.
 router.get('/', async (req, res) => {
   try {
     const snapshot = await db.collection('issues').orderBy('createdAt', 'desc').limit(20).get();
@@ -281,6 +291,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+// 현재 프런트는 Firestore Web SDK로 직접 CRUD를 수행하므로, 아래 라우트는 레거시 참고용이다.
 router.get('/:id', async (req, res) => {
   try {
     const issueId = req.params.id;
@@ -308,6 +319,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// 현재 프런트는 Firestore Web SDK로 직접 CRUD를 수행하므로, 아래 라우트는 레거시 참고용이다.
 router.post('/', async (req, res) => {
   try {
     // TODO: 운영 단계에서는 x-admin-secret 같은 관리자 인증을 반드시 붙여야 한다.
@@ -341,6 +353,7 @@ router.post('/', async (req, res) => {
   }
 });
 
+// 현재 프런트는 Firestore Web SDK로 직접 CRUD를 수행하므로, 아래 라우트는 레거시 참고용이다.
 router.put('/:id', async (req, res) => {
   try {
     // TODO: 운영 단계에서는 PUT 요청에도 관리자 인증과 권한 검증을 적용해야 한다.
@@ -381,6 +394,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// 현재 프런트는 Firestore Web SDK로 직접 CRUD를 수행하므로, 아래 라우트는 레거시 참고용이다.
 router.delete('/:id', async (req, res) => {
   try {
     // TODO: 운영 단계에서는 DELETE 요청에도 관리자 인증을 강제해야 한다.

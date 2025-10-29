@@ -1,0 +1,169 @@
+// frontend/src/firebaseClient.js
+// !!! 매우 중요 !!!
+// 지금은 개발 단계라서 Firestore Security Rules에서 issues 컬렉션에 대해 read/write 모두 allow true; 로 열어둔다고 가정한다.
+// 즉 누구나 /admin 페이지에서 문서를 생성/수정/삭제할 수 있다.
+// 프로덕션에서는 절대 이렇게 두면 안 된다. TODO: 보안 규칙을 잠그고 인증을 붙여야 한다.
+// (예시 규칙 - 실제 콘솔에 수동 반영 필요)
+// rules_version = '2';
+// service cloud.firestore {
+//   match /databases/{db}/documents {
+//     match /issues/{docId} {
+//       allow read: if true;      // 현재는 누구나 읽기 허용
+//       allow write: if true;     // 현재는 누구나 쓰기 허용 (DEV ONLY)
+//     }
+//     match /metrics/{issueId} {
+//       allow read: if true;
+//       allow write: if true;     // DEV ONLY
+//     }
+//   }
+// }
+
+// 이 파일은 브라우저 전용 Firebase Web SDK 초기화와 CRUD 유틸을 단일 진실(Single Source of Truth)로 제공한다.
+// Render/Express 백엔드는 현재 전혀 호출하지 않으며, 모든 데이터 흐름이 "프론트 → Firestore" 직행 구조임을 명심해야 한다.
+
+import { initializeApp } from 'firebase/app';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  getFirestore,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc
+} from 'firebase/firestore';
+
+// Vite 환경 변수 기반 Firebase 설정을 구성한다.
+// Netlify 등 배포 환경에서도 동일한 키 이름(VITE_FIREBASE_*)으로 등록해야 한다.
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
+};
+
+// Firebase 앱을 초기화하고 Firestore 인스턴스를 공유한다.
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// 내부에서 사용하는 헬퍼: Firestore 문서를 issueDraft 스키마에 맞는 평범한 객체로 정규화한다.
+function normalizeIssueData(issueId, data) {
+  // Firestore에서 특정 필드가 누락된 경우에도 UI가 안전하게 동작하도록 기본값을 강제한다.
+  return {
+    id: issueId,
+    easySummary: typeof data?.easySummary === 'string' ? data.easySummary : '',
+    title: typeof data?.title === 'string' ? data.title : '',
+    date: typeof data?.date === 'string' ? data.date : '',
+    category: typeof data?.category === 'string' ? data.category : '기타',
+    summaryCard: typeof data?.summaryCard === 'string' ? data.summaryCard : '',
+    background: typeof data?.background === 'string' ? data.background : '',
+    keyPoints: Array.isArray(data?.keyPoints)
+      ? data.keyPoints.map((item) => (typeof item === 'string' ? item : String(item ?? '')))
+      : [],
+    progressiveView: data?.progressiveView ?? null,
+    conservativeView: data?.conservativeView ?? null,
+    impactToLife: data?.impactToLife ?? null,
+    sources: Array.isArray(data?.sources)
+      ? data.sources.map((source) => ({
+          type: typeof source?.type === 'string' ? source.type : 'etc',
+          channelName: typeof source?.channelName === 'string' ? source.channelName : '',
+          sourceDate: typeof source?.sourceDate === 'string' ? source.sourceDate : '',
+          timestamp: typeof source?.timestamp === 'string' ? source.timestamp : '',
+          note: typeof source?.note === 'string' ? source.note : ''
+        }))
+      : [],
+    createdAt: data?.createdAt ?? null,
+    updatedAt: data?.updatedAt ?? null,
+    views: typeof data?.views === 'number' ? data.views : 0
+  };
+}
+
+// 공개 조회 전용. Render 서버를 거치지 않고 Firestore에서 직접 최근 50개의 이슈를 불러온다.
+export async function getRecentIssues(limitCount = 50) {
+  const q = query(collection(db, 'issues'), orderBy('date', 'desc'), limit(limitCount));
+  const snap = await getDocs(q);
+  return snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+}
+
+// 상세 페이지나 /admin/edit/:id 페이지에서 단일 문서를 조회할 때 사용한다.
+export async function getIssueById(issueId) {
+  if (!issueId) {
+    return null;
+  }
+  const ref = doc(db, 'issues', issueId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    return null;
+  }
+  return normalizeIssueData(issueId, snap.data());
+}
+
+// AdminNewPage에서 직접 호출하여 새 문서를 생성한다. Render 서버를 거치지 않는다.
+export async function createIssue(issueDraft) {
+  const docRef = await addDoc(collection(db, 'issues'), {
+    ...issueDraft,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    views: 0
+  });
+  // TODO: 프로덕션에서는 인증 없이 누구나 쓰기를 허용하면 안 된다.
+  return docRef.id;
+}
+
+// AdminEditPage에서 수정 저장 버튼을 누를 때 호출한다.
+export async function updateIssue(issueId, issueDraft) {
+  if (!issueId) {
+    throw new Error('issueId가 필요합니다.');
+  }
+  const ref = doc(db, 'issues', issueId);
+  await updateDoc(ref, {
+    ...issueDraft,
+    updatedAt: serverTimestamp()
+  });
+}
+
+// AdminListPage나 AdminEditPage에서 삭제 버튼을 누르면 Firestore 문서를 직접 삭제한다.
+export async function deleteIssue(issueId) {
+  if (!issueId) {
+    throw new Error('issueId가 필요합니다.');
+  }
+  await deleteDoc(doc(db, 'issues', issueId));
+  // metrics 서브 컬렉션(조회수 등)을 별도로 관리하고 있다면 같이 제거한다.
+  await deleteDoc(doc(db, 'metrics', issueId)).catch(() => {
+    // metrics 문서가 없을 수도 있으므로 오류를 삼킨다.
+  });
+}
+
+// 간단한 클라이언트 측 검색 도우미. Firestore에서 최근 N개를 가져온 뒤 제목/카테고리/요약을 부분 일치로 필터한다.
+export async function searchIssuesClient(keyword, limitCount = 50) {
+  const normalizedKeyword = (keyword ?? '').trim().toLowerCase();
+  const baseList = await getRecentIssues(limitCount);
+  if (!normalizedKeyword) {
+    return baseList;
+  }
+  return baseList.filter((issue) => {
+    const haystack = [issue.title, issue.summaryCard, issue.easySummary, issue.category]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(normalizedKeyword);
+  });
+}
+
+// TODO: 조회수(metrics) 추적을 원한다면 아래 예시처럼 클라이언트에서 직접 setDoc + increment를 호출하는 방식을 추가로 구현할 수 있다.
+// import { increment, setDoc } from 'firebase/firestore';
+// export async function incrementView(issueId) {
+//   await setDoc(
+//     doc(db, 'metrics', issueId),
+//     { views: increment(1), lastViewedAt: serverTimestamp() },
+//     { merge: true }
+//   );
+// }
+
+export { db };
