@@ -1,137 +1,38 @@
 // frontend/src/utils/loadDraftFromJson.js
-// 운영자가 상단 textarea에 붙여넣은 JSON 문자열을 엄격하게 파싱해 issueDraft 상태로 변환한다.
-// JSON.parse 단계에서 오류가 발생하면 예외를 그대로 던져 상단 UI에서 사용자에게 알려준다.
-import { emptyDraft } from './emptyDraft.js';
+// AI가 생성한 JSON 문자열을 받아 issueDraft 스키마에 맞게 병합하는 헬퍼다.
+// 실패 시 예외를 throw해 AdminNewPage에서 오류 메시지를 표시하도록 한다.
 
-const CATEGORY_OPTIONS = new Set(['부동산', '노동/노조', '사법/검찰', '외교/안보', '기타']);
-const SOURCE_TYPE_OPTIONS = new Set(['official', 'youtube', 'media', 'etc']);
+import { emptyDraft } from './emptyDraft';
 
-const PROGRESSIVE_NOTE =
-  '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
-const CONSERVATIVE_NOTE =
-  '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
-const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
-
-function toSafeString(value, fallback = '') {
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (value === null || value === undefined) {
-    return fallback;
-  }
-  return String(value);
-}
-
-function toStringArray(raw) {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  return raw.map((item) => toSafeString(item, ''));
-}
-
-function toSafeCategory(rawCategory) {
-  if (typeof rawCategory !== 'string') {
-    return '기타';
-  }
-  return CATEGORY_OPTIONS.has(rawCategory) ? rawCategory : '기타';
-}
-
-function toSafeSourceType(rawType) {
-  if (typeof rawType !== 'string') {
-    return 'etc';
-  }
-  return SOURCE_TYPE_OPTIONS.has(rawType) ? rawType : 'etc';
-}
-
-function toSafeIntensity(value) {
-  if (value === null || value === undefined || value === '') {
-    return -1;
-  }
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return -1;
-  }
-  if (numeric === -1) {
-    return -1;
-  }
-  return Math.min(100, Math.max(0, Math.round(numeric)));
-}
-
-function normalizePerspective(rawView, defaultNote) {
-  if (!rawView || typeof rawView !== 'object') {
-    return null;
+export const loadDraftFromJson = (rawText) => {
+  if (!rawText) {
+    throw new Error('JSON 문자열이 비어 있습니다.');
   }
 
-  return {
-    headline: toSafeString(rawView.headline, ''),
-    bullets: toStringArray(rawView.bullets ?? rawView.points ?? []),
-    intensity: toSafeIntensity(rawView.intensity),
-    note: toSafeString(rawView.note, defaultNote) || defaultNote
-  };
-}
-
-function normalizeImpact(rawImpact) {
-  if (!rawImpact || typeof rawImpact !== 'object') {
-    return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (error) {
+    throw new Error('JSON 파싱에 실패했습니다. 입력 형식을 다시 확인하세요.');
   }
 
-  return {
-    text: toSafeString(rawImpact.text, ''),
-    note: toSafeString(rawImpact.note, IMPACT_NOTE) || IMPACT_NOTE
-  };
-}
-
-function normalizeSources(rawSources) {
-  if (!Array.isArray(rawSources)) {
-    return [];
-  }
-
-  return rawSources.map((source) => ({
-    type: toSafeSourceType(source?.type),
-    channelName: toSafeString(source?.channelName, ''),
-    sourceDate: toSafeString(source?.sourceDate, ''),
-    timestamp: toSafeString(source?.timestamp, ''),
-    note: toSafeString(source?.note, '')
-  }));
-}
-
-export function loadDraftFromJson(rawText) {
-  if (typeof rawText !== 'string' || rawText.trim().length === 0) {
-    throw new Error('JSON 문자열을 먼저 입력해 주세요.');
-  }
-
-  const parsed = JSON.parse(rawText);
-
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('issueDraft JSON은 객체 형태여야 합니다.');
-  }
-
-  const merged = {
+  // 기본 스키마와 병합하여 누락 필드를 채워 넣는다.
+  const draft = {
     ...emptyDraft,
-    ...parsed
+    ...parsed,
   };
 
-  merged.easySummary = toSafeString(parsed.easySummary, '');
-  merged.title = toSafeString(parsed.title, '');
-  merged.date = toSafeString(parsed.date, '');
-  merged.category = toSafeCategory(parsed.category);
-  merged.summaryCard = toSafeString(parsed.summaryCard, '');
-  merged.background = toSafeString(parsed.background, '');
-  merged.keyPoints = toStringArray(parsed.keyPoints ?? []);
-  merged.sources = normalizeSources(parsed.sources ?? []);
+  // null 허용 필드가 undefined로 들어오는 경우가 있으므로 강제로 null 처리한다.
+  draft.progressiveView = parsed.progressiveView ?? null;
+  draft.conservativeView = parsed.conservativeView ?? null;
+  draft.impactToLife = parsed.impactToLife ?? null;
 
-  merged.progressiveView =
-    parsed.progressiveView === undefined
-      ? null
-      : normalizePerspective(parsed.progressiveView, PROGRESSIVE_NOTE);
+  // 배열 필드는 안전하게 변환한다.
+  draft.keyPoints = Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [];
+  draft.sources = Array.isArray(parsed.sources) ? parsed.sources : [];
 
-  merged.conservativeView =
-    parsed.conservativeView === undefined
-      ? null
-      : normalizePerspective(parsed.conservativeView, CONSERVATIVE_NOTE);
+  // easySummary가 누락되면 빈 문자열로 채운다.
+  draft.easySummary = typeof parsed.easySummary === 'string' ? parsed.easySummary : '';
 
-  merged.impactToLife =
-    parsed.impactToLife === undefined ? null : normalizeImpact(parsed.impactToLife);
-
-  return merged;
-}
+  return draft;
+};

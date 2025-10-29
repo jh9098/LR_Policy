@@ -1,4 +1,11 @@
 // backend/server.js
+/*
+  현재 프론트엔드는 Firestore Web SDK를 통해 직접
+  issues 문서에 대해 create / update / delete 까지 수행한다.
+  즉 이 Express 서버(Render)는 런타임에서 더 이상 사용되지 않고 있다.
+  이 서버 코드는 향후 "보안 강화/권한 제어"를 위해 남겨둔 레거시 초안일 뿐이다.
+  TODO(프로덕션): /admin 접근 제한 + Firestore 보안 규칙 잠그기 + 이 서버에서만 쓰기 허용하는 구조로 전환해야 한다.
+*/
 require('dotenv').config();
 
 const express = require('express');
@@ -65,7 +72,8 @@ app.use((err, req, res, next) => {
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => {
-  res.json({ message: 'LR Policy 백엔드 API가 정상 동작 중입니다.' });
+  // 현재는 프론트가 직접 Firestore를 호출하므로 이 엔드포인트는 운영 경로에서 사용되지 않는다.
+  res.json({ message: 'LR Policy 백엔드 API가 정상 동작 중입니다. (현재 비활성 상태)' });
 });
 
 app.use('/api/issues', issuesRouter);

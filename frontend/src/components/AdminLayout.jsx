@@ -1,11 +1,14 @@
 // frontend/src/components/AdminLayout.jsx
+// 관리자용 공통 레이아웃이다. 지금은 누구나 /admin/* 경로에 접근 가능하며 Firestore도 직접 수정할 수 있다.
+// TODO(프로덕션): 이 페이지 접근 자체를 보호하고 Firestore 보안 규칙을 잠궈야 한다.
+
 import { NavLink, Outlet } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 
 const NAV_ITEMS = [
   { type: 'route', label: '새 글 작성', to: '/admin/new', description: '운영용 초안 작성 및 실시간 미리보기' },
-  { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: '최근 등록된 콘텐츠 관리' },
-  { type: 'placeholder', label: '환경/설정 (준비 중)', description: 'TODO: 향후 운영 환경 설정 페이지' }
+  { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: 'Firestore에 저장된 최신 콘텐츠 관리' },
+  { type: 'placeholder', label: '환경/설정 (준비 중)', description: 'TODO: 향후 운영 환경 설정 페이지' },
 ];
 
 function AdminLayout() {
@@ -39,7 +42,7 @@ function AdminLayout() {
                 'dark:focus-visible:ring-offset-slate-900',
                 isActive
                   ? 'border-indigo-300 bg-indigo-100 text-indigo-700 dark:border-indigo-500/70 dark:bg-indigo-500/20 dark:text-indigo-200'
-                  : 'text-slate-600 dark:text-slate-300'
+                  : 'text-slate-600 dark:text-slate-300',
               ].join(' ')
             }
             onClick={() => setIsMenuOpen(false)}
@@ -55,7 +58,7 @@ function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
-      {/* TODO: 실서비스 도입 시 /admin 전체에 인증 및 접근 제어가 필요하다. */}
+      {/* TODO: 실서비스에서는 /admin 전체를 인증과 권한으로 보호해야 한다. */}
       <div className="flex min-h-screen flex-col lg:flex-row">
         <aside className="w-full border-b border-slate-200 bg-white/90 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80 lg:h-auto lg:w-72 lg:border-r lg:px-6 lg:py-8">
           <div className="flex items-center justify-between lg:block">
@@ -63,7 +66,7 @@ function AdminLayout() {
               <p className="text-sm font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-300">운영 도구</p>
               <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">관리자 대시보드</h1>
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                개발 단계에서는 비밀번호 없이 누구나 접근할 수 있습니다. 배포 시 인증을 추가해야 합니다.
+                개발 단계에서는 비밀번호 없이 누구나 접근할 수 있습니다. URL 공개에 주의하세요.
               </p>
             </div>
             <button

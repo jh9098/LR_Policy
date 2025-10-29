@@ -1,4 +1,6 @@
 // frontend/src/components/SiteHeader.jsx
+// 사이트 상단 공용 헤더. 네비게이션과 다크 모드 토글을 제공하며 Firestore 직접 연결 구조에 맞춰 관리자 링크를 안내한다.
+
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
@@ -75,11 +77,7 @@ function SiteHeader() {
   };
 
   const navLinkClassName = ({ isActive }) =>
-    [
-      navBaseClass,
-      isActive ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300',
-      'block'
-    ].join(' ');
+    [navBaseClass, isActive ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300', 'block'].join(' ');
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90">

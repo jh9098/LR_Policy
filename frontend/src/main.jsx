@@ -1,4 +1,6 @@
 // frontend/src/main.jsx
+// React 엔트리 포인트. HelmetProvider와 BrowserRouter를 감싸 Firestore 직행 SPA를 구성한다.
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
