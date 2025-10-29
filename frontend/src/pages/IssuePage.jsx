@@ -142,11 +142,20 @@ function IssuePage() {
           <header className="rounded-2xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-300">
               <span className="font-semibold uppercase tracking-wide">{issue.date || '정보 부족'}</span>
-              {issue.category ? (
-                <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-500">
-                  {issue.category}
-                </span>
-              ) : null}
+              {(issue.category || issue.subcategory) && (
+                <div className="flex flex-wrap items-center gap-1">
+                  {issue.category ? (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-500">
+                      {issue.category}
+                    </span>
+                  ) : null}
+                  {issue.subcategory ? (
+                    <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-600 ring-1 ring-inset ring-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-200 dark:ring-indigo-400/50">
+                      {issue.subcategory}
+                    </span>
+                  ) : null}
+                </div>
+              )}
             </div>
             <h1 className="mt-3 text-3xl font-bold leading-snug text-slate-900 dark:text-slate-100">{issue.title}</h1>
             <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{issue.summaryCard}</p>

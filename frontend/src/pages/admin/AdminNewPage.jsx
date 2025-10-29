@@ -5,12 +5,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
+import { CATEGORY_OPTIONS, getSubcategoryOptions, isValidCategory, isValidSubcategory } from '../../constants/categoryStructure.js';
 import { createIssue } from '../../firebaseClient.js';
 import { emptyDraft } from '../../utils/emptyDraft.js';
 import { loadDraftFromJson } from '../../utils/loadDraftFromJson.js';
 
-const STORAGE_KEY = 'adminDraftV4';
-const CATEGORY_OPTIONS = ['부동산', '노동/노조', '사법/검찰', '외교/안보', '기타'];
+const STORAGE_KEY = 'adminDraftV5';
 const SOURCE_TYPE_OPTIONS = [
   { value: 'official', label: '공식 발표' },
   { value: 'youtube', label: '유튜브' },
@@ -54,6 +54,17 @@ function AdminNewPage() {
   const [jsonError, setJsonError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const categoryValue = issueDraft.category;
+  const subcategoryValue = issueDraft.subcategory;
+
+  const subcategoryOptions = useMemo(() => getSubcategoryOptions(categoryValue), [categoryValue]);
+
+  useEffect(() => {
+    if (subcategoryValue && !subcategoryOptions.includes(subcategoryValue)) {
+      setIssueDraft((prev) => ({ ...prev, subcategory: '' }));
+    }
+  }, [subcategoryValue, subcategoryOptions]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -122,9 +133,23 @@ function AdminNewPage() {
 
   const handleCategoryChange = (event) => {
     const { value } = event.target;
+    setIssueDraft((prev) => {
+      const nextCategory = isValidCategory(value) ? value : prev.category;
+      const allowedSubcategories = getSubcategoryOptions(nextCategory);
+      const nextSubcategory = allowedSubcategories.includes(prev.subcategory) ? prev.subcategory : '';
+      return {
+        ...prev,
+        category: nextCategory,
+        subcategory: nextSubcategory
+      };
+    });
+  };
+
+  const handleSubcategoryChange = (event) => {
+    const { value } = event.target;
     setIssueDraft((prev) => ({
       ...prev,
-      category: CATEGORY_OPTIONS.includes(value) ? value : prev.category
+      subcategory: isValidSubcategory(prev.category, value) ? value : ''
     }));
   };
 
@@ -400,7 +425,7 @@ function AdminNewPage() {
                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 />
               </label>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <label className="flex flex-col gap-2 text-sm">
                   <span className="font-medium">날짜</span>
                   <input
@@ -419,6 +444,21 @@ function AdminNewPage() {
                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                   >
                     {CATEGORY_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-2 text-sm">
+                  <span className="font-medium">하위 카테고리</span>
+                  <select
+                    value={issueDraft.subcategory}
+                    onChange={handleSubcategoryChange}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                  >
+                    <option value="">하위 카테고리 선택</option>
+                    {subcategoryOptions.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
@@ -819,6 +859,26 @@ function AdminNewPage() {
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 아래 화면은 현재 입력값을 기반으로 사용자가 보게 될 상세 페이지 레이아웃을 즉시 반영한다.
               </p>
+              <dl className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="font-medium text-slate-500 dark:text-slate-400">카테고리</dt>
+                  <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
+                    {issueDraft.category || '미선택'}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="font-medium text-slate-500 dark:text-slate-400">하위 카테고리</dt>
+                  <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
+                    {issueDraft.subcategory || '미선택'}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="font-medium text-slate-500 dark:text-slate-400">날짜</dt>
+                  <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
+                    {issueDraft.date || '정보 부족'}
+                  </dd>
+                </div>
+              </dl>
             </div>
 
             {issueDraft.easySummary && (

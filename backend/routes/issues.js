@@ -14,7 +14,14 @@ const { db, FieldValue } = require('../firebaseAdmin');
 
 const router = express.Router();
 
-const CATEGORY_OPTIONS = new Set(['부동산', '노동/노조', '사법/검찰', '외교/안보', '기타']);
+const CATEGORY_STRUCTURE = {
+  부동산: ['주거·주택공급 정책', '전월세·임대차 제도', '재건축·재개발·도시정비', '부동산 세제·규제'],
+  '노동/노조': ['임금·근로조건 정책', '노사협상·파업 이슈', '고용·산재·안전 규제', '산업별 노동 현안'],
+  '사법/검찰': ['수사·기소·사건 처리', '법원 판결·양형 논쟁', '사법개혁·제도개편', '감찰·징계·인사'],
+  '외교/안보': ['정상외교·국제협력', '군사·방위 정책', '동맹 현안', '대북·통일 정책'],
+  기타: ['국회·정당·정치개혁', '복지·보건·교육 정책', '과학·디지털·규제 혁신', '환경·에너지 전환']
+};
+const CATEGORY_OPTIONS = new Set(Object.keys(CATEGORY_STRUCTURE));
 const SOURCE_TYPE_OPTIONS = new Set(['official', 'youtube', 'media', 'etc']);
 
 const PROGRESSIVE_NOTE =
@@ -43,6 +50,15 @@ function toStringArray(raw) {
 function toSafeCategory(value) {
   const candidate = toSafeString(value);
   return CATEGORY_OPTIONS.has(candidate) ? candidate : '기타';
+}
+
+function toSafeSubcategory(category, value) {
+  const candidate = toSafeString(value);
+  const options = CATEGORY_STRUCTURE[category];
+  if (!Array.isArray(options)) {
+    return '';
+  }
+  return options.includes(candidate) ? candidate : '';
 }
 
 function toSafeSourceType(value) {
@@ -103,11 +119,13 @@ function normalizeSourcesForSave(sources) {
 }
 
 function buildIssueDocument(body) {
+  const safeCategory = toSafeCategory(body.category);
   const base = {
     easySummary: toSafeString(body.easySummary),
     title: toSafeString(body.title),
     date: toSafeString(body.date),
-    category: toSafeCategory(body.category),
+    category: safeCategory,
+    subcategory: toSafeSubcategory(safeCategory, body.subcategory),
     summaryCard: toSafeString(body.summaryCard),
     background: toSafeString(body.background),
     keyPoints: toStringArray(body.keyPoints),
@@ -205,24 +223,28 @@ function normalizeSourcesForOutput(sources) {
 
 function toIssueSummary(doc) {
   const data = doc.data();
+  const category = toSafeCategory(data.category);
   return {
     id: doc.id,
     easySummary: toSafeString(data.easySummary),
     title: toSafeString(data.title),
     date: toSafeString(data.date),
-    category: toSafeCategory(data.category),
+    category,
+    subcategory: toSafeSubcategory(category, data.subcategory),
     summaryCard: toSafeString(data.summaryCard)
   };
 }
 
 function toIssueDetail(doc) {
   const data = doc.data();
+  const category = toSafeCategory(data.category);
   const issue = {
     id: doc.id,
     easySummary: toSafeString(data.easySummary),
     title: toSafeString(data.title),
     date: toSafeString(data.date),
-    category: toSafeCategory(data.category),
+    category,
+    subcategory: toSafeSubcategory(category, data.subcategory),
     summaryCard: toSafeString(data.summaryCard),
     background: toSafeString(data.background),
     keyPoints: toStringArray(data.keyPoints),
