@@ -1,745 +1,843 @@
 // frontend/src/pages/admin/AdminEditPage.jsx
+// 기존 문서를 Firestore에서 직접 읽어와 수정/삭제하는 페이지다. 모든 작업이 클라이언트에서 곧바로 Firestore로 전송된다.
+// TODO: 현재 누구나 수정/삭제 가능. 실제 운영에서는 접근 제한과 Firestore 보안 규칙 강화를 반드시 도입해야 한다.
+
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
-import { API_BASE_URL, ADMIN_SECRET } from '../../config.js';
-import { parseSources } from '../../utils/parseSources.js';
+import { deleteIssue, getIssueById, updateIssue } from '../../firebaseClient.js';
+import { emptyDraft } from '../../utils/emptyDraft.js';
 
-const CATEGORY_OPTIONS = ['부동산', '노동/노조', '사법/검찰', '외교/안보', '기타'];
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const CONSERVATIVE_NOTE =
   '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
 
-function splitLines(value) {
-  if (!value || typeof value !== 'string') {
-    return [];
-  }
-  return value
-    .split(/\r?\n|\r|\u2028/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function parseIntensity(value) {
-  if (value === null || value === undefined || value === '') {
-    return undefined;
-  }
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return undefined;
-  }
-  return Math.min(100, Math.max(0, Math.round(numeric)));
-}
-
-function splitParagraphs(text) {
-  if (!text) {
-    return [];
-  }
-  return text
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-}
-
-function formatSourcesForTextarea(rawSources) {
-  if (!Array.isArray(rawSources)) {
-    return '';
-  }
-
-  return rawSources
-    .map((source) => {
-      if (!source) {
-        return null;
-      }
-      const type = typeof source.type === 'string' && source.type.trim() ? source.type.trim() : 'etc';
-      const channelName = typeof source.channelName === 'string' ? source.channelName.trim() : '';
-      if (!channelName) {
-        return null;
-      }
-      const sourceDate = typeof source.sourceDate === 'string' ? source.sourceDate.trim() : '';
-      const timestampRaw = source.timestamp === null || source.timestamp === undefined ? '' : source.timestamp;
-      const timestamp = typeof timestampRaw === 'string' ? timestampRaw.trim() : '';
-      const note = typeof source.note === 'string' ? source.note.trim() : '';
-
-      return [type, channelName, sourceDate, timestamp, note].join('|');
-    })
-    .filter(Boolean)
-    .join('\n');
-}
-
-function toSafeString(value, fallback = '') {
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (value === null || value === undefined) {
-    return fallback;
-  }
-  return String(value);
-}
-
-function buildFormStateFromIssue(issue) {
-  return {
-    title: toSafeString(issue.title),
-    date: toSafeString(issue.date),
-    category: toSafeString(issue.category, '기타') || '기타',
-    summaryCard: toSafeString(issue.summaryCard),
-    background: toSafeString(issue.background),
-    keyPoints: Array.isArray(issue.keyPoints) ? issue.keyPoints.map((point) => toSafeString(point)).join('\n') : '',
-    progressiveHeadline: toSafeString(issue.progressiveView?.headline),
-    progressiveBullets: Array.isArray(issue.progressiveView?.bullets)
-      ? issue.progressiveView.bullets.map((point) => toSafeString(point)).join('\n')
-      : '',
-    progressiveIntensity:
-      issue.progressiveView?.intensity === null || issue.progressiveView?.intensity === undefined
-        ? ''
-        : String(issue.progressiveView.intensity),
-    conservativeHeadline: toSafeString(issue.conservativeView?.headline),
-    conservativeBullets: Array.isArray(issue.conservativeView?.bullets)
-      ? issue.conservativeView.bullets.map((point) => toSafeString(point)).join('\n')
-      : '',
-    conservativeIntensity:
-      issue.conservativeView?.intensity === null || issue.conservativeView?.intensity === undefined
-        ? ''
-        : String(issue.conservativeView.intensity),
-    impactToLifeText: toSafeString(issue.impactToLife?.text),
-    sourcesRaw: formatSourcesForTextarea(issue.sources)
-  };
-}
-
 function AdminEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-
-  const [formData, setFormData] = useState(null);
+  const [issueDraft, setIssueDraft] = useState(() => ({ ...emptyDraft }));
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const [error, setError] = useState('');
   const [submitError, setSubmitError] = useState('');
-  const [submitSuccess, setSubmitSuccess] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!id) {
-      setLoadError('이슈 ID가 올바르지 않습니다.');
-      setIsLoading(false);
-      return;
-    }
-
     let isMounted = true;
-
-    async function loadIssue() {
+    const loadIssue = async () => {
       setIsLoading(true);
-      setLoadError('');
+      setError('');
       try {
-        const response = await fetch(`${API_BASE_URL}/issues/${id}`);
-        if (!response.ok) {
-          throw new Error(response.status === 404 ? '해당 문서를 찾을 수 없습니다.' : '문서를 불러오지 못했습니다.');
+        const doc = await getIssueById(id);
+        if (!doc) {
+          throw new Error('문서를 찾을 수 없습니다.');
         }
-        const data = await response.json();
         if (!isMounted) {
           return;
         }
-        setFormData(buildFormStateFromIssue({
-          id: data.id ?? id,
-          title: data.title ?? '',
-          date: data.date ?? '',
-          category: data.category ?? '기타',
-          summaryCard: data.summaryCard ?? '',
-          background: data.background ?? '',
-          keyPoints: Array.isArray(data.keyPoints) ? data.keyPoints : [],
-          progressiveView: data.progressiveView ?? null,
-          conservativeView: data.conservativeView ?? null,
-          impactToLife: data.impactToLife ?? null,
-          sources: Array.isArray(data.sources) ? data.sources : []
-        }));
-      } catch (error) {
-        console.error('문서 불러오기 실패:', error);
-        if (!isMounted) {
-          return;
+        setIssueDraft({
+          ...emptyDraft,
+          ...doc,
+          keyPoints: Array.isArray(doc.keyPoints) ? doc.keyPoints : [],
+          progressiveView: doc.progressiveView ?? null,
+          conservativeView: doc.conservativeView ?? null,
+          impactToLife: doc.impactToLife ?? null,
+          sources: Array.isArray(doc.sources) ? doc.sources : [],
+        });
+      } catch (err) {
+        console.error('문서 불러오기 실패:', err);
+        if (isMounted) {
+          setError(err.message || '알 수 없는 오류가 발생했습니다.');
         }
-        setLoadError(error.message || '알 수 없는 오류가 발생했습니다.');
       } finally {
         if (isMounted) {
           setIsLoading(false);
         }
       }
-    }
+    };
 
-    loadIssue();
+    if (id) {
+      loadIssue();
+    }
 
     return () => {
       isMounted = false;
     };
   }, [id]);
 
-  useEffect(() => {
-    if (!submitSuccess) {
-      return undefined;
+  const previewBackgroundParagraphs = useMemo(() => {
+    if (!issueDraft.background) {
+      return [];
     }
-    const timer = window.setTimeout(() => setSubmitSuccess(''), 2000);
-    return () => window.clearTimeout(timer);
-  }, [submitSuccess]);
+    return issueDraft.background
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+  }, [issueDraft.background]);
+
+  const previewKeyPoints = useMemo(() => {
+    if (!Array.isArray(issueDraft.keyPoints)) {
+      return [];
+    }
+    return issueDraft.keyPoints.map((point) => point.trim()).filter(Boolean);
+  }, [issueDraft.keyPoints]);
+
+  const previewSources = useMemo(() => {
+    if (!Array.isArray(issueDraft.sources)) {
+      return [];
+    }
+    return issueDraft.sources
+      .map((source, index) => ({
+        id: `${source.channelName || 'source'}-${index}`,
+        type: source.type || 'etc',
+        channelName: source.channelName || '',
+        sourceDate: source.sourceDate || '',
+        timestamp: source.timestamp || '',
+        note: source.note || '',
+      }))
+      .filter((source) => source.channelName);
+  }, [issueDraft.sources]);
+
+  const handleBasicFieldChange = (field, value) => {
+    setIssueDraft((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setSubmitError('');
+  };
+
+  const handleKeyPointsChange = (index, value) => {
+    setIssueDraft((prev) => {
+      const points = Array.isArray(prev.keyPoints) ? [...prev.keyPoints] : [];
+      points[index] = value;
+      return { ...prev, keyPoints: points };
+    });
+    setSubmitError('');
+  };
+
+  const addKeyPoint = () => {
+    setIssueDraft((prev) => ({
+      ...prev,
+      keyPoints: [...(Array.isArray(prev.keyPoints) ? prev.keyPoints : []), ''],
+    }));
+    setSubmitError('');
+  };
+
+  const removeKeyPoint = (index) => {
+    setIssueDraft((prev) => {
+      const points = Array.isArray(prev.keyPoints) ? [...prev.keyPoints] : [];
+      points.splice(index, 1);
+      return { ...prev, keyPoints: points };
+    });
+    setSubmitError('');
+  };
+
+  const ensurePerspective = (key, defaultNote) => {
+    setIssueDraft((prev) => {
+      if (prev[key]) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: {
+          headline: '',
+          bullets: [''],
+          intensity: -1,
+          note: defaultNote,
+        },
+      };
+    });
+    setSubmitError('');
+  };
+
+  const removePerspective = (key) => {
+    setIssueDraft((prev) => ({
+      ...prev,
+      [key]: null,
+    }));
+    setSubmitError('');
+  };
+
+  const handlePerspectiveFieldChange = (key, field, value) => {
+    setIssueDraft((prev) => {
+      const current = prev[key];
+      if (!current) {
+        return prev;
+      }
+      if (field === 'intensity') {
+        if (value === '') {
+          return {
+            ...prev,
+            [key]: { ...current, intensity: -1 },
+          };
+        }
+        const numeric = Number(value);
+        const safeValue = Number.isFinite(numeric) ? Math.min(100, Math.max(0, Math.round(numeric))) : -1;
+        return {
+          ...prev,
+          [key]: { ...current, intensity: safeValue },
+        };
+      }
+      return {
+        ...prev,
+        [key]: { ...current, [field]: value },
+      };
+    });
+    setSubmitError('');
+  };
+
+  const handlePerspectiveBulletChange = (key, index, value) => {
+    setIssueDraft((prev) => {
+      const current = prev[key];
+      if (!current) {
+        return prev;
+      }
+      const bullets = Array.isArray(current.bullets) ? [...current.bullets] : [];
+      bullets[index] = value;
+      return {
+        ...prev,
+        [key]: { ...current, bullets },
+      };
+    });
+    setSubmitError('');
+  };
+
+  const addPerspectiveBullet = (key) => {
+    setIssueDraft((prev) => {
+      const current = prev[key];
+      if (!current) {
+        return prev;
+      }
+      const bullets = Array.isArray(current.bullets) ? [...current.bullets, ''] : [''];
+      return {
+        ...prev,
+        [key]: { ...current, bullets },
+      };
+    });
+    setSubmitError('');
+  };
+
+  const removePerspectiveBullet = (key, index) => {
+    setIssueDraft((prev) => {
+      const current = prev[key];
+      if (!current) {
+        return prev;
+      }
+      const bullets = Array.isArray(current.bullets) ? [...current.bullets] : [];
+      bullets.splice(index, 1);
+      return {
+        ...prev,
+        [key]: { ...current, bullets },
+      };
+    });
+    setSubmitError('');
+  };
+
+  const ensureImpactSection = () => {
+    setIssueDraft((prev) => {
+      if (prev.impactToLife) {
+        return prev;
+      }
+      return {
+        ...prev,
+        impactToLife: {
+          text: '',
+          note: IMPACT_NOTE,
+        },
+      };
+    });
+    setSubmitError('');
+  };
+
+  const removeImpactSection = () => {
+    setIssueDraft((prev) => ({
+      ...prev,
+      impactToLife: null,
+    }));
+    setSubmitError('');
+  };
+
+  const handleImpactChange = (field, value) => {
+    setIssueDraft((prev) => {
+      if (!prev.impactToLife) {
+        return prev;
+      }
+      return {
+        ...prev,
+        impactToLife: {
+          ...prev.impactToLife,
+          [field]: value,
+        },
+      };
+    });
+    setSubmitError('');
+  };
+
+  const handleSourceChange = (index, field, value) => {
+    setIssueDraft((prev) => {
+      const sources = Array.isArray(prev.sources) ? [...prev.sources] : [];
+      const current = sources[index] || { type: 'etc', channelName: '', sourceDate: '', timestamp: '', note: '' };
+      sources[index] = {
+        ...current,
+        [field]: value,
+      };
+      return { ...prev, sources };
+    });
+    setSubmitError('');
+  };
+
+  const addSource = () => {
+    setIssueDraft((prev) => ({
+      ...prev,
+      sources: [
+        ...(Array.isArray(prev.sources) ? prev.sources : []),
+        { type: 'media', channelName: '', sourceDate: '', timestamp: '', note: '' },
+      ],
+    }));
+    setSubmitError('');
+  };
+
+  const removeSource = (index) => {
+    setIssueDraft((prev) => {
+      const sources = Array.isArray(prev.sources) ? [...prev.sources] : [];
+      sources.splice(index, 1);
+      return { ...prev, sources };
+    });
+    setSubmitError('');
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSubmitError('');
+    try {
+      await updateIssue(id, issueDraft);
+      alert('수정 완료');
+    } catch (err) {
+      console.error('수정 실패:', err);
+      setSubmitError(err.message || 'Firestore 업데이트 중 오류가 발생했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleDelete = async () => {
-    if (!id || isSubmitting) {
-      return;
-    }
-    const ok = window.confirm('정말로 이 문서를 삭제할까요? 삭제 후에는 복원할 수 없습니다.');
+    const ok = window.confirm('정말로 이 글을 삭제할까요? 이 작업은 되돌릴 수 없습니다.');
     if (!ok) {
       return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}/issues/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-secret': ADMIN_SECRET
-        }
-      });
-      if (!response.ok) {
-        throw new Error('삭제에 실패했습니다.');
-      }
-      window.alert('삭제가 완료되었습니다.');
+      await deleteIssue(id);
+      alert('삭제 완료');
       navigate('/admin/list');
-    } catch (error) {
-      console.error('삭제 실패:', error);
-      setLoadError(error.message || '삭제 중 오류가 발생했습니다.');
+    } catch (err) {
+      console.error('삭제 실패:', err);
+      setSubmitError(err.message || '삭제 중 오류가 발생했습니다.');
     }
   };
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData((prev) => (prev ? { ...prev, [name]: value } : prev));
-    setSubmitError('');
-  };
+  if (isLoading) {
+    return <p className="py-12 text-center text-sm text-slate-500 dark:text-slate-300">문서를 불러오는 중입니다...</p>;
+  }
 
-  const previewData = useMemo(() => {
-    if (!formData) {
-      return null;
-    }
-
-    const keyPoints = splitLines(formData.keyPoints);
-    const progressiveBullets = splitLines(formData.progressiveBullets);
-    const conservativeBullets = splitLines(formData.conservativeBullets);
-    const progressiveIntensity = parseIntensity(formData.progressiveIntensity);
-    const conservativeIntensity = parseIntensity(formData.conservativeIntensity);
-    const sources = parseSources(formData.sourcesRaw);
-
-    const progressiveView =
-      formData.progressiveHeadline || progressiveBullets.length > 0
-        ? {
-            headline: formData.progressiveHeadline,
-            bullets: progressiveBullets,
-            note: PROGRESSIVE_NOTE,
-            intensity: progressiveIntensity
-          }
-        : null;
-
-    const conservativeView =
-      formData.conservativeHeadline || conservativeBullets.length > 0
-        ? {
-            headline: formData.conservativeHeadline,
-            bullets: conservativeBullets,
-            note: CONSERVATIVE_NOTE,
-            intensity: conservativeIntensity
-          }
-        : null;
-
-    const impactToLife = formData.impactToLifeText
-      ? {
-          text: formData.impactToLifeText,
-          note: IMPACT_NOTE
-        }
-      : null;
-
-    return {
-      ...formData,
-      keyPoints,
-      progressiveView,
-      conservativeView,
-      impactToLife,
-      sources
-    };
-  }, [formData]);
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!formData || !id) {
-      return;
-    }
-
-    setSubmitError('');
-    setSubmitSuccess('');
-
-    const keyPoints = splitLines(formData.keyPoints);
-    const progressiveBullets = splitLines(formData.progressiveBullets);
-    const conservativeBullets = splitLines(formData.conservativeBullets);
-    const progressiveIntensity = parseIntensity(formData.progressiveIntensity);
-    const conservativeIntensity = parseIntensity(formData.conservativeIntensity);
-    const sources = parseSources(formData.sourcesRaw);
-
-    if (!formData.title || !formData.date || !formData.summaryCard || !formData.background) {
-      setSubmitError('제목, 날짜, 요약 카드 문장, 배경/맥락 본문은 필수입니다.');
-      return;
-    }
-    if (keyPoints.length === 0) {
-      setSubmitError('핵심 쟁점 bullet을 최소 1개 이상 작성해주세요.');
-      return;
-    }
-    if (sources.length === 0) {
-      setSubmitError('출처를 최소 1개 이상 입력해야 합니다.');
-      return;
-    }
-
-    const payload = {
-      title: formData.title,
-      date: formData.date,
-      category: formData.category,
-      summaryCard: formData.summaryCard,
-      background: formData.background,
-      keyPoints,
-      sources
-    };
-
-    if (formData.progressiveHeadline || progressiveBullets.length > 0) {
-      payload.progressiveView = {
-        headline: formData.progressiveHeadline,
-        bullets: progressiveBullets,
-        note: PROGRESSIVE_NOTE
-      };
-      if (progressiveIntensity !== undefined) {
-        payload.progressiveView.intensity = progressiveIntensity;
-      }
-    }
-
-    if (formData.conservativeHeadline || conservativeBullets.length > 0) {
-      payload.conservativeView = {
-        headline: formData.conservativeHeadline,
-        bullets: conservativeBullets,
-        note: CONSERVATIVE_NOTE
-      };
-      if (conservativeIntensity !== undefined) {
-        payload.conservativeView.intensity = conservativeIntensity;
-      }
-    }
-
-    if (formData.impactToLifeText) {
-      payload.impactToLife = {
-        text: formData.impactToLifeText,
-        note: IMPACT_NOTE
-      };
-    }
-
-    setIsSubmitting(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/issues/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-secret': ADMIN_SECRET
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message || '수정에 실패했습니다.');
-      }
-
-      const updated = await response.json();
-      setFormData(buildFormStateFromIssue({
-        id: updated.id ?? id,
-        title: updated.title ?? payload.title,
-        date: updated.date ?? payload.date,
-        category: updated.category ?? payload.category,
-        summaryCard: updated.summaryCard ?? payload.summaryCard,
-        background: updated.background ?? payload.background,
-        keyPoints: Array.isArray(updated.keyPoints) ? updated.keyPoints : keyPoints,
-        progressiveView: updated.progressiveView ?? payload.progressiveView ?? null,
-        conservativeView: updated.conservativeView ?? payload.conservativeView ?? null,
-        impactToLife: updated.impactToLife ?? payload.impactToLife ?? null,
-        sources: Array.isArray(updated.sources) ? updated.sources : sources
-      }));
-      setSubmitSuccess('수정 내용이 저장되었습니다. (Firestore 반영까지 수 초 걸릴 수 있습니다)');
-    } catch (error) {
-      console.error('수정 실패:', error);
-      setSubmitError(error.message || '문서를 수정하는 중 오류가 발생했습니다.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  if (error) {
+    return (
+      <div className="space-y-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-6 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+        <p>문서를 읽어오지 못했습니다.</p>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <section className="space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">글 수정</h2>
+    <div className="space-y-8">
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <header className="space-y-2">
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">문서 수정</h1>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            기존에 등록한 정책/사건 카드를 그대로 불러와 수정하고 저장할 수 있습니다. 입력 폼과 미리보기 레이아웃은 신규 등록 화면과 동일합니다.
+            Firestore에서 불러온 초안을 바로 수정합니다. 저장을 누르면 updateDoc()이 실행되고, 삭제를 누르면 deleteDoc()이 실행됩니다.
           </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            to="/admin/list"
-            className="inline-flex items-center justify-center rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900"
+        </header>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-70 dark:focus-visible:ring-offset-slate-900"
           >
-            목록으로
-          </Link>
+            {isSaving ? '저장 중...' : '수정 저장'}
+          </button>
           <button
             type="button"
             onClick={handleDelete}
-            disabled={isSubmitting || isLoading}
-            className="inline-flex items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-500/50 dark:text-rose-200 dark:hover:bg-rose-500/10 dark:focus-visible:ring-offset-slate-900"
+            className="inline-flex items-center rounded-md border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-rose-500/50 dark:text-rose-200 dark:hover:bg-rose-500/10 dark:focus-visible:ring-offset-slate-900"
           >
-            삭제
+            이 글 삭제
           </button>
         </div>
-      </header>
+        {submitError && (
+          <p className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100">
+            {submitError}
+          </p>
+        )}
+      </section>
 
-      {loadError ? (
-        <p className="rounded-lg border border-rose-300 bg-rose-100/60 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100">
-          {loadError}
-        </p>
-      ) : null}
-
-      {isLoading ? (
-        <p className="text-sm text-slate-500 dark:text-slate-300">데이터를 불러오는 중입니다...</p>
-      ) : null}
-
-      {!isLoading && !loadError && formData ? (
-        <div className="grid gap-6 xl:grid-cols-[1.3fr,1fr]">
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
-          >
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">1. 기본 정보</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  제목
-                  <input
-                    type="text"
-                    name="title"
-                    value={formData.title}
-                    onChange={handleChange}
-                    required
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-indigo-400"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  날짜 (YYYY-MM-DD)
-                  <input
-                    type="date"
-                    name="date"
-                    value={formData.date}
-                    onChange={handleChange}
-                    required
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-indigo-400"
-                  />
-                </label>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  카테고리
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-indigo-400"
-                  >
-                    {CATEGORY_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  홈 카드 요약 (1~2문장)
-                  <input
-                    type="text"
-                    name="summaryCard"
-                    value={formData.summaryCard}
-                    onChange={handleChange}
-                    required
-                    placeholder="홈 화면 카드에 노출되는 짧은 요약"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">2. 배경/맥락</h3>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr),minmax(0,420px)]">
+        <main className="space-y-6">
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">기본 정보</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                배경 설명 (사실 중심)
+                쉬운 요약 (일반인 설명용)
                 <textarea
-                  name="background"
-                  value={formData.background}
-                  onChange={handleChange}
-                  rows={8}
-                  required
-                  placeholder="이 정책/사건이 무엇인지, 왜 등장했는지, 공식적으로 확인된 사실만 작성"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
+                  value={issueDraft.easySummary}
+                  onChange={(event) => handleBasicFieldChange('easySummary', event.target.value)}
+                  className="min-h-[80px] rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                핵심 쟁점 bullet (줄바꿈으로 구분)
-                <textarea
-                  name="keyPoints"
-                  value={formData.keyPoints}
-                  onChange={handleChange}
-                  rows={4}
-                  required
-                  placeholder={`예:\nLTV 상향으로 초기 자금 부담이 줄었다\n정부는 서민 주거안정을 주장한다\n일부에서는 부채 리스크를 우려한다`}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
-                />
-              </label>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">3. 진보 시각 (선택)</h3>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                진보 시각 헤드라인
+                제목
                 <input
                   type="text"
-                  name="progressiveHeadline"
-                  value={formData.progressiveHeadline}
-                  onChange={handleChange}
-                  placeholder="예: 정부 개입은 서민 보호에 필수"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
+                  value={issueDraft.title}
+                  onChange={(event) => handleBasicFieldChange('title', event.target.value)}
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                진보 시각 bullet (줄바꿈)
-                <textarea
-                  name="progressiveBullets"
-                  value={formData.progressiveBullets}
-                  onChange={handleChange}
-                  rows={4}
-                  placeholder={`예:\n이 정책은 서민 주거 안정을 위해 필요하다는 주장\n시장 규제를 통한 격차 완화를 기대`}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                진보 주장 강도 (0~100)
-                <input
-                  type="number"
-                  name="progressiveIntensity"
-                  value={formData.progressiveIntensity}
-                  onChange={handleChange}
-                  min="0"
-                  max="100"
-                  placeholder="예: 70"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
-                />
-              </label>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                note 문구는 자동으로 저장되며 수정할 수 없습니다. 강도 값은 비워두면 저장되지 않습니다.
-              </p>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">4. 보수 시각 (선택)</h3>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                보수 시각 헤드라인
+                날짜 (YYYY-MM-DD 혹은 정보 부족)
                 <input
                   type="text"
-                  name="conservativeHeadline"
-                  value={formData.conservativeHeadline}
-                  onChange={handleChange}
-                  placeholder="예: 이건 선거용 퍼주기 정책이다"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
+                  value={issueDraft.date}
+                  onChange={(event) => handleBasicFieldChange('date', event.target.value)}
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                보수 시각 bullet (줄바꿈)
-                <textarea
-                  name="conservativeBullets"
-                  value={formData.conservativeBullets}
-                  onChange={handleChange}
-                  rows={4}
-                  placeholder={`예:\n재정 건전성이 악화될 수 있다는 비판\n실수요자보다 투기 수요를 키울 것이라는 주장`}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
-                />
+                카테고리
+                <select
+                  value={issueDraft.category}
+                  onChange={(event) => handleBasicFieldChange('category', event.target.value)}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="부동산">부동산</option>
+                  <option value="노동/노조">노동/노조</option>
+                  <option value="사법/검찰">사법/검찰</option>
+                  <option value="외교/안보">외교/안보</option>
+                  <option value="기타">기타</option>
+                </select>
               </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                보수 주장 강도 (0~100)
-                <input
-                  type="number"
-                  name="conservativeIntensity"
-                  value={formData.conservativeIntensity}
-                  onChange={handleChange}
-                  min="0"
-                  max="100"
-                  placeholder="예: 50"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
-                />
-              </label>
-            </section>
+            </div>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              메인 카드 요약 (summaryCard)
+              <textarea
+                value={issueDraft.summaryCard}
+                onChange={(event) => handleBasicFieldChange('summaryCard', event.target.value)}
+                className="min-h-[100px] rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              배경/맥락 설명
+              <textarea
+                value={issueDraft.background}
+                onChange={(event) => handleBasicFieldChange('background', event.target.value)}
+                className="min-h-[160px] rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+          </section>
 
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">5. 이게 내 삶에 뭐가 변함? (선택)</h3>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                생활 영향 요약
-                <textarea
-                  name="impactToLifeText"
-                  value={formData.impactToLifeText}
-                  onChange={handleChange}
-                  rows={4}
-                  placeholder="중립적 해석과 체감 영향을 요약해주세요. (ChatGPT의 의견)"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
-                />
-              </label>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">6. 출처 (필수)</h3>
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                출처 목록
-                <textarea
-                  name="sourcesRaw"
-                  value={formData.sourcesRaw}
-                  onChange={handleChange}
-                  rows={6}
-                  required
-                  placeholder={`형식: type|channelName|sourceDate|timestamp|note\n예: official|국토교통부|2023-09-01||보도자료`}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400"
-                />
-              </label>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                각 줄을 <code>type|channelName|sourceDate|timestamp|note</code> 형식으로 작성합니다. timestamp가 없으면 비워두고 <code>||</code>로 연결해도 됩니다.
-              </p>
-            </section>
-
-            {submitError ? (
-              <p className="rounded-lg border border-rose-300 bg-rose-100/60 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100">
-                {submitError}
-              </p>
-            ) : null}
-
-            {submitSuccess ? (
-              <p className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-100">
-                {submitSuccess}
-              </p>
-            ) : null}
-
-            <div className="flex flex-wrap justify-end gap-2">
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">핵심 쟁점 bullet</h2>
               <button
-                type="submit"
-                disabled={isSubmitting}
-                className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:ring-offset-slate-900"
+                type="button"
+                onClick={addKeyPoint}
+                className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
-                {isSubmitting ? '저장 중...' : '수정 내용 저장'}
+                bullet 추가
               </button>
             </div>
-          </form>
-
-          <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">실시간 미리보기</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              아래 미리보기는 상세 페이지 형태를 단순화한 버전입니다. 입력을 수정하면 즉시 반영되며, 비어 있는 섹션은 자동으로 숨겨집니다.
-            </p>
-
-            <div className="space-y-6">
-              <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-950/40">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500 dark:text-indigo-300">{previewData?.category}</p>
-                    <h4 className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{previewData?.title || '제목이 여기에 표시됩니다'}</h4>
-                  </div>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{previewData?.date}</span>
+            <div className="space-y-3">
+              {issueDraft.keyPoints.map((point, index) => (
+                <div key={`keypoint-${index}`} className="flex items-start gap-3">
+                  <textarea
+                    value={point}
+                    onChange={(event) => handleKeyPointsChange(index, event.target.value)}
+                    className="min-h-[60px] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeKeyPoint(index)}
+                    className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:bg-rose-500/20 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    삭제
+                  </button>
                 </div>
-                <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{previewData?.summaryCard || '홈 카드 요약이 여기에 표시됩니다.'}</p>
-              </section>
+              ))}
+              {issueDraft.keyPoints.length === 0 && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">bullet이 없습니다. 추가 버튼을 눌러 입력하세요.</p>
+              )}
+            </div>
+          </section>
 
-              <SectionCard title="이 사건/정책은 무엇인가?" tone="neutral">
-                {previewData && splitParagraphs(previewData.background).length > 0 ? (
-                  splitParagraphs(previewData.background).map((paragraph, index) => <p key={index}>{paragraph}</p>)
-                ) : (
-                  <p className="text-slate-500">배경 설명을 입력하면 이곳에 문단이 표시됩니다.</p>
-                )}
-              </SectionCard>
+          <section className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">주요 시각 (진보/보수)</h2>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => ensurePerspective('progressiveView', PROGRESSIVE_NOTE)}
+                  className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200 dark:hover:bg-emerald-500/20 dark:focus-visible:ring-offset-slate-900"
+                >
+                  진보 시각 추가
+                </button>
+                <button
+                  type="button"
+                  onClick={() => ensurePerspective('conservativeView', CONSERVATIVE_NOTE)}
+                  className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:bg-rose-500/20 dark:focus-visible:ring-offset-slate-900"
+                >
+                  보수 시각 추가
+                </button>
+              </div>
+            </div>
 
-              <SectionCard title="핵심 쟁점 요약" tone="neutral">
-                {previewData && previewData.keyPoints.length > 0 ? (
-                  <ul className="list-disc space-y-2 pl-5">
-                    {previewData.keyPoints.map((point, index) => (
-                      <li key={index}>{point}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-slate-500">bullet을 입력하면 목록이 표시됩니다.</p>
-                )}
-              </SectionCard>
+            {['progressiveView', 'conservativeView'].map((key) => {
+              const label = key === 'progressiveView' ? '진보 시각' : '보수 시각';
+              const defaultNote = key === 'progressiveView' ? PROGRESSIVE_NOTE : CONSERVATIVE_NOTE;
+              const tone = key === 'progressiveView' ? 'progressive' : 'conservative';
+              const colorClass = key === 'progressiveView' ? 'bg-emerald-500' : 'bg-rose-500';
+              const current = issueDraft[key];
 
-              {previewData?.progressiveView ? (
-                <SectionCard title="주요 시각들 - 진보" tone="progressive">
-                  {previewData.progressiveView.headline ? <p className="font-semibold">{previewData.progressiveView.headline}</p> : null}
-                  {previewData.progressiveView.bullets?.length ? (
-                    <ul className="list-disc space-y-2 pl-5">
-                      {previewData.progressiveView.bullets.map((point, index) => (
-                        <li key={index}>{point}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <p className="text-xs text-emerald-700 dark:text-emerald-200">{PROGRESSIVE_NOTE}</p>
-                  {previewData.progressiveView.intensity !== undefined ? (
-                    <IntensityBar value={previewData.progressiveView.intensity} label="주장 강도" colorClass="bg-emerald-500" />
-                  ) : null}
-                </SectionCard>
-              ) : null}
+              if (!current) {
+                return null;
+              }
 
-              {previewData?.conservativeView ? (
-                <SectionCard title="주요 시각들 - 보수" tone="conservative">
-                  {previewData.conservativeView.headline ? <p className="font-semibold">{previewData.conservativeView.headline}</p> : null}
-                  {previewData.conservativeView.bullets?.length ? (
-                    <ul className="list-disc space-y-2 pl-5">
-                      {previewData.conservativeView.bullets.map((point, index) => (
-                        <li key={index}>{point}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <p className="text-xs text-rose-700 dark:text-rose-200">{CONSERVATIVE_NOTE}</p>
-                  {previewData.conservativeView.intensity !== undefined ? (
-                    <IntensityBar value={previewData.conservativeView.intensity} label="주장 강도" colorClass="bg-rose-500" />
-                  ) : null}
-                </SectionCard>
-              ) : null}
+              return (
+                <div key={key} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{label}</h3>
+                    <button
+                      type="button"
+                      onClick={() => removePerspective(key)}
+                      className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:bg-rose-500/20 dark:focus-visible:ring-offset-slate-900"
+                    >
+                      섹션 제거
+                    </button>
+                  </div>
 
-              {previewData?.impactToLife ? (
-                <SectionCard title="이게 내 삶에 뭐가 변함?" tone="impact">
-                  <p>{previewData.impactToLife.text}</p>
-                  <p className="text-xs text-indigo-700 dark:text-indigo-200">{IMPACT_NOTE}</p>
-                </SectionCard>
-              ) : null}
+                  <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                    헤드라인
+                    <input
+                      type="text"
+                      value={current.headline}
+                      onChange={(event) => handlePerspectiveFieldChange(key, 'headline', event.target.value)}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </label>
 
-              <SectionCard title="출처" tone="neutral">
-                {previewData && previewData.sources.length > 0 ? (
-                  <div className="space-y-2 text-xs">
-                    {previewData.sources.map((source, index) => (
-                      <div key={index} className="rounded-lg border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-950/60">
-                        <p className="font-semibold text-slate-700 dark:text-slate-100">{source.channelName}</p>
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          <span>유형: {source.type}</span>
-                          {source.sourceDate ? <span>날짜: {source.sourceDate}</span> : null}
-                          {source.timestamp ? <span>시각: {source.timestamp}</span> : null}
-                        </div>
-                        {source.note ? <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-300">{source.note}</p> : null}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">bullet</span>
+                      <button
+                        type="button"
+                        onClick={() => addPerspectiveBullet(key)}
+                        className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        bullet 추가
+                      </button>
+                    </div>
+                    {current.bullets.map((bullet, index) => (
+                      <div key={`${key}-bullet-${index}`} className="flex items-start gap-3">
+                        <textarea
+                          value={bullet}
+                          onChange={(event) => handlePerspectiveBulletChange(key, index, event.target.value)}
+                          className="min-h-[60px] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePerspectiveBullet(key, index)}
+                          className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:bg-rose-500/20 dark:focus-visible:ring-offset-slate-900"
+                        >
+                          삭제
+                        </button>
                       </div>
                     ))}
+                    {current.bullets.length === 0 && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">bullet이 없습니다.</p>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-slate-500">출처를 입력하면 리스트가 표시됩니다.</p>
-                )}
-              </SectionCard>
+
+                  <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                    강도 (0~100, 비어 있으면 -1)
+                    <input
+                      type="number"
+                      value={current.intensity === -1 ? '' : current.intensity}
+                      onChange={(event) => handlePerspectiveFieldChange(key, 'intensity', event.target.value)}
+                      min={0}
+                      max={100}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                    메모
+                    <textarea
+                      value={current.note}
+                      onChange={(event) => handlePerspectiveFieldChange(key, 'note', event.target.value)}
+                      placeholder={defaultNote}
+                      className="min-h-[80px] rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </label>
+
+                  <SectionCard title={`${label} 미리보기`} tone={tone}>
+                    {current.bullets.length > 0 ? (
+                      <ul className="space-y-1 list-disc pl-5">
+                        {current.bullets.map((item, index) => (
+                          <li key={`preview-${key}-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">bullet이 비어 있습니다.</p>
+                    )}
+                    {current.intensity !== -1 && <IntensityBar value={current.intensity} colorClass={colorClass} />}
+                    <p className="text-xs text-slate-600 dark:text-slate-300">{current.note || defaultNote}</p>
+                  </SectionCard>
+                </div>
+              );
+            })}
+          </section>
+
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">이게 내 삶에 뭐가 변함?</h2>
+              {issueDraft.impactToLife ? (
+                <button
+                  type="button"
+                  onClick={removeImpactSection}
+                  className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:bg-rose-500/20 dark:focus-visible:ring-offset-slate-900"
+                >
+                  섹션 제거
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={ensureImpactSection}
+                  className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-indigo-500/50 dark:bg-indigo-500/10 dark:text-indigo-200 dark:hover:bg-indigo-500/20 dark:focus-visible:ring-offset-slate-900"
+                >
+                  섹션 추가
+                </button>
+              )}
             </div>
-          </aside>
-        </div>
-      ) : null}
-    </section>
+
+            {issueDraft.impactToLife ? (
+              <div className="space-y-3">
+                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  요약 문장
+                  <textarea
+                    value={issueDraft.impactToLife.text}
+                    onChange={(event) => handleImpactChange('text', event.target.value)}
+                    className="min-h-[80px] rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  메모
+                  <textarea
+                    value={issueDraft.impactToLife.note}
+                    onChange={(event) => handleImpactChange('note', event.target.value)}
+                    placeholder={IMPACT_NOTE}
+                    className="min-h-[80px] rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                </label>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 dark:text-slate-400">섹션이 비활성화되어 있습니다.</p>
+            )}
+          </section>
+
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">출처 목록</h2>
+              <button
+                type="button"
+                onClick={addSource}
+                className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                출처 추가
+              </button>
+            </div>
+            <div className="space-y-4">
+              {issueDraft.sources.map((source, index) => (
+                <div key={`source-${index}`} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/60 sm:grid-cols-2">
+                  <label className="flex flex-col gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    유형 (official/youtube/media/etc)
+                    <input
+                      type="text"
+                      value={source.type}
+                      onChange={(event) => handleSourceChange(index, 'type', event.target.value)}
+                      className="rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    채널/기관
+                    <input
+                      type="text"
+                      value={source.channelName}
+                      onChange={(event) => handleSourceChange(index, 'channelName', event.target.value)}
+                      className="rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    날짜 (YYYY-MM-DD)
+                    <input
+                      type="text"
+                      value={source.sourceDate}
+                      onChange={(event) => handleSourceChange(index, 'sourceDate', event.target.value)}
+                      className="rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    타임스탬프 (없으면 빈칸)
+                    <input
+                      type="text"
+                      value={source.timestamp}
+                      onChange={(event) => handleSourceChange(index, 'timestamp', event.target.value)}
+                      className="rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </label>
+                  <label className="sm:col-span-2 flex flex-col gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    요약 메모
+                    <textarea
+                      value={source.note}
+                      onChange={(event) => handleSourceChange(index, 'note', event.target.value)}
+                      className="min-h-[60px] rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </label>
+                  <div className="sm:col-span-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => removeSource(index)}
+                      className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:bg-rose-500/20 dark:focus-visible:ring-offset-slate-900"
+                    >
+                      출처 삭제
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {issueDraft.sources.length === 0 && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">출처가 없습니다. 출처 추가 버튼을 눌러 주세요.</p>
+              )}
+            </div>
+          </section>
+        </main>
+
+        <aside className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">미리보기</h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">현재 입력 상태를 상세 페이지처럼 확인할 수 있습니다.</p>
+          </div>
+
+          {issueDraft.easySummary && (
+            <section className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-6 text-emerald-900 shadow-sm dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-100">
+              <h3 className="text-sm font-semibold uppercase tracking-wide">쉬운 요약</h3>
+              <p className="mt-2 text-sm leading-relaxed">{issueDraft.easySummary}</p>
+            </section>
+          )}
+
+          <SectionCard title="이 사건/정책은 무엇인가?" tone="neutral">
+            {previewBackgroundParagraphs.length > 0 ? (
+              previewBackgroundParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)
+            ) : (
+              <p className="italic text-slate-500 dark:text-slate-400">배경 정보가 아직 입력되지 않았습니다.</p>
+            )}
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">핵심 쟁점 요약</h4>
+              {previewKeyPoints.length > 0 ? (
+                <ul className="mt-2 space-y-1 list-disc pl-5">
+                  {previewKeyPoints.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">요약 bullet이 아직 없습니다.</p>
+              )}
+            </div>
+          </SectionCard>
+
+          {(issueDraft.progressiveView || issueDraft.conservativeView) && (
+            <section className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">주요 시각들</h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">이 섹션은 일부 진영의 주장과 전망을 요약한 것입니다.</p>
+              </div>
+              <div className="grid gap-4">
+                {issueDraft.progressiveView && (
+                  <SectionCard title={issueDraft.progressiveView.headline || '진보 시각'} tone="progressive">
+                    {issueDraft.progressiveView.bullets.length > 0 ? (
+                      <ul className="space-y-1 list-disc pl-5">
+                        {issueDraft.progressiveView.bullets.map((item, index) => (
+                          <li key={`preview-progressive-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">bullet이 비어 있습니다.</p>
+                    )}
+                    {issueDraft.progressiveView.intensity !== -1 && <IntensityBar value={issueDraft.progressiveView.intensity} colorClass="bg-emerald-500" />}
+                    <p className="text-xs text-emerald-900/80 dark:text-emerald-200/80">{issueDraft.progressiveView.note || PROGRESSIVE_NOTE}</p>
+                  </SectionCard>
+                )}
+
+                {issueDraft.conservativeView && (
+                  <SectionCard title={issueDraft.conservativeView.headline || '보수 시각'} tone="conservative">
+                    {issueDraft.conservativeView.bullets.length > 0 ? (
+                      <ul className="space-y-1 list-disc pl-5">
+                        {issueDraft.conservativeView.bullets.map((item, index) => (
+                          <li key={`preview-conservative-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">bullet이 비어 있습니다.</p>
+                    )}
+                    {issueDraft.conservativeView.intensity !== -1 && <IntensityBar value={issueDraft.conservativeView.intensity} colorClass="bg-rose-500" />}
+                    <p className="text-xs text-rose-900/80 dark:text-rose-200/80">{issueDraft.conservativeView.note || CONSERVATIVE_NOTE}</p>
+                  </SectionCard>
+                )}
+              </div>
+            </section>
+          )}
+
+          {issueDraft.impactToLife && (
+            <SectionCard title="이게 내 삶에 뭐가 변함?" tone="impact">
+              <p>{issueDraft.impactToLife.text || '설명이 비어 있습니다.'}</p>
+              <p className="text-xs text-indigo-900/80 dark:text-indigo-200/80">{issueDraft.impactToLife.note || IMPACT_NOTE}</p>
+            </SectionCard>
+          )}
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">출처</h3>
+            {previewSources.length === 0 ? (
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">출처가 없습니다.</p>
+            ) : (
+              <ul className="mt-3 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+                {previewSources.map((source) => (
+                  <li
+                    key={source.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-900/60"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <span className="font-semibold">{source.type}</span>
+                      {source.sourceDate && <span>{source.sourceDate}</span>}
+                      {source.timestamp && <span>{source.timestamp}</span>}
+                    </div>
+                    <p className="mt-1 font-semibold text-slate-700 dark:text-slate-200">{source.channelName}</p>
+                    <p className="text-slate-600 dark:text-slate-300">{source.note || '요약 미입력'}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
   );
 }
 

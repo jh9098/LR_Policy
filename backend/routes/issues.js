@@ -1,4 +1,11 @@
 // backend/routes/issues.js
+/*
+  현재 프론트엔드는 Firestore Web SDK를 통해 직접
+  issues 문서에 대해 create / update / delete 까지 수행한다.
+  즉 이 Express 서버(Render)는 런타임에서 더 이상 사용되지 않고 있다.
+  이 서버 코드는 향후 "보안 강화/권한 제어"를 위해 남겨둔 레거시 초안일 뿐이다.
+  TODO(프로덕션): /admin 접근 제한 + Firestore 보안 규칙 잠그기 + 이 서버에서만 쓰기 허용하는 구조로 전환해야 한다.
+*/
 // Step 12: easySummary 필드를 포함해 issueDraft 스키마를 Firestore에 저장/조회한다. null 섹션은 필드를 생략한다.
 
 const express = require('express');
@@ -271,6 +278,7 @@ router.get('/search', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
+    // 현재 운영에서는 사용하지 않지만 과거 API 형태를 참고하기 위해 남겨둔다.
     const snapshot = await db.collection('issues').orderBy('createdAt', 'desc').limit(20).get();
     // 목록에서도 easySummary를 제공하면 홈 카드와 상세 링크에서 동일한 문구를 재사용할 수 있다.
     const issues = snapshot.docs.map((doc) => toIssueSummary(doc));
@@ -283,6 +291,7 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
+    // 현재 프론트는 firebaseClient.getIssueById()를 직접 호출하므로 참고용 라우트다.
     const issueId = req.params.id;
     const docRef = db.collection('issues').doc(issueId);
     const docSnap = await docRef.get();
@@ -310,6 +319,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
+    // 현재 프론트는 firebaseClient.createIssue()로 addDoc()을 직접 호출하므로 레거시 참고용 라우트다.
     // TODO: 운영 단계에서는 x-admin-secret 같은 관리자 인증을 반드시 붙여야 한다.
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return res.status(400).json({ message: 'issueDraft 객체를 JSON으로 전달해 주세요.' });
@@ -343,6 +353,7 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
+    // 현재 프론트는 firebaseClient.updateIssue()로 updateDoc()을 직접 호출한다.
     // TODO: 운영 단계에서는 PUT 요청에도 관리자 인증과 권한 검증을 적용해야 한다.
     const issueId = req.params.id;
     if (!issueId) {
@@ -383,6 +394,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
+    // 현재 프론트는 firebaseClient.deleteIssue()로 deleteDoc()을 직접 호출한다.
     // TODO: 운영 단계에서는 DELETE 요청에도 관리자 인증을 강제해야 한다.
     const issueId = req.params.id;
     if (!issueId) {

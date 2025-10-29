@@ -1,4 +1,6 @@
 // frontend/src/App.jsx
+// 라우팅 구성. 모든 페이지가 Firestore Web SDK를 직접 사용하도록 연결되어 있으며 Render 백엔드는 호출하지 않는다.
+
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import SiteHeader from './components/SiteHeader.jsx';
 import SiteFooter from './components/SiteFooter.jsx';
@@ -29,7 +31,7 @@ function App() {
         <Route path="/issue/:id" element={<IssuePage />} />
       </Route>
 
-      {/* 관리자는 별도 레이아웃을 사용한다. SiteHeader/SiteFooter를 중복 렌더링하지 않기 위해 옵션 B를 채택했다. */}
+      {/* 관리자는 별도 레이아웃을 사용한다. SiteHeader/SiteFooter를 중복 렌더링하지 않도록 Outlet 구조를 구성한다. */}
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<Navigate to="new" replace />} />
         <Route path="new" element={<AdminNewPage />} />

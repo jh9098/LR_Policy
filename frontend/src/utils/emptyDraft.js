@@ -1,8 +1,9 @@
 // frontend/src/utils/emptyDraft.js
-// issueDraft 스키마 전체를 기본값으로 정의한다.
-// 모든 필드는 AdminNewPage.jsx에서 useState로 관리되며, localStorage('adminDraftV4') 백업에도 동일하게 사용된다.
+// issueDraft 기본 구조를 전부 정의한 객체다.
+// AdminNewPage/AdminEditPage에서 상태 초기값으로 사용하며 localStorage('adminDraftV4')에도 저장된다.
+// easySummary가 맨 앞에 위치하도록 Step 12 이후 최종 스키마 순서를 그대로 따른다.
 export const emptyDraft = {
-  // 쉬운 요약은 일반 방문자를 위한 한 줄 설명이다.
+  // 쉬운 요약은 일반인을 위한 한 줄 설명이다.
   easySummary: '',
 
   title: '',
@@ -18,5 +19,7 @@ export const emptyDraft = {
   conservativeView: null,
   impactToLife: null,
 
-  sources: []
+  sources: [],
 };
+
+// 참고: localStorage에는 항상 'adminDraftV4' 키로 저장하며, 스키마가 바뀌면 버전을 올려야 한다.

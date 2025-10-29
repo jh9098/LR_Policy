@@ -1,7 +1,10 @@
 // frontend/src/pages/admin/AdminListPage.jsx
+// Firestore에서 직접 목록을 읽고 삭제하는 관리자 페이지다. Render 백엔드는 더 이상 호출하지 않는다.
+// TODO: 현재 누구나 /admin/list 에 접근하면 Firestore에서 직접 삭제가 가능하다. 프로덕션에서는 인증과 보안 규칙 강화가 필요하다.
+
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API_BASE_URL, ADMIN_SECRET } from '../../config.js';
+import { deleteIssue, getRecentIssues } from '../../firebaseClient.js';
 import { sortIssuesByDate } from '../../utils/issueSorting.js';
 
 function AdminListPage() {
@@ -17,16 +20,11 @@ function AdminListPage() {
       setIsLoading(true);
       setError('');
       try {
-        const response = await fetch(`${API_BASE_URL}/issues`);
-        if (!response.ok) {
-          throw new Error('이슈 목록을 불러오지 못했습니다.');
-        }
-        const data = await response.json();
+        const data = await getRecentIssues(100);
         if (!isMounted) {
           return;
         }
-        const normalized = Array.isArray(data) ? data : [];
-        setItems(sortIssuesByDate(normalized));
+        setItems(sortIssuesByDate(data));
       } catch (err) {
         if (!isMounted) {
           return;
@@ -57,16 +55,7 @@ function AdminListPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/issues/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-secret': ADMIN_SECRET
-        }
-      });
-      if (!response.ok) {
-        throw new Error('삭제에 실패했습니다. 잠시 후 다시 시도하세요.');
-      }
+      await deleteIssue(id);
       setItems((prev) => sortIssuesByDate(prev.filter((item) => item.id !== id)));
       alert('삭제 완료');
     } catch (err) {
@@ -81,7 +70,7 @@ function AdminListPage() {
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">등록된 글 목록</h2>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            최근 Firestore에 저장된 20개 문서를 보여줍니다. 삭제 버튼은 즉시 DB에서 제거하므로 주의하세요.
+            Firestore에서 직접 읽어온 최근 문서 목록입니다. 삭제 버튼은 즉시 DB에서 제거하므로 주의하세요.
           </p>
         </div>
         <button
@@ -103,11 +92,21 @@ function AdminListPage() {
         <table className="min-w-full divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white text-left shadow-sm dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900">
           <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
             <tr>
-              <th scope="col" className="px-4 py-3">날짜</th>
-              <th scope="col" className="px-4 py-3">카테고리</th>
-              <th scope="col" className="px-4 py-3">제목</th>
-              <th scope="col" className="px-4 py-3">요약</th>
-              <th scope="col" className="px-4 py-3 text-center">관리</th>
+              <th scope="col" className="px-4 py-3">
+                날짜
+              </th>
+              <th scope="col" className="px-4 py-3">
+                카테고리
+              </th>
+              <th scope="col" className="px-4 py-3">
+                제목
+              </th>
+              <th scope="col" className="px-4 py-3">
+                요약
+              </th>
+              <th scope="col" className="px-4 py-3 text-center">
+                관리
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
@@ -133,7 +132,7 @@ function AdminListPage() {
                     </span>
                   </td>
                   <td className="px-4 py-4 font-semibold text-slate-900 dark:text-slate-100">{item.title}</td>
-                  <td className="px-4 py-4 text-slate-600 dark:text-slate-300">{item.summaryCard}</td>
+                  <td className="px-4 py-4 text-slate-600 dark:text-slate-300">{item.easySummary || item.summaryCard}</td>
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap justify-center gap-2">
                       <Link

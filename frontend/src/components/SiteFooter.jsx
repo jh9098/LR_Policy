@@ -1,4 +1,6 @@
 // frontend/src/components/SiteFooter.jsx
+// 사이트 하단에 고정 안내문을 보여준다. Firestore와 직접 통신하는 구조에서도 별도 변경 없이 재사용한다.
+
 function SiteFooter() {
   return (
     <footer className="border-t border-slate-200 bg-white/90 dark:border-slate-700 dark:bg-slate-900/80">

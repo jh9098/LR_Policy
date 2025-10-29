@@ -1,67 +1,54 @@
-# 에디터 작업 흐름 (운영 대시보드 기준)
+# 에디터 작업 흐름 (현재 Firestore 직행 구조)
 
-운영자는 `/admin` 영역을 통해 정책/사건 이슈를 등록하고 관리합니다. 현재는 비밀번호나 토큰 검증이 적용되지 않았으므로, URL은 내부 인원만 공유해 주세요. 실제 운영 단계에서는 인증을 반드시 추가해야 합니다.
+> ⚠️ 지금은 누구나 `/admin`에 접근하면 Firestore에서 직접 문서를 생성·수정·삭제할 수 있다.
+> TODO: 프로덕션 단계에서는 Firestore Security Rules를 잠그고 `/admin` 자체를 인증으로 보호해야 한다.
 
 ## 1. 주요 화면
 
-1. `/admin/new` – 신규 이슈 등록 폼, JSON 붙여넣기, 실시간 미리보기
-2. `/admin/list` – 최근 문서 목록과 상세/삭제 버튼
-3. `/admin/edit/:id` – 특정 문서를 조회하고 향후 수정을 준비하는 화면 (PUT 전송은 후속 작업 예정)
+1. `/admin/new` – 신규 이슈 등록 폼. AI JSON 붙여넣기, 로컬 자동 저장, 실시간 미리보기 포함.
+2. `/admin/list` – Firestore에서 불러온 최근 문서 목록. 보기/수정, 삭제 버튼 제공.
+3. `/admin/edit/:id` – 특정 문서를 직접 수정/삭제하는 폼. Firestore에서 데이터를 읽어와 편집.
 
-> ⚠️ 지금은 누구나 접근할 수 있으므로 배포 링크를 외부에 공개하지 마세요.
+## 2. 신규 등록 절차 (`/admin/new`)
 
-## 2. 신규 등록 절차 ( `/admin/new` )
-
-1. **AI에게 issueDraft JSON을 받아오기**
-   - 프롬프트 예시는 내부 가이드라인을 활용합니다.
-   - AI가 돌려준 JSON에는 이제 `easySummary`(쉬운 요약) 필드가 포함됩니다. 일반 독자에게 설명하듯 1~2문장으로 작성해 달라고 요청하세요.
-   - JSON을 복사한 뒤 페이지 상단의 “AI JSON 붙여넣기” 영역에 그대로 붙여넣습니다.
-2. **불러오기 버튼으로 유효성 검사**
-   - “불러오기”를 누르면 `JSON.parse()`가 바로 실행됩니다.
-   - 문법 오류가 있을 경우 빨간 박스로 `❌ JSON 형식 오류: ... / 문자열 내 줄바꿈(엔터) 제거 후 다시 요청 필요` 메시지가 표시됩니다.
-   - JSON 구조를 자동으로 고치지 않으니, 오류가 뜨면 AI 프롬프트를 수정해 다시 받아오세요.
-3. **폼에서 세부 내용 조정**
-   - issueDraft 스키마는 하나의 상태로 관리되며, 각 필드를 그대로 수정할 수 있습니다.
-   - `easySummary` 입력칸은 한 줄짜리 텍스트로, 일반 독자가 바로 이해할 수 있는 쉬운 표현을 작성합니다.
-   - 진보/보수 시각, “이게 내 삶에 뭐가 변함?” 섹션은 필요할 때만 “섹션 추가” 버튼으로 활성화합니다.
-   - bullet 계열은 배열 형태이므로, 줄바꿈이나 카드 추가/삭제로 자유롭게 조절합니다.
+1. **AI에게 issueDraft JSON(v4)을 요청**
+   - easySummary를 포함한 스키마로 응답을 받는다.
+   - JSON 전체를 복사해 페이지 상단 “AI JSON 결과 붙여넣기” 텍스트 영역에 붙여넣는다.
+2. **불러오기 버튼으로 파싱**
+   - `JSON.parse`에 실패하면 빨간 오류 메시지가 표시된다.
+   - 성공 시 `emptyDraft`와 병합되어 누락 필드가 자동 채워진다.
+3. **폼에서 세부 조정**
+   - 쉬운 요약, 제목, 날짜, 카테고리, summaryCard, background, keyPoints 등을 수정한다.
+   - 진보/보수 시각, “이게 내 삶에 뭐가 변함?”은 필요 시 “섹션 추가” 버튼으로 생성한다.
+   - bullet과 출처는 추가/삭제 버튼으로 배열 형태를 편집한다.
 4. **자동 저장**
-   - 모든 입력은 `localStorage('adminDraftV4')`에 즉시 저장됩니다. (이전 버전 `adminDraftV3`에 남은 데이터가 있으면 최초 로딩 시 자동 변환합니다.)
-   - 새로고침해도 마지막 작성 내용이 자동 복구됩니다.
-   - “초기화” 버튼을 누르면 빈 초안으로 되돌리고 로컬 저장본도 삭제합니다.
+   - 모든 입력은 `localStorage('adminDraftV4')`에 즉시 저장된다.
+   - 새로고침해도 마지막 상태가 복구된다. 제출이 완료되면 localStorage가 초기화된다.
 5. **미리보기 확인**
-   - 우측 패널은 issueDraft 상태를 그대로 시각화합니다.
-   - 쉬운 요약, 진보/보수 섹션, impact 섹션은 값이 없으면 자동으로 숨겨집니다.
-   - bullet 배열은 `<ul>` 형태, 출처는 카드 리스트로 노출됩니다.
-6. **등록하기 버튼 클릭**
-   - `POST ${API_BASE_URL}/issues`에 issueDraft 전체를 전송합니다. (현재는 인증 헤더 없음)
-   - 성공하면 브라우저 alert(`등록 완료`)가 뜨고, 상태와 localStorage가 `emptyDraft` 값으로 초기화됩니다.
-   - 실패하면 빨간 경고 박스에 오류 메시지가 표시됩니다.
+   - 우측 패널이 상세 페이지와 동일한 구성으로 미리보기를 제공한다.
+   - 값이 비어 있는 섹션은 자동으로 숨겨진다.
+6. **등록하기 버튼**
+   - `firebaseClient.createIssue(issueDraft)`가 호출되어 Firestore에 `addDoc()`을 실행한다.
+   - 성공 시 alert로 문서 ID를 보여주고, 폼과 localStorage가 초기화된다.
+   - 실패 시 상단에 빨간 오류 메시지를 표시한다.
 
-## 3. 백엔드 저장 방식
+## 3. 목록/삭제 (`/admin/list`)
 
-- `POST /api/issues`는 issueDraft 객체를 그대로 받아 Firestore에 저장합니다.
-- `easySummary`가 빈 문자열이어도 문서에 포함되며, `progressiveView`, `conservativeView`, `impactToLife` 값이 `null`이면 해당 필드를 Firestore 문서에 아예 추가하지 않습니다.
-- `sources` 배열은 type/channelName/sourceDate/timestamp/note 필드를 그대로 저장합니다.
-- Firestore 문서에는 `createdAt`, `updatedAt`이 `serverTimestamp()`로 기록됩니다.
-- TODO 주석으로 인증/권한 강화를 알리고 있으니, 운영 전 반드시 보안을 강화해야 합니다.
+- 페이지 로드시 `firebaseClient.getRecentIssues()`를 호출해 Firestore에서 최대 100건을 읽어온다.
+- 테이블에는 날짜, 카테고리, 제목, 쉬운 요약/summary가 표시된다.
+- “보기 / 수정” 버튼을 누르면 `/admin/edit/:id`로 이동한다.
+- “삭제” 버튼은 `firebaseClient.deleteIssue(id)`를 호출해 Firestore `issues`와 `metrics` 문서를 삭제한다.
+  - confirm 창으로 한 번 더 확인하며, 성공 시 목록에서 바로 제거된다.
 
-## 4. 목록·삭제 ( `/admin/list` )
+## 4. 수정/삭제 (`/admin/edit/:id`)
 
-- 페이지 진입 시 `GET /api/issues`로 최근 20건을 불러옵니다. 응답에는 `easySummary`도 포함되므로, 카드 목록에서도 필요하면 활용할 수 있습니다.
-- “보기 / 수정”을 누르면 `/admin/edit/:id`로 이동합니다.
-- “삭제”를 누르면 `DELETE /api/issues/:id` 요청이 실행되고 Firestore와 metrics 문서를 동시에 삭제합니다. (되돌릴 수 없으므로 주의)
+1. 페이지 진입 시 `firebaseClient.getIssueById(issueId)`로 기존 문서를 불러온다.
+2. 폼 구조는 `/admin/new`와 동일하며, 수정 후 “수정 저장”을 누르면 `firebaseClient.updateIssue(issueId, issueDraft)`가 실행된다.
+3. “이 글 삭제” 버튼은 `firebaseClient.deleteIssue(issueId)`를 호출하고 `/admin/list`로 이동한다.
+4. 우측 미리보기는 현재 입력 상태를 실시간으로 보여준다.
 
-## 5. 수정 준비 ( `/admin/edit/:id` )
+## 5. 주의 사항 및 TODO
 
-- 저장된 데이터를 카드 형태로 확인할 수 있습니다.
-- PUT API는 아직 미완성이라 주석을 참고해 후속 작업 때 연동할 예정입니다.
-- 필요하면 이 화면에서도 바로 삭제할 수 있습니다.
-
-## 6. 향후 TODO
-
-- `/admin` 전역에 인증/권한 체크 추가 (예: x-admin-secret, OAuth 등)
-- `POST/PUT/DELETE` 요청 시 관리자 키 검증 및 감사 로그 수집
-- 수정 폼 완성 및 `PUT /api/issues/:id` 정식 연동
-
-> 모든 TODO는 코드에도 한국어 주석으로 남겨두었습니다. 실서비스 전에는 반드시 보안 절차를 도입해야 합니다.
+- Firestore Security Rules는 현재 `allow read, write: if true;`라고 가정한다. 외부에 URL을 공유하지 말 것.
+- 추후에는 인증이 된 운영자만 쓰기를 허용하도록 규칙과 인증 절차를 반드시 도입해야 한다.
+- metrics(조회수) 추적은 현재 비활성 상태다. 필요 시 Cloud Functions 또는 서버 측 로직으로 보완한다.

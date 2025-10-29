@@ -1,12 +1,13 @@
 // frontend/src/pages/IssuePage.jsx
-// 상세 페이지는 Firestore에서 가져온 issue 데이터를 easySummary 포함해 보여준다.
+// Firestore에서 직접 단일 이슈를 읽어와 상세 페이지를 렌더링한다.
+// TODO: 조회수(metrics)는 현재 비활성 상태이며, 추후 Cloud Functions 등으로 처리할 수 있다.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import IntensityBar from '../components/IntensityBar.jsx';
 import MetaTags from '../components/MetaTags.jsx';
 import SectionCard from '../components/SectionCard.jsx';
-import { API_BASE_URL } from '../config.js';
+import { getIssueById } from '../firebaseClient.js';
 
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
@@ -26,7 +27,7 @@ const EMPTY_ISSUE = {
   progressiveView: null,
   conservativeView: null,
   impactToLife: null,
-  sources: []
+  sources: [],
 };
 
 function ensureArray(value) {
@@ -104,7 +105,7 @@ function normalizeSources(rawSources) {
       channelName: source?.channelName ? String(source.channelName) : '',
       sourceDate: source?.sourceDate ? String(source.sourceDate) : '',
       timestamp: source?.timestamp ? String(source.timestamp) : '',
-      note: source?.note ? String(source.note) : ''
+      note: source?.note ? String(source.note) : '',
     }))
     .filter((item) => item.channelName);
 }
@@ -124,183 +125,89 @@ function IssuePage() {
   const [issue, setIssue] = useState(EMPTY_ISSUE);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
-    if (!id) {
-      setError('이슈 ID가 올바르지 않습니다.');
-      setIsLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-
-    async function fetchIssue() {
+    let isMounted = true;
+    const loadIssue = async () => {
       setIsLoading(true);
       setError('');
-
       try {
-        const response = await fetch(`${API_BASE_URL}/issues/${id}`, { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error(response.status === 404 ? '해당 이슈를 찾을 수 없습니다.' : '이슈를 불러오지 못했습니다.');
+        const doc = await getIssueById(id);
+        if (!doc) {
+          throw new Error('문서를 찾을 수 없습니다.');
         }
-
-        const data = await response.json();
-        const normalizedIssue = {
-          id: data.id ?? id,
-          easySummary: data.easySummary ? String(data.easySummary) : '',
-          title: data.title ?? '',
-          date: data.date ?? '',
-          category: data.category ?? '기타',
-          summaryCard: data.summaryCard ?? '',
-          background: data.background ?? '',
-          keyPoints: ensureArray(data.keyPoints),
-          progressiveView: normalizeView(
-            data.progressiveView
-              ? {
-                  ...data.progressiveView,
-                  intensity:
-                    data.progressiveView.intensity !== undefined
-                      ? data.progressiveView.intensity
-                      : data.progressiveIntensity
-                }
-              : null,
-            PROGRESSIVE_NOTE
-          ),
-          conservativeView: normalizeView(
-            data.conservativeView
-              ? {
-                  ...data.conservativeView,
-                  intensity:
-                    data.conservativeView.intensity !== undefined
-                      ? data.conservativeView.intensity
-                      : data.conservativeIntensity
-                }
-              : null,
-            CONSERVATIVE_NOTE
-          ),
-          impactToLife: normalizeImpact(data.impactToLife),
-          sources: normalizeSources(data.sources),
-          updatedAt: data.updatedAt ?? null
-        };
-        setIssue(normalizedIssue);
+        if (!isMounted) return;
+        setIssue({
+          ...EMPTY_ISSUE,
+          ...doc,
+          keyPoints: ensureArray(doc.keyPoints),
+          progressiveView: normalizeView(doc.progressiveView, PROGRESSIVE_NOTE),
+          conservativeView: normalizeView(doc.conservativeView, CONSERVATIVE_NOTE),
+          impactToLife: normalizeImpact(doc.impactToLife),
+          sources: normalizeSources(doc.sources),
+        });
       } catch (err) {
-        if (err.name === 'AbortError') {
-          return;
-        }
-        console.error('이슈 상세 조회 실패:', err);
+        console.error('이슈 불러오기 실패:', err);
+        if (!isMounted) return;
         setError(err.message || '알 수 없는 오류가 발생했습니다.');
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
+    };
+
+    if (id) {
+      loadIssue();
     }
 
-    fetchIssue();
-
     return () => {
-      controller.abort();
+      isMounted = false;
     };
   }, [id]);
 
-  useEffect(() => {
-    if (!toastMessage || typeof window === 'undefined') {
-      return undefined;
-    }
-
-    const timer = window.setTimeout(() => setToastMessage(''), 2000);
-    return () => window.clearTimeout(timer);
-  }, [toastMessage]);
-
-  const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
   const backgroundParagraphs = useMemo(() => splitParagraphs(issue.background), [issue.background]);
   const hasViews = Boolean(issue.progressiveView || issue.conservativeView);
-
-  const handleCopyLink = async () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(window.location.href);
-      } else {
-        const tempInput = document.createElement('input');
-        tempInput.value = window.location.href;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
-      }
-      setToastMessage('링크가 복사되었습니다.');
-    } catch (err) {
-      console.error('링크 복사 실패:', err);
-      setToastMessage('링크 복사에 실패했습니다. 주소를 직접 복사해주세요.');
-    }
-  };
+  const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   if (isLoading) {
-    return (
-      <article className="space-y-6">
-        <p className="text-sm text-slate-500 dark:text-slate-300">이슈 정보를 불러오는 중입니다...</p>
-      </article>
-    );
+    return <p className="py-12 text-center text-sm text-slate-500 dark:text-slate-300">문서를 불러오는 중입니다...</p>;
   }
 
   if (error) {
     return (
-      <article className="space-y-6">
-        <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
-          {error}
-        </p>
-      </article>
+      <div className="space-y-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-6 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+        <p>문서를 읽어오지 못했습니다.</p>
+        <p>{error}</p>
+      </div>
     );
   }
 
   return (
-    <article className="space-y-10">
-      <MetaTags title={issue.title} description={issue.summaryCard || issue.easySummary} url={pageUrl} />
+    <article className="space-y-8">
+      <MetaTags title={`${issue.title} - 사건 프레임 아카이브`} description={issue.summaryCard} url={pageUrl} />
 
-      <header className="rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-300">
-          <div className="flex flex-wrap items-center gap-3">
-            {issue.date && <span className="font-semibold uppercase tracking-wide">{issue.date}</span>}
-            {issue.category && (
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-500">
-                {issue.category}
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleCopyLink}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:text-indigo-300 dark:focus-visible:ring-offset-slate-900"
-          >
-            <span aria-hidden="true">🔗</span> 링크 복사
-          </button>
+      <header className="space-y-4 rounded-2xl border border-slate-200 bg-white px-5 py-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:px-6 sm:py-8">
+        <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-300">
+          <span className="font-semibold text-indigo-600 dark:text-indigo-300">{issue.category}</span>
+          <span className="text-slate-600 dark:text-slate-200">{issue.date || '정보 부족'}</span>
         </div>
-        <h1 className="mt-4 text-3xl font-bold leading-tight text-slate-900 dark:text-slate-100">{issue.title}</h1>
-        {issue.summaryCard && (
-          <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{issue.summaryCard}</p>
-        )}
-        {toastMessage && (
-          <p className="mt-4 inline-flex rounded-full bg-slate-100 px-4 py-1 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-200">
-            {toastMessage}
-          </p>
-        )}
+        <h1 className="text-3xl font-bold leading-tight text-slate-900 dark:text-slate-100">{issue.title || '제목 없음'}</h1>
+        {issue.summaryCard ? (
+          <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300">{issue.summaryCard}</p>
+        ) : null}
       </header>
 
       {issue.easySummary && (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-6 shadow-sm dark:border-emerald-600/60 dark:bg-emerald-950/40">
-          <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">한 줄로 말하면?</h2>
-          <p className="mt-2 text-base leading-relaxed text-emerald-900 dark:text-emerald-100">{issue.easySummary}</p>
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-6 text-emerald-900 shadow-sm dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-100">
+          <h2 className="text-sm font-semibold uppercase tracking-wide">한 줄로 말하면?</h2>
+          <p className="mt-2 text-base leading-relaxed">{issue.easySummary}</p>
         </section>
       )}
 
       <SectionCard title="이 사건/정책은 무엇인가?" tone="neutral">
         {backgroundParagraphs.length > 0 ? (
-          backgroundParagraphs.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
-          ))
+          backgroundParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)
         ) : (
           <p className="italic text-slate-500 dark:text-slate-400">배경 정보가 아직 입력되지 않았습니다.</p>
         )}
