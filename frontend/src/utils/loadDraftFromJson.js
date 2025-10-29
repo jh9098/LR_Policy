@@ -111,6 +111,7 @@ export function loadDraftFromJson(rawText) {
     ...parsed
   };
 
+  merged.easySummary = toSafeString(parsed.easySummary, '');
   merged.title = toSafeString(parsed.title, '');
   merged.date = toSafeString(parsed.date, '');
   merged.category = toSafeCategory(parsed.category);

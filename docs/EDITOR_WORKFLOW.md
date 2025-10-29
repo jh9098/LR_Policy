@@ -12,48 +12,50 @@
 
 ## 2. 신규 등록 절차 ( `/admin/new` )
 
-1. **AI에게 issueDraft JSON을 받아오기**  
-   - 프롬프트 예시는 내부 가이드라인을 활용합니다.  
-   - AI가 돌려준 JSON을 복사한 뒤 페이지 상단의 “AI JSON 붙여넣기” 영역에 그대로 붙여넣습니다.
-2. **불러오기 버튼으로 유효성 검사**  
-   - “불러오기”를 누르면 `JSON.parse()`가 바로 실행됩니다.  
-   - 문법 오류가 있을 경우 빨간 박스로 `❌ JSON 형식 오류: ... / 문자열 내 줄바꿈(엔터) 제거 후 다시 요청 필요` 메시지가 표시됩니다.  
+1. **AI에게 issueDraft JSON을 받아오기**
+   - 프롬프트 예시는 내부 가이드라인을 활용합니다.
+   - AI가 돌려준 JSON에는 이제 `easySummary`(쉬운 요약) 필드가 포함됩니다. 일반 독자에게 설명하듯 1~2문장으로 작성해 달라고 요청하세요.
+   - JSON을 복사한 뒤 페이지 상단의 “AI JSON 붙여넣기” 영역에 그대로 붙여넣습니다.
+2. **불러오기 버튼으로 유효성 검사**
+   - “불러오기”를 누르면 `JSON.parse()`가 바로 실행됩니다.
+   - 문법 오류가 있을 경우 빨간 박스로 `❌ JSON 형식 오류: ... / 문자열 내 줄바꿈(엔터) 제거 후 다시 요청 필요` 메시지가 표시됩니다.
    - JSON 구조를 자동으로 고치지 않으니, 오류가 뜨면 AI 프롬프트를 수정해 다시 받아오세요.
-3. **폼에서 세부 내용 조정**  
-   - issueDraft 스키마는 하나의 상태로 관리되며, 각 필드를 그대로 수정할 수 있습니다.  
-   - 진보/보수 시각, “이게 내 삶에 뭐가 변함?” 섹션은 필요할 때만 “섹션 추가” 버튼으로 활성화합니다.  
+3. **폼에서 세부 내용 조정**
+   - issueDraft 스키마는 하나의 상태로 관리되며, 각 필드를 그대로 수정할 수 있습니다.
+   - `easySummary` 입력칸은 한 줄짜리 텍스트로, 일반 독자가 바로 이해할 수 있는 쉬운 표현을 작성합니다.
+   - 진보/보수 시각, “이게 내 삶에 뭐가 변함?” 섹션은 필요할 때만 “섹션 추가” 버튼으로 활성화합니다.
    - bullet 계열은 배열 형태이므로, 줄바꿈이나 카드 추가/삭제로 자유롭게 조절합니다.
-4. **자동 저장**  
-   - 모든 입력은 `localStorage('adminDraftV3')`에 즉시 저장됩니다.  
-   - 새로고침해도 마지막 작성 내용이 자동 복구됩니다.  
+4. **자동 저장**
+   - 모든 입력은 `localStorage('adminDraftV4')`에 즉시 저장됩니다. (이전 버전 `adminDraftV3`에 남은 데이터가 있으면 최초 로딩 시 자동 변환합니다.)
+   - 새로고침해도 마지막 작성 내용이 자동 복구됩니다.
    - “초기화” 버튼을 누르면 빈 초안으로 되돌리고 로컬 저장본도 삭제합니다.
-5. **미리보기 확인**  
-   - 우측 패널은 issueDraft 상태를 그대로 시각화합니다.  
-   - 진보/보수 섹션이 null이면 해당 카드가 렌더링되지 않습니다.  
+5. **미리보기 확인**
+   - 우측 패널은 issueDraft 상태를 그대로 시각화합니다.
+   - 쉬운 요약, 진보/보수 섹션, impact 섹션은 값이 없으면 자동으로 숨겨집니다.
    - bullet 배열은 `<ul>` 형태, 출처는 카드 리스트로 노출됩니다.
-6. **등록하기 버튼 클릭**  
-   - `POST ${API_BASE_URL}/issues`에 issueDraft 전체를 전송합니다. (현재는 인증 헤더 없음)  
-   - 성공하면 브라우저 alert(`등록 완료`)가 뜨고, 상태와 localStorage가 `emptyDraft` 값으로 초기화됩니다.  
+6. **등록하기 버튼 클릭**
+   - `POST ${API_BASE_URL}/issues`에 issueDraft 전체를 전송합니다. (현재는 인증 헤더 없음)
+   - 성공하면 브라우저 alert(`등록 완료`)가 뜨고, 상태와 localStorage가 `emptyDraft` 값으로 초기화됩니다.
    - 실패하면 빨간 경고 박스에 오류 메시지가 표시됩니다.
 
 ## 3. 백엔드 저장 방식
 
-- `POST /api/issues`는 issueDraft 객체를 그대로 받아 Firestore에 저장합니다.  
-- `progressiveView`, `conservativeView`, `impactToLife` 값이 `null`이면 해당 필드를 Firestore 문서에 아예 추가하지 않습니다.  
-- `sources` 배열은 type/channelName/sourceDate/timestamp/note 필드를 그대로 저장합니다.  
-- Firestore 문서에는 `createdAt`, `updatedAt`이 `serverTimestamp()`로 기록됩니다.  
+- `POST /api/issues`는 issueDraft 객체를 그대로 받아 Firestore에 저장합니다.
+- `easySummary`가 빈 문자열이어도 문서에 포함되며, `progressiveView`, `conservativeView`, `impactToLife` 값이 `null`이면 해당 필드를 Firestore 문서에 아예 추가하지 않습니다.
+- `sources` 배열은 type/channelName/sourceDate/timestamp/note 필드를 그대로 저장합니다.
+- Firestore 문서에는 `createdAt`, `updatedAt`이 `serverTimestamp()`로 기록됩니다.
 - TODO 주석으로 인증/권한 강화를 알리고 있으니, 운영 전 반드시 보안을 강화해야 합니다.
 
 ## 4. 목록·삭제 ( `/admin/list` )
 
-- 페이지 진입 시 `GET /api/issues`로 최근 20건을 불러옵니다.  
-- “보기 / 수정”을 누르면 `/admin/edit/:id`로 이동합니다.  
+- 페이지 진입 시 `GET /api/issues`로 최근 20건을 불러옵니다. 응답에는 `easySummary`도 포함되므로, 카드 목록에서도 필요하면 활용할 수 있습니다.
+- “보기 / 수정”을 누르면 `/admin/edit/:id`로 이동합니다.
 - “삭제”를 누르면 `DELETE /api/issues/:id` 요청이 실행되고 Firestore와 metrics 문서를 동시에 삭제합니다. (되돌릴 수 없으므로 주의)
 
 ## 5. 수정 준비 ( `/admin/edit/:id` )
 
-- 저장된 데이터를 카드 형태로 확인할 수 있습니다.  
-- PUT API는 아직 미완성이라 주석을 참고해 후속 작업 때 연동할 예정입니다.  
+- 저장된 데이터를 카드 형태로 확인할 수 있습니다.
+- PUT API는 아직 미완성이라 주석을 참고해 후속 작업 때 연동할 예정입니다.
 - 필요하면 이 화면에서도 바로 삭제할 수 있습니다.
 
 ## 6. 향후 TODO
