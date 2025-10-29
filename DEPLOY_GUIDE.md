@@ -9,8 +9,16 @@
 1. Netlify에서 새 사이트를 생성하고 `frontend/` 디렉터리를 빌드 대상으로 지정합니다.
 2. Build command: `npm run build`, Publish directory: `dist`
 3. 환경 변수 설정
-   - `VITE_API_BASE_URL = https://<render-backend-domain>/api`
+   - `VITE_API_BASE_URL = https://<render-backend-domain>/api` (선택 사항. 조회·검색용 백엔드가 유지되는 동안 사용)
    - `VITE_ADMIN_SECRET = <선택 사항, 나중에 인증을 붙일 때 사용>`
+   - `VITE_FIREBASE_API_KEY = <Firebase Web API Key>`
+   - `VITE_FIREBASE_AUTH_DOMAIN = <Firebase Auth Domain>`
+   - `VITE_FIREBASE_PROJECT_ID = <Firebase Project ID>`
+   - `VITE_FIREBASE_STORAGE_BUCKET = <Firebase Storage Bucket>`
+   - `VITE_FIREBASE_MESSAGING_SENDER_ID = <Firebase Messaging Sender ID>`
+   - `VITE_FIREBASE_APP_ID = <Firebase App ID>`
+
+> 새 글 작성 페이지는 위 Firebase 설정을 사용해 Render 백엔드가 슬립 상태여도 Firestore에 직접 쓰기합니다.
 4. 다크 모드는 `<html>`에 `dark` 클래스를 붙이는 방식이며, 사용자의 선택은 `localStorage`에 저장됩니다.
 5. SPA 특성상 일부 SNS 미리보기가 동작하지 않을 수 있습니다. TODO: 장기적으로 SSR/프리렌더 도입 검토.
 

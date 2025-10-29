@@ -1,8 +1,9 @@
 // frontend/src/pages/admin/AdminNewPage.jsx
 import { useEffect, useMemo, useState } from 'react';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import SectionCard from '../../components/SectionCard.jsx';
 import IntensityBar from '../../components/IntensityBar.jsx';
-import { API_BASE_URL, ADMIN_SECRET } from '../../config.js';
+import { getFirestoreClient } from '../../firebase/client.js';
 import { parseSources } from '../../utils/parseSources.js';
 
 const CATEGORY_OPTIONS = ['부동산', '노동/노조', '사법/검찰', '외교/안보', '기타'];
@@ -245,32 +246,36 @@ function AdminNewPage() {
       };
     }
 
+    let firestoreInstance;
+    try {
+      firestoreInstance = getFirestoreClient();
+    } catch (error) {
+      console.error('Firebase 초기화 실패:', error);
+      setSubmitError(error.message || 'Firebase 설정을 다시 확인해주세요.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/issues`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-secret': ADMIN_SECRET
-        },
-        body: JSON.stringify(payload)
+      const docRef = await addDoc(collection(firestoreInstance, 'issues'), {
+        ...payload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
 
-      if (!response.ok) {
-        throw new Error('등록에 실패했습니다. 입력값을 다시 확인해주세요.');
-      }
-
-      await response.json();
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(DRAFT_STORAGE_KEY);
       }
-      setSubmitSuccess('등록이 완료되었습니다. (Firestore 반영까지 수 초 걸릴 수 있습니다)');
+
       handleReset();
-      alert('등록 완료');
+      setSubmitSuccess('등록이 완료되었습니다. (Firestore 반영까지 수 초 걸릴 수 있습니다)');
+      if (typeof window !== 'undefined') {
+        window.alert(`등록 완료 (문서 ID: ${docRef.id})`);
+      }
     } catch (error) {
       console.error('이슈 등록 실패:', error);
-      setSubmitError(error.message || '알 수 없는 오류가 발생했습니다.');
+      setSubmitError(error.message || 'Firestore 저장 중 오류가 발생했습니다.');
     } finally {
       setIsSubmitting(false);
     }
