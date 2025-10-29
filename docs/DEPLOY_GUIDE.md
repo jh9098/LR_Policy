@@ -1,61 +1,58 @@
-# 배포 가이드 (운영 대시보드 포함)
+# 배포 가이드 (Netlify + Firestore)
 
-## 1. 개요
-- **프론트엔드**: `frontend/` (Vite + React + Tailwind, dark mode = class 기반)
-- **백엔드**: `backend/` (Express + Firebase Admin)
-- **데이터베이스**: Firestore (`issues`, `metrics` 컬렉션 사용)
-- 이번 배포부터 `easySummary` 필드가 추가되었으므로, 프론트/백엔드 모두 최신 코드를 함께 배포해야 합니다.
+현재 애플리케이션은 React/Vite 프런트엔드가 Firestore Web SDK로 직접 CRUD를 수행하는 구조다. Render/Express 서버는 런타임에서 사용되지 않는다.
 
-## 2. Netlify (프론트)
-1. Netlify에서 새 사이트를 생성하고 `frontend/` 디렉터리를 빌드 대상으로 지정합니다.
-2. Build command: `npm run build`, Publish directory: `dist`
-3. 환경 변수 설정
-   - `VITE_API_BASE_URL = https://<render-backend-domain>/api`
-   - `VITE_ADMIN_SECRET = <선택 사항, 나중에 인증을 붙일 때 사용>`
-4. 다크 모드는 `<html>`에 `dark` 클래스를 붙이는 방식이며, 사용자의 선택은 `localStorage`에 저장됩니다.
-5. SPA 특성상 일부 SNS 미리보기가 동작하지 않을 수 있습니다. TODO: 장기적으로 SSR/프리렌더 도입 검토.
-6. 빌드 결과에는 IssuePage 상단의 “한 줄로 말하면?” 섹션이 포함되므로, 배포 전 미리보기에서 easySummary가 정상 노출되는지 확인합니다.
+## 1. 환경 변수 설정
 
-## 3. Render (백엔드)
-1. **New Web Service** 생성 → `backend/` 디렉터리 사용
-2. Build command: `npm install`
-3. Start command: `npm start`
-4. 환경 변수
-   - `PORT` (Render 기본값 사용)
-   - `FIREBASE_SERVICE_ACCOUNT` (서비스 계정 JSON 문자열 전체)
-   - `ADMIN_SECRET` (선택 사항. 현재는 검증하지 않지만 추후 인증 시 재활성화 예정)
-5. 배포 후 API 엔드포인트 예시: `https://<render-domain>/api`
-6. 백엔드도 easySummary를 그대로 저장/응답하므로, 프론트 배포 전에 반드시 최신 버전으로 재배포하세요.
+Netlify 혹은 Vercel과 같은 정적 호스팅 서비스에 배포할 때 다음 Vite 환경 변수를 설정한다.
 
-> ⚠️ 현재는 인증이 비활성화되어 있으므로 Render 인스턴스 URL을 외부에 공개하지 마세요.
+| 변수 | 설명 |
+| --- | --- |
+| `VITE_FIREBASE_API_KEY` | Firebase 프로젝트 API Key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase Auth Domain |
+| `VITE_FIREBASE_PROJECT_ID` | 프로젝트 ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Storage Bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | 메시징 ID |
+| `VITE_FIREBASE_APP_ID` | App ID |
 
-## 4. Tailwind & 다크 모드
-- `frontend/tailwind.config.js`에서 `darkMode: 'class'`로 설정되어 있습니다.
-- `SiteHeader` 컴포넌트가 테마 토글을 담당하며, 로컬 스토리지 키 `efa-theme-preference`에 사용자 선호를 저장합니다.
-- easySummary 섹션은 연둣빛 카드로 표현되며, 다크 모드에서도 대비가 유지되도록 Tailwind 클래스가 적용되어 있습니다.
+> ❗ `VITE_API_BASE_URL`과 `VITE_ADMIN_SECRET`은 현재 미사용이다. 과거 Render 백엔드와의 호환성을 위해 남겨둔 값이다.
 
-## 5. Open Graph 메타 태그
-- `MetaTags` 컴포넌트가 `react-helmet-async`로 `<head>`에 태그를 삽입합니다.
-- SPA 특성상 모든 SNS에서 즉시 반영되지는 않습니다. TODO: SSR 또는 정적 프리렌더링 방식을 추후 도입해야 합니다.
-- 메타 설명은 `summaryCard`가 비어 있으면 자동으로 `easySummary`를 활용합니다.
+## 2. 빌드 및 배포
 
-## 6. 로컬 개발 체크
 ```bash
-# 백엔드
-cd backend
 npm install
-npm run dev
-
-# 프론트엔드
-cd frontend
-npm install
-npm run dev
+npm run build
 ```
-- 프론트는 `frontend/src/config.js`에서 개발 환경일 때 자동으로 `http://localhost:5000/api`를 사용합니다.
 
-## 7. 보안 메모
-- `/admin` 라우트와 `POST/PUT/DELETE /api/issues`는 현재 누구나 호출할 수 있습니다. TODO 주석을 참고해 운영 전까지 인증을 추가하세요.
-- `metrics` 컬렉션은 단순 카운터라 반복 호출에 취약합니다. Rate Limit 또는 Cloud Functions 기반 검증을 도입해야 합니다.
-- easySummary와 같은 공개 필드는 악용될 가능성이 있으므로, 운영 전에는 관리자 인증과 감사 로그를 반드시 마련해야 합니다.
+생성된 `dist/` 폴더를 Netlify에 업로드하거나 CI/CD를 이용해 자동 배포한다. Firestore Web SDK는 브라우저에서 실행되므로 별도의 서버 프로세스가 필요 없다.
 
-> TODO: 운영 단계에서 `VITE_ADMIN_SECRET`과 `ADMIN_SECRET`을 다시 활성화하여 헤더 기반 검증 또는 OAuth/세션 방식을 추가합니다.
+## 3. Firestore Security Rules (DEV → PROD)
+
+DEV 단계에서는 아래와 같은 완전 개방 규칙을 가정한다.
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    match /issues/{docId} {
+      allow read: if true;
+      allow write: if true; // DEV ONLY
+    }
+    match /metrics/{issueId} {
+      allow read: if true;
+      allow write: if true; // DEV ONLY
+    }
+  }
+}
+```
+
+프로덕션 전환 시에는 반드시 아래 항목을 수행해야 한다.
+
+1. Firebase Authentication(또는 다른 인증 체계)을 도입해 관리자만 쓰기 가능하도록 한다.
+2. Firestore Rules에서 `allow write: if request.auth != null` 등의 조건을 추가한다.
+3. /admin 라우트를 보호(비밀번호/IDP)하고, 필요 시 Render/Express 백엔드를 부활시켜 서버에서만 쓰기를 허용하는 구조로 변경한다.
+
+## 4. 추가 TODO
+
+- 조회수(metrics) 추적은 현재 프런트에서 수행하지 않는다. 추후 Cloud Functions 또는 인증된 서버를 통해 안전하게 구현할 계획이다.
+- 배포 URL이 외부에 알려지면 누구든지 /admin 페이지에 접근할 수 있으므로, DEV 환경에서는 URL을 공유하지 말 것.

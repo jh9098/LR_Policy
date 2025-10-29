@@ -1,22 +1,14 @@
 // frontend/src/pages/HomePage.jsx
-import { useCallback, useEffect, useState } from 'react';
+// 홈 화면은 Firestore Web SDK로 직접 데이터를 읽어온다. Render 백엔드는 더 이상 호출하지 않는다.
+// TODO: 데이터가 많아지면 서버 사이드 검색/인덱싱 혹은 Cloud Functions를 검토해야 한다.
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import IssueCard from '../components/IssueCard.jsx';
 import MediaLandscapeSection from '../components/MediaLandscapeSection.jsx';
 import MetaTags from '../components/MetaTags.jsx';
-import { API_BASE_URL } from '../config.js';
-import { sortIssuesByDate } from '../utils/issueSorting.js';
+import { getRecentIssues, searchIssuesClient } from '../firebaseClient.js';
 
 const CATEGORY_OPTIONS = ['전체', '부동산', '노동/노조', '사법/검찰', '외교/안보', '기타'];
-
-function normalizeIssue(raw) {
-  return {
-    id: raw.id ?? '',
-    title: raw.title ?? '',
-    date: raw.date ?? '',
-    category: raw.category ?? '기타',
-    summaryCard: raw.summaryCard ?? ''
-  };
-}
 
 function HomePage() {
   const [issues, setIssues] = useState([]);
@@ -27,87 +19,66 @@ function HomePage() {
   const [queryDraft, setQueryDraft] = useState('');
   const [activeFilters, setActiveFilters] = useState({ category: '전체', query: '' });
 
-  const loadRecentIssues = useCallback(async () => {
+  const fetchRecentIssues = useCallback(async () => {
     setIsLoading(true);
     setError('');
-
     try {
-      const response = await fetch(`${API_BASE_URL}/issues`);
-      if (!response.ok) {
-        throw new Error('최근 정책/사건 목록을 불러오지 못했습니다.');
-      }
-
-      const data = await response.json();
-      const normalized = Array.isArray(data) ? data.map(normalizeIssue).filter((item) => item.id) : [];
-      const sorted = sortIssuesByDate(normalized);
-      setIssues(sorted);
+      const list = await getRecentIssues(50);
+      setIssues(list);
       setActiveFilters({ category: '전체', query: '' });
     } catch (err) {
-      console.error('최근 이슈 불러오기 실패:', err);
-      setError(err.message || '알 수 없는 오류가 발생했습니다.');
+      console.error('Firestore에서 최근 이슈 불러오기 실패:', err);
+      setError('최근 정책/사건 목록을 불러오지 못했습니다. 인터넷 연결 또는 Firestore 설정을 확인하세요.');
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadRecentIssues();
-  }, [loadRecentIssues]);
+    fetchRecentIssues();
+  }, [fetchRecentIssues]);
 
   const handleSearch = async () => {
     setIsLoading(true);
     setError('');
-
     try {
-      const params = new URLSearchParams();
-      if (categoryDraft && categoryDraft !== '전체') {
-        params.set('category', categoryDraft);
-      }
-      if (queryDraft.trim()) {
-        params.set('query', queryDraft.trim());
-      }
-
-      const queryString = params.toString();
-      const response = await fetch(`${API_BASE_URL}/issues/search${queryString ? `?${queryString}` : ''}`);
-      if (!response.ok) {
-        throw new Error('검색 결과를 불러오지 못했습니다.');
-      }
-
-      const data = await response.json();
-      const normalized = Array.isArray(data) ? data.map(normalizeIssue).filter((item) => item.id) : [];
-      const sorted = sortIssuesByDate(normalized);
-      setIssues(sorted);
+      // Firestore에서 최근 문서를 가져온 뒤 클라이언트에서 조건 필터링한다.
+      const baseList = await searchIssuesClient(queryDraft, 80);
+      const filtered = baseList.filter((issue) =>
+        categoryDraft === '전체' ? true : issue.category === categoryDraft
+      );
+      setIssues(filtered);
       setActiveFilters({ category: categoryDraft, query: queryDraft.trim() });
     } catch (err) {
-      console.error('검색 실패:', err);
-      setError(err.message || '알 수 없는 오류가 발생했습니다.');
+      console.error('Firestore 검색 실패:', err);
+      setError('검색 중 문제가 발생했습니다. Firestore 권한 또는 네트워크를 확인하세요.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const siteUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : '';
+  const siteUrl = useMemo(() => (typeof window !== 'undefined' ? `${window.location.origin}/` : ''), []);
 
   return (
     <section className="space-y-8">
       <MetaTags
         title="사건 프레임 아카이브 - 최근 정책/사건"
-        description="핵심 맥락을 먼저 이해한 뒤, 필요할 때 주요 쟁점과 시각 차이를 살펴보세요."
+        description="핵심 맥락을 먼저 이해하고, 필요할 때 주요 쟁점과 시각을 살펴보세요. 모든 데이터는 Firestore에서 바로 불러옵니다."
         url={siteUrl}
       />
 
       <header className="rounded-2xl border border-slate-200 bg-white px-5 py-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:px-6 sm:py-8">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 sm:text-3xl">최근 정책/사건</h1>
         <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-slate-600 dark:text-slate-300">
-          핵심 내용을 먼저 이해하고, 마지막에 쟁점과 시각 차이를 확인하세요. 이 서비스는 사실과 맥락을 기반으로 정보를 정리한 후,
-          선택적으로 진영별 주장을 덧붙입니다.
+          이 페이지는 Firestore Web SDK를 통해 직접 데이터를 불러온다. Render 백엔드를 거치지 않으므로 배포 환경에서도 동일한 크롬
+          브라우저 요청만으로 최신 데이터를 확인할 수 있다.
         </p>
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">필터 · 검색</h2>
         <p className="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">
-          카테고리와 키워드로 궁금한 정책/사건을 찾아보세요. 검색 버튼을 누르면 서버에서 조건에 맞춰 다시 불러옵니다.
+          Firestore에서 최근 문서를 불러온 뒤 브라우저 메모리에서 필터링한다. 검색어 입력 후 검색 버튼을 누르면 즉시 반영된다.
         </p>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-[180px,1fr,auto]">
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -148,7 +119,8 @@ function HomePage() {
           </div>
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-          ※ 현재는 Firestore에서 최대 50건을 불러온 뒤 메모리에서 필터링합니다. 데이터가 많아지면 별도의 검색 인덱스 도입이 필요합니다.
+          ※ DEV 단계에서는 Firestore Security Rules를 완전히 열어두었기 때문에 누구나 데이터에 접근 가능하다. TODO: 프로덕션에서
+          는 인증·권한을 반드시 설정해야 한다.
         </p>
       </section>
 
@@ -178,10 +150,10 @@ function HomePage() {
         </p>
         <button
           type="button"
-          onClick={loadRecentIssues}
+          onClick={fetchRecentIssues}
           className="mt-2 inline-flex items-center text-xs font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-300"
         >
-          최근 20건 다시 보기
+          Firestore에서 최근 50건 다시 불러오기
         </button>
       </div>
 

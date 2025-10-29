@@ -1,4 +1,7 @@
 // frontend/src/components/SectionCard.jsx
+// 상세/요약 페이지에서 공통으로 사용하는 카드 UI 컴포넌트다.
+// tone 값에 따라 진보/보수/체감영향 등의 색상을 바꿔준다.
+
 import PropTypes from 'prop-types';
 
 const toneClassMap = {
@@ -16,9 +19,7 @@ function SectionCard({ title, badgeText, tone, children }) {
   const toneClasses = toneClassMap[tone] ?? toneClassMap.neutral;
 
   return (
-    <section
-      className={`flex flex-col gap-4 rounded-2xl border p-6 shadow-sm transition ${toneClasses}`}
-    >
+    <section className={`flex flex-col gap-4 rounded-2xl border p-6 shadow-sm transition ${toneClasses}`}>
       <header className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-xl font-semibold leading-tight">{title}</h2>
