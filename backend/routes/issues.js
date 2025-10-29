@@ -49,16 +49,17 @@ function normalizeView(view, fallbackNote) {
   const headline = view.headline ? toSafeString(view.headline) : '';
   const bullets = splitLines(view.bullets ?? view.points);
   const note = view.note ? toSafeString(view.note) : fallbackNote;
+  const intensity = normalizeIntensity(view.intensity ?? view.progressiveIntensity ?? view.conservativeIntensity);
 
   if (!headline && bullets.length === 0) {
     return null;
   }
 
-  return {
-    headline,
-    bullets,
-    note
-  };
+  const normalized = { headline, bullets, note };
+  if (intensity !== undefined) {
+    normalized.intensity = intensity;
+  }
+  return normalized;
 }
 
 function normalizeImpact(impact) {
@@ -105,7 +106,87 @@ function normalizeSources(sources) {
     .filter(Boolean);
 }
 
-// TODO: 현재 검색 구현은 최근 50건을 불러와 메모리에서 필터링한다. 데이터가 늘어나면 Firestore 복합 색인 또는 전용 검색 인프라 도입이 필요하다.
+function buildIssuePayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { error: '요청 본문이 비어 있습니다.' };
+  }
+
+  const {
+    title,
+    date,
+    category,
+    summaryCard,
+    background,
+    keyPoints,
+    progressiveView,
+    progressiveIntensity,
+    conservativeView,
+    conservativeIntensity,
+    impactToLife,
+    sources
+  } = body;
+
+  if (!title || !date || !summaryCard || !background) {
+    return { error: 'title, date, summaryCard, background 필드는 필수입니다.' };
+  }
+
+  const normalizedKeyPoints = splitLines(keyPoints);
+  if (normalizedKeyPoints.length === 0) {
+    return { error: 'keyPoints 는 최소 1개 이상의 bullet 이 필요합니다.' };
+  }
+
+  const normalizedSources = normalizeSources(sources);
+  if (normalizedSources.length === 0) {
+    return { error: 'sources 배열에 최소 1개의 출처를 입력해야 합니다.' };
+  }
+
+  const payload = {
+    title: toSafeString(title),
+    date: toSafeString(date),
+    category: category ? toSafeString(category) : '기타',
+    summaryCard: toSafeString(summaryCard),
+    background: toSafeString(background),
+    keyPoints: normalizedKeyPoints,
+    sources: normalizedSources
+  };
+
+  const normalizedProgressiveView = normalizeView(
+    progressiveView
+      ? {
+          ...progressiveView,
+          intensity:
+            progressiveView.intensity !== undefined ? progressiveView.intensity : progressiveIntensity
+        }
+      : null,
+    PROGRESSIVE_NOTE
+  );
+  if (normalizedProgressiveView) {
+    payload.progressiveView = normalizedProgressiveView;
+  }
+
+  const normalizedConservativeView = normalizeView(
+    conservativeView
+      ? {
+          ...conservativeView,
+          intensity:
+            conservativeView.intensity !== undefined ? conservativeView.intensity : conservativeIntensity
+        }
+      : null,
+    CONSERVATIVE_NOTE
+  );
+  if (normalizedConservativeView) {
+    payload.conservativeView = normalizedConservativeView;
+  }
+
+  const normalizedImpact = normalizeImpact(impactToLife);
+  if (normalizedImpact) {
+    payload.impactToLife = normalizedImpact;
+  }
+
+  return { payload };
+}
+
+// TODO: 현재 검색 구현은 최근 50건을 불러와 메모리에서 필터링한다. 데이터가 늘어나면 Firestore 복합 색인 또는 전용 검색 인프라도입이 필요하다.
 router.get('/search', async (req, res) => {
   try {
     const { category, query } = req.query;
@@ -193,98 +274,92 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const adminSecretFromHeader = req.header('x-admin-secret');
-    const adminSecretEnv = process.env.ADMIN_SECRET;
-
-    // TODO: 현재는 단순 헤더 기반 비밀번호 검증만 수행한다. 실제 운영 시에는 인증 서버 혹은 OAuth 기반 보호 장치가 필요하다.
-    if (adminSecretEnv && adminSecretFromHeader !== adminSecretEnv) {
-      return res.status(401).json({ message: '인증에 실패했습니다.' });
-    }
-
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ message: '요청 본문이 비어 있습니다.' });
-    }
-
-    const {
-      id,
-      title,
-      date,
-      category,
-      summaryCard,
-      background,
-      keyPoints,
-      progressiveView,
-      progressiveIntensity,
-      conservativeView,
-      conservativeIntensity,
-      impactToLife,
-      sources
-    } = req.body;
-
-    if (!title || !date || !summaryCard || !background) {
-      return res.status(400).json({ message: 'title, date, summaryCard, background 필드는 필수입니다.' });
-    }
-
-    const normalizedKeyPoints = splitLines(keyPoints);
-    if (normalizedKeyPoints.length === 0) {
-      return res.status(400).json({ message: 'keyPoints 는 최소 1개 이상의 bullet 이 필요합니다.' });
-    }
-
-    const normalizedSources = normalizeSources(sources);
-    if (normalizedSources.length === 0) {
-      return res.status(400).json({ message: 'sources 배열에 최소 1개의 출처를 입력해야 합니다.' });
-    }
-
-    const payload = {
-      title: toSafeString(title),
-      date: toSafeString(date),
-      category: category ? toSafeString(category) : '기타',
-      summaryCard: toSafeString(summaryCard),
-      background: toSafeString(background),
-      keyPoints: normalizedKeyPoints,
-      sources: normalizedSources
-    };
-
-    const normalizedProgressiveView = normalizeView(progressiveView, PROGRESSIVE_NOTE);
-    const normalizedProgressiveIntensity = normalizeIntensity(progressiveIntensity);
-    if (normalizedProgressiveView) {
-      payload.progressiveView = normalizedProgressiveView;
-    }
-    if (normalizedProgressiveIntensity !== undefined) {
-      payload.progressiveIntensity = normalizedProgressiveIntensity;
-    }
-
-    const normalizedConservativeView = normalizeView(conservativeView, CONSERVATIVE_NOTE);
-    const normalizedConservativeIntensity = normalizeIntensity(conservativeIntensity);
-    if (normalizedConservativeView) {
-      payload.conservativeView = normalizedConservativeView;
-    }
-    if (normalizedConservativeIntensity !== undefined) {
-      payload.conservativeIntensity = normalizedConservativeIntensity;
-    }
-
-    const normalizedImpact = normalizeImpact(impactToLife);
-    if (normalizedImpact) {
-      payload.impactToLife = normalizedImpact;
+    // TODO: 운영 단계에서는 x-admin-secret 같은 관리자 검증을 다시 활성화하고, 더 강력한 인증 방식을 도입해야 한다.
+    const { payload, error } = buildIssuePayload(req.body);
+    if (error) {
+      return res.status(400).json({ message: error });
     }
 
     const collection = db.collection('issues');
-    const docRef = id ? collection.doc(String(id)) : collection.doc();
+    const docRef = collection.doc();
 
-    const timestamps = {
-      updatedAt: FieldValue.serverTimestamp()
-    };
-    if (!id) {
-      timestamps.createdAt = FieldValue.serverTimestamp();
-    }
-
-    await docRef.set({ ...payload, ...timestamps }, { merge: Boolean(id) });
+    await docRef.set(
+      {
+        ...payload,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: false }
+    );
 
     const savedDoc = await docRef.get();
     res.status(201).json({ id: docRef.id, ...savedDoc.data() });
   } catch (error) {
     console.error('POST /api/issues 오류:', error);
     res.status(500).json({ message: '이슈를 저장하는 중 오류가 발생했습니다.' });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    // TODO: 운영 단계에서는 PUT 요청에도 관리자 인증과 세부 권한 검증을 추가해야 한다.
+    const issueId = req.params.id;
+    if (!issueId) {
+      return res.status(400).json({ message: '문서 ID가 필요합니다.' });
+    }
+
+    const docRef = db.collection('issues').doc(issueId);
+    const snapshot = await docRef.get();
+    if (!snapshot.exists) {
+      return res.status(404).json({ message: '해당 ID의 이슈를 찾을 수 없습니다.' });
+    }
+
+    const { payload, error } = buildIssuePayload(req.body);
+    if (error) {
+      return res.status(400).json({ message: error });
+    }
+
+    await docRef.set(
+      {
+        ...payload,
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: false }
+    );
+
+    const updatedDoc = await docRef.get();
+    res.json({ id: docRef.id, ...updatedDoc.data() });
+  } catch (error) {
+    console.error(`PUT /api/issues/${req.params.id} 오류:`, error);
+    res.status(500).json({ message: '이슈를 수정하는 중 오류가 발생했습니다.' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    // TODO: 운영 단계에서는 DELETE 요청을 실행하기 전에 관리자 인증을 필수로 걸어야 한다.
+    const issueId = req.params.id;
+    if (!issueId) {
+      return res.status(400).json({ message: '문서 ID가 필요합니다.' });
+    }
+
+    const docRef = db.collection('issues').doc(issueId);
+    const snapshot = await docRef.get();
+    if (!snapshot.exists) {
+      return res.status(404).json({ message: '해당 ID의 이슈를 찾을 수 없습니다.' });
+    }
+
+    await docRef.delete();
+
+    const metricsRef = db.collection('metrics').doc(issueId);
+    await metricsRef.delete().catch((error) => {
+      console.warn(`metrics/${issueId} 삭제 중 경고:`, error.message);
+    });
+
+    res.json({ id: issueId, message: '문서를 삭제했습니다.' });
+  } catch (error) {
+    console.error(`DELETE /api/issues/${req.params.id} 오류:`, error);
+    res.status(500).json({ message: '이슈를 삭제하는 중 오류가 발생했습니다.' });
   }
 });
 

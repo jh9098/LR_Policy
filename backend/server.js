@@ -42,7 +42,7 @@ const corsOptions = {
     console.warn(`[CORS] 허용되지 않은 Origin 요청 차단: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-admin-secret'],
   credentials: false,
   optionsSuccessStatus: 200
