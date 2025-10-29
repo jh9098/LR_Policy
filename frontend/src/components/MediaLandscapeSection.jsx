@@ -22,7 +22,20 @@ function MediaLandscapeSection() {
         </p>
       </header>
 
-      <div className="overflow-x-auto">
+      <div className="space-y-3 text-sm md:hidden">
+        {MEDIA_CHANNELS.map((channel) => (
+          <div
+            key={channel.name}
+            className="rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50"
+          >
+            <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{channel.name}</p>
+            <p className="mt-1 text-[13px] font-medium text-indigo-600 dark:text-indigo-300">{channel.orientation}</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">{channel.note}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
           <thead className="bg-slate-50 dark:bg-slate-900/40">
             <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300">

@@ -1,6 +1,6 @@
 // frontend/src/components/SiteHeader.jsx
 import { useEffect, useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 
 const navBaseClass =
   'rounded-md px-2 py-1 text-sm font-medium transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:text-slate-100 dark:focus-visible:ring-offset-slate-900';
@@ -21,6 +21,8 @@ function applyTheme(theme) {
 
 function SiteHeader() {
   const [theme, setTheme] = useState('light');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     // 초기 진입 시 로컬 저장소 혹은 OS 모드에서 기본값을 찾는다.
@@ -63,8 +65,24 @@ function SiteHeader() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  useEffect(() => {
+    // 경로가 바뀔 때마다 모바일 내비게이션을 닫아 화면 낭독기 혼선을 줄인다.
+    setIsMenuOpen(false);
+  }, [location.pathname]);
+
+  const handleToggleMenu = () => {
+    setIsMenuOpen((prev) => !prev);
+  };
+
+  const navLinkClassName = ({ isActive }) =>
+    [
+      navBaseClass,
+      isActive ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300',
+      'block'
+    ].join(' ');
+
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
         <Link
           to="/"
@@ -72,27 +90,31 @@ function SiteHeader() {
         >
           사건 프레임 아카이브
         </Link>
-        <nav className="flex items-center gap-3">
-          <NavLink
-            to="/"
-            className={({ isActive }) =>
-              [
-                navBaseClass,
-                isActive ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300'
-              ].join(' ')
-            }
+        <div className="flex items-center gap-2 md:hidden">
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-base shadow-sm transition hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:text-indigo-300 dark:focus-visible:ring-offset-slate-900"
+            aria-label="다크 모드 전환"
           >
+            <span aria-hidden="true">{theme === 'dark' ? '🌙' : '☀️'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleMenu}
+            aria-expanded={isMenuOpen}
+            aria-controls="site-header-mobile-nav"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white text-base shadow-sm transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-indigo-400/80 dark:hover:text-indigo-300 dark:focus-visible:ring-offset-slate-900"
+          >
+            <span className="sr-only">메뉴 열기/닫기</span>
+            <span aria-hidden="true">{isMenuOpen ? '✕' : '☰'}</span>
+          </button>
+        </div>
+        <nav className="hidden items-center gap-3 md:flex">
+          <NavLink to="/" className={navLinkClassName}>
             홈
           </NavLink>
-          <NavLink
-            to="/admin"
-            className={({ isActive }) =>
-              [
-                navBaseClass,
-                isActive ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300'
-              ].join(' ')
-            }
-          >
+          <NavLink to="/admin" className={navLinkClassName}>
             관리자 대시보드
           </NavLink>
           <button
@@ -105,6 +127,21 @@ function SiteHeader() {
           </button>
         </nav>
       </div>
+      <nav
+        id="site-header-mobile-nav"
+        className={`md:hidden transition-all duration-200 ease-out ${
+          isMenuOpen ? 'max-h-40 border-t border-slate-200 bg-white/95 opacity-100 dark:border-slate-700 dark:bg-slate-900/95' : 'max-h-0 overflow-hidden opacity-0'
+        }`}
+      >
+        <div className="space-y-1 px-4 pb-4 pt-3 text-sm font-medium sm:px-6">
+          <NavLink to="/" className={navLinkClassName}>
+            홈
+          </NavLink>
+          <NavLink to="/admin" className={navLinkClassName}>
+            관리자 대시보드
+          </NavLink>
+        </div>
+      </nav>
     </header>
   );
 }
