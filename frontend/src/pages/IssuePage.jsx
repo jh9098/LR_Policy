@@ -152,11 +152,27 @@ function IssuePage() {
           background: data.background ?? '',
           keyPoints: ensureArray(data.keyPoints),
           progressiveView: normalizeView(
-            data.progressiveView ? { ...data.progressiveView, intensity: data.progressiveIntensity } : null,
+            data.progressiveView
+              ? {
+                  ...data.progressiveView,
+                  intensity:
+                    data.progressiveView.intensity !== undefined
+                      ? data.progressiveView.intensity
+                      : data.progressiveIntensity
+                }
+              : null,
             PROGRESSIVE_NOTE
           ),
           conservativeView: normalizeView(
-            data.conservativeView ? { ...data.conservativeView, intensity: data.conservativeIntensity } : null,
+            data.conservativeView
+              ? {
+                  ...data.conservativeView,
+                  intensity:
+                    data.conservativeView.intensity !== undefined
+                      ? data.conservativeView.intensity
+                      : data.conservativeIntensity
+                }
+              : null,
             CONSERVATIVE_NOTE
           ),
           impactToLife: normalizeImpact(data.impactToLife),
