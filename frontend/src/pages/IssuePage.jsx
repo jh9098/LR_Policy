@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom';
 import IntensityBar from '../components/IntensityBar.jsx';
 import MetaTags from '../components/MetaTags.jsx';
 import SectionCard from '../components/SectionCard.jsx';
+import { getThemeById } from '../constants/themeConfig.js';
 import { getIssueById } from '../firebaseClient.js';
 
 const PROGRESSIVE_NOTE =
@@ -83,8 +84,10 @@ function IssuePage() {
   }, [toastMessage]);
 
   const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const metaTitle = issue ? `${issue.title} - 사건 프레임 아카이브` : '사건 프레임 아카이브';
-  const metaDescription = issue?.easySummary || issue?.summaryCard || '정책/사건의 맥락을 정리합니다.';
+  const themeInfo = issue ? getThemeById(issue.theme) : null;
+  const themeLabel = themeInfo?.label ?? '사건/정책';
+  const metaTitle = issue ? `${issue.title} - infoall` : 'infoall';
+  const metaDescription = issue?.easySummary || issue?.summaryCard || `${themeLabel} 주제의 정보를 제공합니다.`;
   const easySummary = issue?.easySummary || '';
   const keyPoints = useMemo(() => toArray(issue?.keyPoints), [issue?.keyPoints]);
   const backgroundParagraphs = useMemo(() => toArray(issue?.background), [issue?.background]);
@@ -141,7 +144,12 @@ function IssuePage() {
         <div className="space-y-6">
           <header className="rounded-2xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-300">
-              <span className="font-semibold uppercase tracking-wide">{issue.date || '정보 부족'}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-slate-900/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 dark:bg-slate-100/10 dark:text-slate-200">
+                  {themeLabel}
+                </span>
+                <span className="font-semibold uppercase tracking-wide">{issue.date || '정보 부족'}</span>
+              </div>
               {(issue.category || issue.subcategory) && (
                 <div className="flex flex-wrap items-center gap-1">
                   {issue.category ? (

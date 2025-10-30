@@ -7,6 +7,7 @@ import SiteFooter from './components/SiteFooter.jsx';
 import AdminLayout from './components/AdminLayout.jsx';
 import HomePage from './pages/HomePage.jsx';
 import IssuePage from './pages/IssuePage.jsx';
+import ThemePage from './pages/ThemePage.jsx';
 import AdminNewPage from './pages/admin/AdminNewPage.jsx';
 import AdminListPage from './pages/admin/AdminListPage.jsx';
 import AdminEditPage from './pages/admin/AdminEditPage.jsx';
@@ -28,6 +29,7 @@ function App() {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/theme/:themeId" element={<ThemePage />} />
         <Route path="/issue/:id" element={<IssuePage />} />
       </Route>
 

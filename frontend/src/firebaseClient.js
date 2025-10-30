@@ -34,8 +34,10 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc
+  updateDoc,
+  where
 } from 'firebase/firestore';
+import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from './constants/themeConfig.js';
 
 // Vite 환경 변수 기반 Firebase 설정을 구성한다.
 // Netlify 등 배포 환경에서도 동일한 키 이름(VITE_FIREBASE_*)으로 등록해야 한다.
@@ -57,6 +59,7 @@ function normalizeIssueData(issueId, data) {
   // Firestore에서 특정 필드가 누락된 경우에도 UI가 안전하게 동작하도록 기본값을 강제한다.
   return {
     id: issueId,
+    theme: typeof data?.theme === 'string' && isValidThemeId(data.theme) ? data.theme : DEFAULT_THEME_ID,
     easySummary: typeof data?.easySummary === 'string' ? data.easySummary : '',
     title: typeof data?.title === 'string' ? data.title : '',
     date: typeof data?.date === 'string' ? data.date : '',
@@ -90,6 +93,86 @@ export async function getRecentIssues(limitCount = 50) {
   const q = query(collection(db, 'issues'), orderBy('date', 'desc'), limit(limitCount));
   const snap = await getDocs(q);
   return snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+}
+
+async function fetchIssuesWithFallback(constraints, { fallbackLimit = 80, fallbackFilter = null } = {}) {
+  try {
+    const q = query(collection(db, 'issues'), ...constraints);
+    const snap = await getDocs(q);
+    return snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+  } catch (error) {
+    console.warn('Firestore 고급 쿼리 실패, 최신 순 결과로 폴백합니다:', error);
+    const fallbackList = await getRecentIssues(fallbackLimit);
+    if (typeof fallbackFilter === 'function') {
+      return fallbackList.filter(fallbackFilter);
+    }
+    return fallbackList;
+  }
+}
+
+export async function getTopIssuesByTheme(themeId, limitCount = 10) {
+  const validTheme = isValidThemeId(themeId) ? themeId : DEFAULT_THEME_ID;
+  const list = await fetchIssuesWithFallback(
+    [where('theme', '==', validTheme), orderBy('date', 'desc'), limit(limitCount)],
+    {
+      fallbackLimit: limitCount * 4,
+      fallbackFilter: (issue) => issue.theme === validTheme
+    }
+  );
+  return list.slice(0, limitCount);
+}
+
+const SORT_OPTION_MAP = {
+  recent: { field: 'date', direction: 'desc' },
+  popular: { field: 'views', direction: 'desc' },
+  title: { field: 'title', direction: 'asc' }
+};
+
+export async function getIssuesByTheme(themeId, { sort = 'recent', limitCount = 60 } = {}) {
+  const validTheme = isValidThemeId(themeId) ? themeId : DEFAULT_THEME_ID;
+  const sortOption = SORT_OPTION_MAP[sort] ?? SORT_OPTION_MAP.recent;
+  const constraints = [where('theme', '==', validTheme), orderBy(sortOption.field, sortOption.direction), limit(limitCount)];
+  const fallbackFilter = (issue) => issue.theme === validTheme;
+  const results = await fetchIssuesWithFallback(constraints, {
+    fallbackLimit: limitCount * 4,
+    fallbackFilter
+  });
+
+  if (sortOption.field === 'title') {
+    return [...results].sort((a, b) => a.title.localeCompare(b.title, 'ko')); // Firestore는 문자열 정렬이 제한적이라 안전장치
+  }
+  if (sortOption.field === 'views') {
+    return [...results].sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
+  }
+  return results;
+}
+
+export async function searchIssuesByTheme(themeId, keyword, { limitCount = 80, sort = 'recent' } = {}) {
+  const normalizedKeyword = (keyword ?? '').trim().toLowerCase();
+  const baseList = await getIssuesByTheme(themeId, { sort, limitCount });
+  if (!normalizedKeyword) {
+    return baseList;
+  }
+  return baseList.filter((issue) => {
+    const haystack = [issue.title, issue.summaryCard, issue.easySummary, issue.background]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(normalizedKeyword);
+  });
+}
+
+export async function searchIssuesAcrossThemes(keyword, { limitPerTheme = 40, sort = 'recent' } = {}) {
+  const entries = await Promise.all(
+    THEME_CONFIG.map(async (theme) => ({
+      themeId: theme.id,
+      items: await searchIssuesByTheme(theme.id, keyword, { limitCount: limitPerTheme, sort })
+    }))
+  );
+  return entries.reduce((acc, { themeId, items }) => {
+    acc[themeId] = items;
+    return acc;
+  }, {});
 }
 
 // 상세 페이지나 /admin/edit/:id 페이지에서 단일 문서를 조회할 때 사용한다.

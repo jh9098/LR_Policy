@@ -12,6 +12,7 @@ import {
   isValidCategory,
   isValidSubcategory
 } from '../../constants/categoryStructure.js';
+import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
 import { deleteIssue, getIssueById, updateIssue } from '../../firebaseClient.js';
 import { emptyDraft } from '../../utils/emptyDraft.js';
 const PROGRESSIVE_NOTE =
@@ -24,11 +25,13 @@ function normalizeDraft(raw) {
   if (!raw) {
     return { ...emptyDraft };
   }
+  const safeTheme = isValidThemeId(raw.theme) ? raw.theme : DEFAULT_THEME_ID;
   const safeCategory = isValidCategory(raw.category) ? raw.category : '기타';
   const safeSubcategory = isValidSubcategory(safeCategory, raw.subcategory) ? raw.subcategory : '';
   return {
     ...emptyDraft,
     ...raw,
+    theme: safeTheme,
     category: safeCategory,
     subcategory: safeSubcategory,
     keyPoints: Array.isArray(raw.keyPoints) ? raw.keyPoints.map((item) => String(item ?? '')) : [],
@@ -82,6 +85,9 @@ function AdminEditPage() {
 
   const categoryValue = issueDraft?.category ?? '기타';
   const subcategoryValue = issueDraft?.subcategory ?? '';
+  const selectedTheme = issueDraft?.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
+  const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
+  const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
 
   const subcategoryOptions = useMemo(() => getSubcategoryOptions(categoryValue), [categoryValue]);
 
@@ -175,6 +181,23 @@ function AdminEditPage() {
   const handleFieldChange = (field) => (event) => {
     const { value } = event.target;
     setIssueDraft((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleThemeChange = (event) => {
+    const { value } = event.target;
+    const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
+    setIssueDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const draft = { ...prev, theme: nextTheme };
+      const nextThemeMeta = THEME_CONFIG.find((item) => item.id === nextTheme);
+      if (!nextThemeMeta?.showPerspectives) {
+        draft.progressiveView = null;
+        draft.conservativeView = null;
+      }
+      return draft;
+    });
   };
 
   const handleEasySummaryChange = (event) => {
@@ -395,7 +418,14 @@ function AdminEditPage() {
     setSubmitError('');
     setIsSubmitting(true);
     try {
-      await updateIssue(id, issueDraft);
+      const payload = {
+        ...issueDraft,
+        theme: selectedTheme,
+        progressiveView: showPerspectiveSections ? issueDraft.progressiveView : null,
+        conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null
+      };
+      await updateIssue(id, payload);
+      setIssueDraft(payload);
       setSubmitSuccess('수정이 완료되어 Firestore에 반영되었습니다.');
     } catch (error) {
       console.error('Firestore 수정 실패:', error);
@@ -450,9 +480,9 @@ function AdminEditPage() {
   return (
     <div className="space-y-6">
       <header className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">문서 수정</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">게시물 수정</h1>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          Firestore에서 불러온 내용을 직접 편집합니다. 지금은 인증이 없어 누구나 수정/삭제가 가능하니 URL을 외부에 공유하지 마세요.
+          Firestore에서 불러온 내용을 직접 편집합니다. 기존 데이터에 테마가 없으면 "사건/정책"으로 자동 지정되며, 필요 시 다른 테마로 변경한 뒤 저장해 주세요. 지금은 인증이 없어 누구나 수정/삭제가 가능하니 URL을 외부에 공유하지 마세요.
         </p>
       </header>
 
@@ -480,6 +510,21 @@ function AdminEditPage() {
                 이 글 삭제
               </button>
             </div>
+            <label className="flex flex-col gap-2 text-sm">
+              <span className="font-medium">테마</span>
+              <select
+                value={selectedTheme}
+                onChange={handleThemeChange}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              >
+                {THEME_CONFIG.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</span>
+            </label>
             <label className="flex flex-col gap-2 text-sm">
               <span className="font-medium">쉬운 요약 (일반인 설명용)</span>
               <textarea
@@ -592,9 +637,10 @@ function AdminEditPage() {
             </div>
           </div>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">진보 시각</h2>
+          {showPerspectiveSections ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">진보 시각</h2>
               {issueDraft.progressiveView ? (
                 <button
                   type="button"
@@ -680,11 +726,13 @@ function AdminEditPage() {
                 </label>
               </div>
             ) : null}
-          </section>
+            </section>
+          ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">보수 시각</h2>
+          {showPerspectiveSections ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">보수 시각</h2>
               {issueDraft.conservativeView ? (
                 <button
                   type="button"
@@ -770,7 +818,12 @@ function AdminEditPage() {
                 </label>
               </div>
             ) : null}
-          </section>
+            </section>
+          ) : (
+            <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              선택한 테마에서는 진보/보수 비교 섹션을 사용하지 않습니다. 필요 시 테마를 "사건/정책"으로 변경한 뒤 다시 편집해 주세요.
+            </section>
+          )}
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div className="flex items-center justify-between">
@@ -922,6 +975,10 @@ function AdminEditPage() {
               현재 입력 상태를 기반으로 상세 페이지가 어떻게 보이는지 확인하세요.
             </p>
             <dl className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="font-medium text-slate-500 dark:text-slate-400">테마</dt>
+                <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">{themeMeta?.label}</dd>
+              </div>
               <div className="flex items-center justify-between gap-4">
                 <dt className="font-medium text-slate-500 dark:text-slate-400">카테고리</dt>
                 <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
