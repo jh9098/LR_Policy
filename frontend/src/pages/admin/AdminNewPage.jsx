@@ -59,6 +59,54 @@ function restoreDraftFromStorage() {
   }
 }
 
+function sanitizeJsonNewlines(rawText) {
+  if (typeof rawText !== 'string' || rawText.length === 0) {
+    return rawText || '';
+  }
+
+  let sanitized = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < rawText.length; index += 1) {
+    const char = rawText[index];
+
+    if (escaped) {
+      sanitized += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      sanitized += char;
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      sanitized += char;
+      continue;
+    }
+
+    if (inString && (char === '\n' || char === '\r')) {
+      continue;
+    }
+
+    sanitized += char;
+  }
+
+  return sanitized;
+}
+
+function parseDraftFromJson(jsonText) {
+  const parsed = loadDraftFromJson(jsonText);
+  if (!isValidThemeId(parsed.theme)) {
+    parsed.theme = DEFAULT_THEME_ID;
+  }
+  return ensureThemeGuides(parsed);
+}
+
 function AdminNewPage() {
   const [issueDraft, setIssueDraft] = useState(() => restoreDraftFromStorage());
   const [jsonInput, setJsonInput] = useState('');
@@ -76,6 +124,7 @@ function AdminNewPage() {
   const isClipboardSupported = typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
   const isCopyError = promptCopyFeedback.startsWith('복사 실패');
   const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
+  const isJsonAdjustRecommended = jsonError.includes('Bad control character');
 
   const categoryOptions = useMemo(() => getCategoryOptions(selectedTheme), [selectedTheme]);
   const subcategoryOptions = useMemo(
@@ -185,11 +234,26 @@ function AdminNewPage() {
 
   const handleLoadJson = () => {
     try {
-      const parsed = loadDraftFromJson(jsonInput);
-      if (!isValidThemeId(parsed.theme)) {
-        parsed.theme = DEFAULT_THEME_ID;
-      }
-      setIssueDraft(ensureThemeGuides(parsed));
+      const draft = parseDraftFromJson(jsonInput);
+      setIssueDraft(draft);
+      setJsonError('');
+      setSubmitError('');
+    } catch (error) {
+      setJsonError(`❌ JSON 파싱 오류: ${error.message}`);
+    }
+  };
+
+  const handleAdjustJson = () => {
+    if (typeof jsonInput !== 'string' || jsonInput.trim().length === 0) {
+      return;
+    }
+
+    const sanitized = sanitizeJsonNewlines(jsonInput);
+    setJsonInput(sanitized);
+
+    try {
+      const draft = parseDraftFromJson(sanitized);
+      setIssueDraft(draft);
       setJsonError('');
       setSubmitError('');
     } catch (error) {
@@ -517,13 +581,40 @@ function AdminNewPage() {
           </p>
         </header>
 
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <h2 className="text-lg font-semibold">테마 선택</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            먼저 테마를 고르면 분류 옵션과 프롬프트가 자동으로 맞춰집니다.
+          </p>
+          <label className="flex flex-col gap-2 text-sm">
+            <span className="font-medium">테마</span>
+            <select
+              value={selectedTheme}
+              onChange={handleThemeChange}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+            >
+              {THEME_CONFIG.map((theme) => (
+                <option key={theme.id} value={theme.id}>
+                  {theme.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</span>
+            {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                세부 영역: {themeMeta.keyAreas.join(' · ')}
+              </span>
+            ) : null}
+          </label>
+        </section>
+
         {themePrompt && (
           <section className="space-y-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-6 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/10">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">선택한 테마 프롬프트</h2>
                 <p className="text-xs text-emerald-700 dark:text-emerald-200/80">
-                  {themeMeta?.label ?? '테마'} 테마에 맞춘 AI 지침입니다. 프롬프트를 복사해 활용하세요.
+                  버튼을 누르면 {themeMeta?.label ?? '테마'}용 프롬프트가 복사됩니다.
                 </p>
               </div>
               <button
@@ -550,11 +641,6 @@ function AdminNewPage() {
                 {promptCopyFeedback}
               </p>
             )}
-            <div className="max-h-72 overflow-y-auto rounded-xl border border-emerald-200 bg-white/90 px-4 py-3 text-left shadow-inner dark:border-emerald-500/40 dark:bg-slate-950/40">
-              <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
-                {themePrompt}
-              </pre>
-            </div>
           </section>
         )}
 
@@ -576,12 +662,28 @@ function AdminNewPage() {
             </button>
             <button
               type="button"
+              onClick={handleAdjustJson}
+              disabled={jsonInput.trim().length === 0}
+              className={`inline-flex items-center rounded-lg px-4 py-2 font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+                jsonInput.trim().length === 0
+                  ? 'cursor-not-allowed border border-amber-200 text-amber-300 dark:border-amber-500/30 dark:text-amber-400/50'
+                  : isJsonAdjustRecommended
+                    ? 'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-600'
+                    : 'border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-500/60 dark:text-amber-300 dark:hover:bg-amber-500/10'
+              }`}
+            >
+              조정하기
+            </button>
+            <button
+              type="button"
               onClick={resetDraft}
               className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               초기화
             </button>
-            <p className="text-xs text-slate-500 dark:text-slate-400">JSON은 한 줄 문자열이어야 하며 줄바꿈이 포함되면 파싱에 실패합니다.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              JSON은 한 줄 문자열이어야 합니다. 오류가 난다면 조정하기 버튼으로 줄바꿈을 제거해 보세요.
+            </p>
           </div>
           {jsonError && (
             <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
@@ -594,26 +696,6 @@ function AdminNewPage() {
           <section className="space-y-6">
             <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <h2 className="text-lg font-semibold">기본 정보</h2>
-              <label className="flex flex-col gap-2 text-sm">
-                <span className="font-medium">테마</span>
-                <select
-                  value={selectedTheme}
-                  onChange={handleThemeChange}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                >
-                  {THEME_CONFIG.map((theme) => (
-                    <option key={theme.id} value={theme.id}>
-                      {theme.label}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</span>
-                {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    세부 영역: {themeMeta.keyAreas.join(' · ')}
-                  </span>
-                ) : null}
-              </label>
               <label className="flex flex-col gap-2 text-sm">
                 <span className="font-medium">쉬운 요약 (일반인 설명용)</span>
                 <textarea
