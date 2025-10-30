@@ -38,6 +38,11 @@ import {
   where
 } from 'firebase/firestore';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from './constants/themeConfig.js';
+import {
+  normalizeHealthGuide,
+  normalizeLifestyleGuide,
+  normalizeParentingGuide
+} from './utils/themeDraftDefaults.js';
 
 // Vite 환경 변수 기반 Firebase 설정을 구성한다.
 // Netlify 등 배포 환경에서도 동일한 키 이름(VITE_FIREBASE_*)으로 등록해야 한다.
@@ -82,6 +87,9 @@ function normalizeIssueData(issueId, data) {
           note: typeof source?.note === 'string' ? source.note : ''
         }))
       : [],
+    parentingGuide: normalizeParentingGuide(data?.parentingGuide, { withPresets: true }),
+    healthGuide: normalizeHealthGuide(data?.healthGuide, { withPresets: true }),
+    lifestyleGuide: normalizeLifestyleGuide(data?.lifestyleGuide),
     createdAt: data?.createdAt ?? null,
     updatedAt: data?.updatedAt ?? null,
     views: typeof data?.views === 'number' ? data.views : 0

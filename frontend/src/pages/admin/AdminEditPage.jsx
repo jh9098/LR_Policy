@@ -6,6 +6,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
+import LifestyleThemeEditor from '../../components/admin/LifestyleThemeEditor.jsx';
+import LifestyleThemePreview from '../../components/admin/LifestyleThemePreview.jsx';
+import ParentingThemeEditor from '../../components/admin/ParentingThemeEditor.jsx';
+import ParentingThemePreview from '../../components/admin/ParentingThemePreview.jsx';
+import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
+import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
 import {
   CATEGORY_OPTIONS,
   getSubcategoryOptions,
@@ -14,7 +20,15 @@ import {
 } from '../../constants/categoryStructure.js';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
 import { deleteIssue, getIssueById, updateIssue } from '../../firebaseClient.js';
-import { emptyDraft } from '../../utils/emptyDraft.js';
+import { emptyDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
+import {
+  createHealthGuide,
+  createLifestyleGuide,
+  createParentingGuide,
+  normalizeHealthGuide,
+  normalizeLifestyleGuide,
+  normalizeParentingGuide
+} from '../../utils/themeDraftDefaults.js';
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const CONSERVATIVE_NOTE =
@@ -23,14 +37,14 @@ const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약�
 
 function normalizeDraft(raw) {
   if (!raw) {
-    return { ...emptyDraft };
+    return ensureThemeGuides({ ...emptyDraft });
   }
   const safeTheme = isValidThemeId(raw.theme) ? raw.theme : DEFAULT_THEME_ID;
   const safeCategory = isValidCategory(raw.category) ? raw.category : '기타';
   const safeSubcategory = isValidSubcategory(safeCategory, raw.subcategory) ? raw.subcategory : '';
+  const base = ensureThemeGuides({ ...emptyDraft, ...raw });
   return {
-    ...emptyDraft,
-    ...raw,
+    ...base,
     theme: safeTheme,
     category: safeCategory,
     subcategory: safeSubcategory,
@@ -68,7 +82,10 @@ function normalizeDraft(raw) {
           timestamp: source?.timestamp ?? '',
           note: source?.note ?? ''
         }))
-      : []
+      : [],
+    parentingGuide: normalizeParentingGuide(raw.parentingGuide ?? base.parentingGuide, { withPresets: true }),
+    healthGuide: normalizeHealthGuide(raw.healthGuide ?? base.healthGuide, { withPresets: true }),
+    lifestyleGuide: normalizeLifestyleGuide(raw.lifestyleGuide ?? base.lifestyleGuide)
   };
 }
 
@@ -190,14 +207,33 @@ function AdminEditPage() {
       if (!prev) {
         return prev;
       }
-      const draft = { ...prev, theme: nextTheme };
+      const base = ensureThemeGuides(prev);
       const nextThemeMeta = THEME_CONFIG.find((item) => item.id === nextTheme);
+      const draft = {
+        ...base,
+        theme: nextTheme,
+        parentingGuide: base.parentingGuide ?? createParentingGuide(),
+        healthGuide: base.healthGuide ?? createHealthGuide(),
+        lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide()
+      };
       if (!nextThemeMeta?.showPerspectives) {
         draft.progressiveView = null;
         draft.conservativeView = null;
       }
       return draft;
     });
+  };
+
+  const handleParentingGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => (prev ? { ...prev, parentingGuide: nextGuide } : prev));
+  };
+
+  const handleHealthGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => (prev ? { ...prev, healthGuide: nextGuide } : prev));
+  };
+
+  const handleLifestyleGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => (prev ? { ...prev, lifestyleGuide: nextGuide } : prev));
   };
 
   const handleEasySummaryChange = (event) => {
@@ -422,7 +458,10 @@ function AdminEditPage() {
         ...issueDraft,
         theme: selectedTheme,
         progressiveView: showPerspectiveSections ? issueDraft.progressiveView : null,
-        conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null
+        conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null,
+        parentingGuide: selectedTheme === 'parenting' ? issueDraft.parentingGuide : null,
+        healthGuide: selectedTheme === 'health' ? issueDraft.healthGuide : null,
+        lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null
       };
       await updateIssue(id, payload);
       setIssueDraft(payload);
@@ -510,11 +549,11 @@ function AdminEditPage() {
                 이 글 삭제
               </button>
             </div>
-            <label className="flex flex-col gap-2 text-sm">
-              <span className="font-medium">테마</span>
-              <select
-                value={selectedTheme}
-                onChange={handleThemeChange}
+              <label className="flex flex-col gap-2 text-sm">
+                <span className="font-medium">테마</span>
+                <select
+                  value={selectedTheme}
+                  onChange={handleThemeChange}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
               >
                 {THEME_CONFIG.map((theme) => (
@@ -522,9 +561,14 @@ function AdminEditPage() {
                     {theme.label}
                   </option>
                 ))}
-              </select>
-              <span className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</span>
-            </label>
+                </select>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</span>
+                {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    세부 영역: {themeMeta.keyAreas.join(' · ')}
+                  </span>
+                ) : null}
+              </label>
             <label className="flex flex-col gap-2 text-sm">
               <span className="font-medium">쉬운 요약 (일반인 설명용)</span>
               <textarea
@@ -636,6 +680,18 @@ function AdminEditPage() {
               ))}
             </div>
           </div>
+
+          {selectedTheme === 'parenting' ? (
+            <ParentingThemeEditor guide={issueDraft.parentingGuide} onChange={handleParentingGuideChange} />
+          ) : null}
+
+          {selectedTheme === 'health' ? (
+            <HealthThemeEditor guide={issueDraft.healthGuide} onChange={handleHealthGuideChange} />
+          ) : null}
+
+          {selectedTheme === 'lifestyle' ? (
+            <LifestyleThemeEditor guide={issueDraft.lifestyleGuide} onChange={handleLifestyleGuideChange} />
+          ) : null}
 
           {showPerspectiveSections ? (
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -979,6 +1035,14 @@ function AdminEditPage() {
                 <dt className="font-medium text-slate-500 dark:text-slate-400">테마</dt>
                 <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">{themeMeta?.label}</dd>
               </div>
+              {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="font-medium text-slate-500 dark:text-slate-400">세부 영역</dt>
+                  <dd className="text-right text-xs text-slate-600 dark:text-slate-300">
+                    {themeMeta.keyAreas.join(' · ')}
+                  </dd>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-4">
                 <dt className="font-medium text-slate-500 dark:text-slate-400">카테고리</dt>
                 <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
@@ -1029,6 +1093,18 @@ function AdminEditPage() {
               <p className="text-xs text-slate-500 dark:text-slate-400">핵심 bullet을 입력하면 여기에 표시됩니다.</p>
             )}
           </SectionCard>
+
+          {selectedTheme === 'parenting' ? (
+            <ParentingThemePreview guide={issueDraft.parentingGuide} />
+          ) : null}
+
+          {selectedTheme === 'health' ? (
+            <HealthThemePreview guide={issueDraft.healthGuide} />
+          ) : null}
+
+          {selectedTheme === 'lifestyle' ? (
+            <LifestyleThemePreview guide={issueDraft.lifestyleGuide} />
+          ) : null}
 
           {issueDraft.progressiveView ? (
             <SectionCard title="진보 시각" tone="progressive" badgeText="진보">
