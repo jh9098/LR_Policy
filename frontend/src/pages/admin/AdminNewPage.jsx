@@ -2,7 +2,7 @@
 // 이 페이지는 완전히 클라이언트 사이드에서 Firestore Web SDK를 사용해 새 문서를 생성한다.
 // 현재 누구나 /admin/new 에 접근하면 issues 컬렉션에 글을 추가할 수 있다. TODO: 프로덕션 단계에서는 접근 제한과 Firestore 보안 규칙 강화를 반드시 적용해야 한다.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
 import LifestyleThemeEditor from '../../components/admin/LifestyleThemeEditor.jsx';
@@ -20,6 +20,7 @@ import {
 } from '../../constants/categoryStructure.js';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
 import { createIssue } from '../../firebaseClient.js';
+import { getThemePrompt } from '../../constants/themePrompts.js';
 import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
 import {
   createHealthGuide,
@@ -64,11 +65,16 @@ function AdminNewPage() {
   const [jsonError, setJsonError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [promptCopyFeedback, setPromptCopyFeedback] = useState('');
+  const copyTimeoutRef = useRef(null);
 
   const categoryValue = issueDraft.category;
   const subcategoryValue = issueDraft.subcategory;
   const selectedTheme = issueDraft.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
   const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
+  const themePrompt = getThemePrompt(selectedTheme);
+  const isClipboardSupported = typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
+  const isCopyError = promptCopyFeedback.startsWith('복사 실패');
   const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
 
   const categoryOptions = useMemo(() => getCategoryOptions(selectedTheme), [selectedTheme]);
@@ -128,6 +134,22 @@ function AdminNewPage() {
     }
   }, [issueDraft]);
 
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = null;
+    }
+    setPromptCopyFeedback('');
+  }, [selectedTheme]);
+
   const previewBackground = useMemo(() => {
     if (!issueDraft.background) {
       return [];
@@ -172,6 +194,30 @@ function AdminNewPage() {
       setSubmitError('');
     } catch (error) {
       setJsonError(`❌ JSON 파싱 오류: ${error.message}`);
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    if (!themePrompt) {
+      return;
+    }
+    if (!isClipboardSupported) {
+      setPromptCopyFeedback('복사 실패: 브라우저가 클립보드를 지원하지 않습니다.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(themePrompt);
+      setPromptCopyFeedback('프롬프트를 복사했어요.');
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
+        setPromptCopyFeedback('');
+        copyTimeoutRef.current = null;
+      }, 2500);
+    } catch (error) {
+      console.error('프롬프트 복사 실패:', error);
+      setPromptCopyFeedback('복사 실패: 브라우저 권한을 확인해 주세요.');
     }
   };
 
@@ -470,6 +516,47 @@ function AdminNewPage() {
             AI가 생성한 JSON 초안을 붙여넣으면 모든 필드가 자동으로 채워집니다. infoall은 테마 기반 서비스이므로 반드시 적절한 테마를 선택해 주세요. 지금은 인증 없이 누구나 Firestore에 글을 올릴 수 있으니 URL을 외부에 공유하지 마세요.
           </p>
         </header>
+
+        {themePrompt && (
+          <section className="space-y-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-6 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/10">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">선택한 테마 프롬프트</h2>
+                <p className="text-xs text-emerald-700 dark:text-emerald-200/80">
+                  {themeMeta?.label ?? '테마'} 테마에 맞춘 AI 지침입니다. 프롬프트를 복사해 활용하세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyPrompt}
+                disabled={!isClipboardSupported}
+                className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
+                  isClipboardSupported
+                    ? 'bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-500 dark:hover:bg-emerald-600'
+                    : 'cursor-not-allowed bg-slate-300 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                }`}
+              >
+                프롬프트 복사
+              </button>
+            </div>
+            {promptCopyFeedback && (
+              <p
+                className={`text-xs font-semibold ${
+                  isCopyError
+                    ? 'text-rose-600 dark:text-rose-300'
+                    : 'text-emerald-700 dark:text-emerald-200'
+                }`}
+              >
+                {promptCopyFeedback}
+              </p>
+            )}
+            <div className="max-h-72 overflow-y-auto rounded-xl border border-emerald-200 bg-white/90 px-4 py-3 text-left shadow-inner dark:border-emerald-500/40 dark:bg-slate-950/40">
+              <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
+                {themePrompt}
+              </pre>
+            </div>
+          </section>
+        )}
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <h2 className="text-lg font-semibold">AI JSON 붙여넣기</h2>
