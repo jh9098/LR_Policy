@@ -36,7 +36,7 @@ function AdminLayout() {
           <nav
             className={`${isMenuOpen ? 'flex' : 'hidden'} flex-col gap-2 border-t border-slate-200 pt-3 text-sm lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:gap-3 lg:border-none lg:pt-0`}
           >
-            {`.map((item, index) => {
+            {NAV_ITEMS.map((item, index) => {
               if (item.type === 'placeholder') {
                 return (
                   <div
