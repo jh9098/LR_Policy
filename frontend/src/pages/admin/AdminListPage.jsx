@@ -72,9 +72,6 @@ function AdminListPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">등록된 글 목록</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Firestore에서 직접 불러온 문서를 테마별로 확인하고 관리할 수 있습니다. 삭제 버튼을 누르면 즉시 Firestore에서 제거되므로 주의하세요.
-          </p>
           <label className="inline-flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300 sm:flex-row sm:items-center sm:gap-2">
             <span className="font-semibold">테마 필터</span>
             <select
@@ -167,9 +164,6 @@ function AdminListPage() {
         </table>
       </div>
 
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        TODO: 실제 운영 단계에서는 이 목록/삭제 기능 전체에 인증과 접근 제어를 추가해야 합니다.
-      </p>
     </section>
   );
 }
