@@ -31,9 +31,9 @@ import {
   normalizeParentingGuide
 } from '../../utils/themeDraftDefaults.js';
 const PROGRESSIVE_NOTE =
-  '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+  '아래 내용은 일부 진보측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const CONSERVATIVE_NOTE =
-  '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+  '아래 내용은 일부 보수측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
 
 function normalizeDraft(raw) {
@@ -555,9 +555,6 @@ function AdminEditPage() {
     <div className="space-y-6">
       <header className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">게시물 수정</h1>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          Firestore에서 불러온 내용을 직접 편집합니다. 기존 데이터에 테마가 없으면 "사건/정책"으로 자동 지정되며, 필요 시 다른 테마로 변경한 뒤 저장해 주세요. 지금은 인증이 없어 누구나 수정/삭제가 가능하니 URL을 외부에 공유하지 마세요.
-        </p>
       </header>
 
       {submitSuccess && (
