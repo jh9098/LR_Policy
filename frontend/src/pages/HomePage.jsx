@@ -157,9 +157,6 @@ function HomePage() {
             </div>
           </form>
 
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            DEV 단계에서는 Firestore Security Rules를 완전히 열어두었기 때문에 누구나 데이터를 읽을 수 있습니다. 프로덕션 전환 시 인증과 권한 관리를 반드시 적용하세요.
-          </p>
         </div>
       </header>
 
