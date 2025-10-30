@@ -5,7 +5,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import IssueCard from '../components/IssueCard.jsx';
 import MetaTags from '../components/MetaTags.jsx';
-import { CATEGORY_FILTER_OPTIONS, getSubcategoryOptions } from '../constants/categoryStructure.js';
+import {
+  getCategoryFilterOptions,
+  getCategoryOptions,
+  getSubcategoryOptions
+} from '../constants/categoryStructure.js';
 import { DEFAULT_THEME_ID, getThemeById } from '../constants/themeConfig.js';
 import { getIssuesByTheme, searchIssuesByTheme } from '../firebaseClient.js';
 
@@ -20,8 +24,6 @@ function ThemePage() {
   const requestedThemeId = params.themeId ?? DEFAULT_THEME_ID;
   const theme = getThemeById(requestedThemeId);
   const isUnknownTheme = requestedThemeId !== theme.id;
-  const isPolicyTheme = theme.id === 'policy';
-
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,34 +33,44 @@ function ThemePage() {
   const [categoryFilter, setCategoryFilter] = useState('전체');
   const [subcategoryFilter, setSubcategoryFilter] = useState('전체');
 
+  const categoryOptions = useMemo(() => getCategoryOptions(theme.id), [theme.id]);
+  const categoryFilterOptions = useMemo(() => getCategoryFilterOptions(theme.id), [theme.id]);
+  const hasCategoryFilter = categoryOptions.length > 0;
+
   const subcategoryOptions = useMemo(() => {
-    if (!isPolicyTheme || categoryFilter === '전체') {
+    if (!hasCategoryFilter || categoryFilter === '전체') {
       return [];
     }
-    return getSubcategoryOptions(categoryFilter);
-  }, [categoryFilter, isPolicyTheme]);
+    return getSubcategoryOptions(theme.id, categoryFilter);
+  }, [categoryFilter, hasCategoryFilter, theme.id]);
 
   useEffect(() => {
-    if (!isPolicyTheme) {
-      setCategoryFilter('전체');
-      setSubcategoryFilter('전체');
-    }
-  }, [isPolicyTheme]);
-
-  useEffect(() => {
-    if (!isPolicyTheme) {
+    if (!hasCategoryFilter) {
+      if (categoryFilter !== '전체') {
+        setCategoryFilter('전체');
+      }
+      if (subcategoryFilter !== '전체') {
+        setSubcategoryFilter('전체');
+      }
       return;
     }
+
     if (categoryFilter === '전체') {
       if (subcategoryFilter !== '전체') {
         setSubcategoryFilter('전체');
       }
       return;
     }
+
+    if (!categoryOptions.includes(categoryFilter)) {
+      setCategoryFilter('전체');
+      return;
+    }
+
     if (subcategoryFilter !== '전체' && !subcategoryOptions.includes(subcategoryFilter)) {
       setSubcategoryFilter('전체');
     }
-  }, [categoryFilter, subcategoryFilter, isPolicyTheme, subcategoryOptions]);
+  }, [categoryFilter, categoryOptions, hasCategoryFilter, subcategoryFilter, subcategoryOptions]);
 
   const loadIssues = useCallback(async () => {
     setIsLoading(true);
@@ -112,7 +124,7 @@ function ThemePage() {
   }, [loadIssues]);
 
   const filteredItems = useMemo(() => {
-    if (!isPolicyTheme) {
+    if (!hasCategoryFilter) {
       return items;
     }
     return items.filter((item) => {
@@ -121,9 +133,12 @@ function ThemePage() {
         !matchesCategory || subcategoryFilter === '전체' || item.subcategory === subcategoryFilter;
       return matchesCategory && matchesSubcategory;
     });
-  }, [categoryFilter, isPolicyTheme, items, subcategoryFilter]);
+  }, [categoryFilter, hasCategoryFilter, items, subcategoryFilter]);
 
-  const siteUrl = useMemo(() => (typeof window !== 'undefined' ? `${window.location.origin}/theme/${theme.id}` : ''), [theme.id]);
+  const siteUrl = useMemo(
+    () => (typeof window !== 'undefined' ? `${window.location.origin}/theme/${theme.id}` : ''),
+    [theme.id]
+  );
 
   return (
     <section className="space-y-8">
@@ -180,7 +195,7 @@ function ThemePage() {
             </select>
           </label>
 
-          {isPolicyTheme ? (
+          {hasCategoryFilter ? (
             <>
               <label className="flex flex-col gap-2 text-sm">
                 <span className="font-medium text-slate-700 dark:text-slate-200">카테고리</span>
@@ -189,7 +204,7 @@ function ThemePage() {
                   onChange={(event) => setCategoryFilter(event.target.value)}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 >
-                  {CATEGORY_FILTER_OPTIONS.map((option) => (
+                  {categoryFilterOptions.map((option) => (
                     <option key={option} value={option}>
                       {option}
                     </option>
@@ -253,7 +268,7 @@ function ThemePage() {
         <div className="space-y-4 text-xs text-slate-500 dark:text-slate-400">
           <p>
             정렬: <strong>{SORT_OPTIONS.find((option) => option.value === sortOption)?.label}</strong>
-            {isPolicyTheme && (
+            {hasCategoryFilter && (
               <>
                 , 카테고리: <strong>{categoryFilter}</strong>, 하위 카테고리: <strong>{subcategoryFilter}</strong>
               </>

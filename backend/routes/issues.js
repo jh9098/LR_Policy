@@ -14,14 +14,41 @@ const { db, FieldValue } = require('../firebaseAdmin');
 
 const router = express.Router();
 
-const CATEGORY_STRUCTURE = {
-  부동산: ['주거·주택공급 정책', '전월세·임대차 제도', '재건축·재개발·도시정비', '부동산 세제·규제'],
-  '노동/노조': ['임금·근로조건 정책', '노사협상·파업 이슈', '고용·산재·안전 규제', '산업별 노동 현안'],
-  '사법/검찰': ['수사·기소·사건 처리', '법원 판결·양형 논쟁', '사법개혁·제도개편', '감찰·징계·인사'],
-  '외교/안보': ['정상외교·국제협력', '군사·방위 정책', '동맹 현안', '대북·통일 정책'],
-  기타: ['국회·정당·정치개혁', '복지·보건·교육 정책', '과학·디지털·규제 혁신', '환경·에너지 전환']
-};
-const CATEGORY_OPTIONS = new Set(Object.keys(CATEGORY_STRUCTURE));
+const THEME_CATEGORY_STRUCTURE = Object.freeze({
+  policy: Object.freeze({
+    categories: Object.freeze({
+      부동산: Object.freeze(['주거·주택공급 정책', '전월세·임대차 제도', '재건축·재개발·도시정비', '부동산 세제·규제']),
+      '노동/노조': Object.freeze(['임금·근로조건 정책', '노사협상·파업 이슈', '고용·산재·안전 규제', '산업별 노동 현안']),
+      '사법/검찰': Object.freeze(['수사·기소·사건 처리', '법원 판결·양형 논쟁', '사법개혁·제도개편', '감찰·징계·인사']),
+      '외교/안보': Object.freeze(['정상외교·국제협력', '군사·방위 정책', '동맹 현안', '대북·통일 정책']),
+      기타: Object.freeze(['국회·정당·정치개혁', '복지·보건·교육 정책', '과학·디지털·규제 혁신', '환경·에너지 전환'])
+    })
+  }),
+  parenting: Object.freeze({
+    categories: Object.freeze({
+      '임신/출산 준비': Object.freeze(['임신 건강관리', '출산 준비물·체크리스트', '산후 회복·케어', '정부 지원·제도']),
+      '0~2세 영아': Object.freeze(['수면·일상 루틴', '모유수유·이유식', '발달 자극 놀이', '예방접종·건강관리']),
+      '3~5세 유아': Object.freeze(['언어·사회성 발달', '놀이·교육 활동', '생활습관·훈육', '어린이집·유치원 준비']),
+      '6세 이상': Object.freeze(['학습 습관·학교생활', '정서·행동 지원', '안전교육·생활기술', '돌봄·방과후 프로그램'])
+    })
+  }),
+  lifestyle: Object.freeze({
+    categories: Object.freeze({
+      '행정/정부 서비스': Object.freeze(['민원·증명서 발급', '복지·지원금 신청', '전입·주거 행정', '교통·운전 절차']),
+      '금융/세무': Object.freeze(['세금·연말정산', '대출·금융상품', '재테크·저축 전략', '보험·보장 점검']),
+      '소비/쇼핑': Object.freeze(['생활필수품 추천', '가전·디지털', '푸드·외식', '여행·문화 할인']),
+      생활관리: Object.freeze(['청소·정리수납', '건강·운동 루틴', '에너지 절약·광열비', '반려동물 케어'])
+    })
+  }),
+  health: Object.freeze({
+    categories: Object.freeze({
+      '만성질환 관리': Object.freeze(['심혈관 질환', '당뇨·대사증후군', '호흡기·알레르기', '근골격계·통증']),
+      정신건강: Object.freeze(['우울·불안 관리', 'ADHD·집중력', '치매·인지장애', '수면·스트레스']),
+      '생애주기 건강': Object.freeze(['소아·청소년 건강', '여성 건강', '남성 건강', '노년 건강']),
+      '예방/응급': Object.freeze(['예방접종·검진', '응급 상황 대응', '운동·재활', '영양·식단'])
+    })
+  })
+});
 const SOURCE_TYPE_OPTIONS = new Set(['official', 'youtube', 'media', 'etc']);
 const THEME_OPTIONS = new Set(['policy', 'parenting', 'lifestyle', 'health']);
 const DEFAULT_THEME_ID = 'policy';
@@ -31,6 +58,32 @@ const PROGRESSIVE_NOTE =
 const CONSERVATIVE_NOTE =
   '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
+
+function getThemeCategoryMap(themeId) {
+  const key = themeId && THEME_CATEGORY_STRUCTURE[themeId] ? themeId : DEFAULT_THEME_ID;
+  return THEME_CATEGORY_STRUCTURE[key]?.categories ?? null;
+}
+
+function getCategoryOptions(themeId) {
+  const map = getThemeCategoryMap(themeId);
+  if (!map) {
+    return [];
+  }
+  return Object.keys(map);
+}
+
+function getDefaultCategory(themeId) {
+  const options = getCategoryOptions(themeId);
+  return options.length > 0 ? options[0] : '';
+}
+
+function getSubcategoryOptions(themeId, category) {
+  const map = getThemeCategoryMap(themeId);
+  if (!map) {
+    return [];
+  }
+  return map[category] ?? [];
+}
 
 function toSafeString(value) {
   if (typeof value === 'string') {
@@ -49,9 +102,13 @@ function toStringArray(raw) {
   return raw.map((item) => toSafeString(item));
 }
 
-function toSafeCategory(value) {
+function toSafeCategory(theme, value) {
   const candidate = toSafeString(value);
-  return CATEGORY_OPTIONS.has(candidate) ? candidate : '기타';
+  const options = getCategoryOptions(theme);
+  if (options.length === 0) {
+    return '';
+  }
+  return options.includes(candidate) ? candidate : getDefaultCategory(theme);
 }
 
 function toSafeTheme(value) {
@@ -59,10 +116,10 @@ function toSafeTheme(value) {
   return THEME_OPTIONS.has(candidate) ? candidate : DEFAULT_THEME_ID;
 }
 
-function toSafeSubcategory(category, value) {
+function toSafeSubcategory(theme, category, value) {
   const candidate = toSafeString(value);
-  const options = CATEGORY_STRUCTURE[category];
-  if (!Array.isArray(options)) {
+  const options = getSubcategoryOptions(theme, category);
+  if (!Array.isArray(options) || options.length === 0) {
     return '';
   }
   return options.includes(candidate) ? candidate : '';
@@ -126,14 +183,15 @@ function normalizeSourcesForSave(sources) {
 }
 
 function buildIssueDocument(body) {
-  const safeCategory = toSafeCategory(body.category);
+  const safeTheme = toSafeTheme(body.theme);
+  const safeCategory = toSafeCategory(safeTheme, body.category);
   const base = {
-    theme: toSafeTheme(body.theme),
+    theme: safeTheme,
     easySummary: toSafeString(body.easySummary),
     title: toSafeString(body.title),
     date: toSafeString(body.date),
     category: safeCategory,
-    subcategory: toSafeSubcategory(safeCategory, body.subcategory),
+    subcategory: toSafeSubcategory(safeTheme, safeCategory, body.subcategory),
     summaryCard: toSafeString(body.summaryCard),
     background: toSafeString(body.background),
     keyPoints: toStringArray(body.keyPoints),
@@ -231,28 +289,34 @@ function normalizeSourcesForOutput(sources) {
 
 function toIssueSummary(doc) {
   const data = doc.data();
-  const category = toSafeCategory(data.category);
+  const theme = toSafeTheme(data.theme);
+  const category = toSafeCategory(theme, data.category);
+  const subcategory = toSafeSubcategory(theme, category, data.subcategory);
   return {
     id: doc.id,
+    theme,
     easySummary: toSafeString(data.easySummary),
     title: toSafeString(data.title),
     date: toSafeString(data.date),
     category,
-    subcategory: toSafeSubcategory(category, data.subcategory),
+    subcategory,
     summaryCard: toSafeString(data.summaryCard)
   };
 }
 
 function toIssueDetail(doc) {
   const data = doc.data();
-  const category = toSafeCategory(data.category);
+  const theme = toSafeTheme(data.theme);
+  const category = toSafeCategory(theme, data.category);
+  const subcategory = toSafeSubcategory(theme, category, data.subcategory);
   const issue = {
     id: doc.id,
+    theme,
     easySummary: toSafeString(data.easySummary),
     title: toSafeString(data.title),
     date: toSafeString(data.date),
     category,
-    subcategory: toSafeSubcategory(category, data.subcategory),
+    subcategory,
     summaryCard: toSafeString(data.summaryCard),
     background: toSafeString(data.background),
     keyPoints: toStringArray(data.keyPoints),

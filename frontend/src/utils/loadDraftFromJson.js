@@ -1,7 +1,7 @@
 // frontend/src/utils/loadDraftFromJson.js
 // 상단 textarea에 붙여넣은 JSON 문자열을 issueDraft 구조에 맞게 파싱한다.
 // 파싱 실패 시 예외를 던져서 AdminNewPage.jsx에서 빨간 경고를 표시하게 한다.
-import { isValidCategory, isValidSubcategory } from '../constants/categoryStructure.js';
+import { getDefaultCategory, isValidCategory, isValidSubcategory } from '../constants/categoryStructure.js';
 import { getThemeById, isValidThemeId } from '../constants/themeConfig.js';
 import { createEmptyDraft, ensureThemeGuides } from './emptyDraft.js';
 import {
@@ -77,14 +77,20 @@ export function loadDraftFromJson(rawText) {
     ...parsed
   });
 
-  merged.theme = isValidThemeId(parsed.theme) ? parsed.theme : getThemeById(parsed.theme)?.id;
+  const themeMeta = getThemeById(parsed.theme);
+  const fallbackThemeId = themeMeta?.id ?? getThemeById().id;
+  const themeId = isValidThemeId(parsed.theme) ? parsed.theme : fallbackThemeId;
+  merged.theme = themeId;
   merged.easySummary = toSafeString(parsed.easySummary, '');
   merged.title = toSafeString(parsed.title, '');
   merged.date = toSafeString(parsed.date, '');
-  const candidateCategory = toSafeString(parsed.category, '기타');
-  merged.category = isValidCategory(candidateCategory) ? candidateCategory : '기타';
+  const defaultCategory = getDefaultCategory(themeId);
+  const candidateCategory = toSafeString(parsed.category, defaultCategory);
+  merged.category = isValidCategory(themeId, candidateCategory) ? candidateCategory : defaultCategory;
   const candidateSubcategory = toSafeString(parsed.subcategory, '');
-  merged.subcategory = isValidSubcategory(merged.category, candidateSubcategory) ? candidateSubcategory : '';
+  merged.subcategory = isValidSubcategory(themeId, merged.category, candidateSubcategory)
+    ? candidateSubcategory
+    : '';
   merged.summaryCard = toSafeString(parsed.summaryCard, '');
   merged.background = toSafeString(parsed.background, '');
   merged.keyPoints = toStringArray(parsed.keyPoints ?? []);

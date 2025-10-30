@@ -11,7 +11,13 @@ import ParentingThemeEditor from '../../components/admin/ParentingThemeEditor.js
 import ParentingThemePreview from '../../components/admin/ParentingThemePreview.jsx';
 import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
 import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
-import { CATEGORY_OPTIONS, getSubcategoryOptions, isValidCategory, isValidSubcategory } from '../../constants/categoryStructure.js';
+import {
+  getCategoryOptions,
+  getDefaultCategory,
+  getSubcategoryOptions,
+  isValidCategory,
+  isValidSubcategory
+} from '../../constants/categoryStructure.js';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
 import { createIssue } from '../../firebaseClient.js';
 import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
@@ -65,7 +71,45 @@ function AdminNewPage() {
   const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
   const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
 
-  const subcategoryOptions = useMemo(() => getSubcategoryOptions(categoryValue), [categoryValue]);
+  const categoryOptions = useMemo(() => getCategoryOptions(selectedTheme), [selectedTheme]);
+  const subcategoryOptions = useMemo(
+    () => getSubcategoryOptions(selectedTheme, categoryValue),
+    [categoryValue, selectedTheme]
+  );
+
+  useEffect(() => {
+    if (categoryOptions.length === 0) {
+      if (categoryValue !== '' || subcategoryValue !== '') {
+        setIssueDraft((prev) => {
+          if (prev.category === '' && prev.subcategory === '') {
+            return prev;
+          }
+          return {
+            ...prev,
+            category: '',
+            subcategory: ''
+          };
+        });
+      }
+      return;
+    }
+
+    if (categoryOptions.includes(categoryValue)) {
+      return;
+    }
+
+    const fallbackCategory = categoryOptions[0];
+    setIssueDraft((prev) => {
+      if (prev.category === fallbackCategory && prev.subcategory === '') {
+        return prev;
+      }
+      return {
+        ...prev,
+        category: fallbackCategory,
+        subcategory: ''
+      };
+    });
+  }, [categoryOptions, categoryValue, subcategoryValue]);
 
   useEffect(() => {
     if (subcategoryValue && !subcategoryOptions.includes(subcategoryValue)) {
@@ -144,8 +188,8 @@ function AdminNewPage() {
   const handleCategoryChange = (event) => {
     const { value } = event.target;
     setIssueDraft((prev) => {
-      const nextCategory = isValidCategory(value) ? value : prev.category;
-      const allowedSubcategories = getSubcategoryOptions(nextCategory);
+      const nextCategory = isValidCategory(selectedTheme, value) ? value : prev.category;
+      const allowedSubcategories = getSubcategoryOptions(selectedTheme, nextCategory);
       const nextSubcategory = allowedSubcategories.includes(prev.subcategory) ? prev.subcategory : '';
       return {
         ...prev,
@@ -159,7 +203,7 @@ function AdminNewPage() {
     const { value } = event.target;
     setIssueDraft((prev) => ({
       ...prev,
-      subcategory: isValidSubcategory(prev.category, value) ? value : ''
+      subcategory: isValidSubcategory(selectedTheme, prev.category, value) ? value : ''
     }));
   };
 
@@ -176,6 +220,10 @@ function AdminNewPage() {
         healthGuide: base.healthGuide ?? createHealthGuide(),
         lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide()
       };
+      const defaultCategory = getDefaultCategory(nextTheme);
+      draft.category = isValidCategory(nextTheme, base.category) ? base.category : defaultCategory;
+      const allowedSubcategories = getSubcategoryOptions(nextTheme, draft.category);
+      draft.subcategory = allowedSubcategories.includes(base.subcategory) ? base.subcategory : '';
       if (!nextThemeMeta?.showPerspectives) {
         draft.progressiveView = null;
         draft.conservativeView = null;
@@ -515,11 +563,15 @@ function AdminNewPage() {
                     onChange={handleCategoryChange}
                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                   >
-                    {CATEGORY_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
+                    {categoryOptions.length === 0 ? (
+                      <option value="">카테고리 없음</option>
+                    ) : (
+                      categoryOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </label>
                 <label className="flex flex-col gap-2 text-sm">
