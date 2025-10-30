@@ -7,6 +7,9 @@ import { useParams } from 'react-router-dom';
 import IntensityBar from '../components/IntensityBar.jsx';
 import MetaTags from '../components/MetaTags.jsx';
 import SectionCard from '../components/SectionCard.jsx';
+import ParentingGuideView from '../components/issue/ParentingGuideView.jsx';
+import LifestyleGuideView from '../components/issue/LifestyleGuideView.jsx';
+import HealthGuideView from '../components/issue/HealthGuideView.jsx';
 import { getThemeById } from '../constants/themeConfig.js';
 import { getIssueById } from '../firebaseClient.js';
 
@@ -108,6 +111,10 @@ function IssuePage() {
   const impactToLife = issue?.impactToLife
     ? { ...issue.impactToLife, note: issue.impactToLife.note || IMPACT_NOTE }
     : null;
+
+  const parentingGuide = issue?.parentingGuide ?? null;
+  const lifestyleGuide = issue?.lifestyleGuide ?? null;
+  const healthGuide = issue?.healthGuide ?? null;
 
   const handleCopyLink = async () => {
     if (typeof navigator === 'undefined') {
@@ -263,6 +270,18 @@ function IssuePage() {
               <p className="text-xs text-slate-500 dark:text-slate-400">{impactToLife.note || IMPACT_NOTE}</p>
             </SectionCard>
           )}
+
+          {issue.theme === 'parenting' && parentingGuide ? (
+            <ParentingGuideView guide={parentingGuide} />
+          ) : null}
+
+          {issue.theme === 'lifestyle' && lifestyleGuide ? (
+            <LifestyleGuideView guide={lifestyleGuide} />
+          ) : null}
+
+          {issue.theme === 'health' && healthGuide ? (
+            <HealthGuideView guide={healthGuide} />
+          ) : null}
 
           <SectionCard title="근거 자료" tone="neutral">
             {Array.isArray(issue.sources) && issue.sources.length > 0 ? (
