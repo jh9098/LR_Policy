@@ -5,10 +5,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
+import LifestyleThemeEditor from '../../components/admin/LifestyleThemeEditor.jsx';
+import LifestyleThemePreview from '../../components/admin/LifestyleThemePreview.jsx';
+import ParentingThemeEditor from '../../components/admin/ParentingThemeEditor.jsx';
+import ParentingThemePreview from '../../components/admin/ParentingThemePreview.jsx';
+import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
+import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
 import { CATEGORY_OPTIONS, getSubcategoryOptions, isValidCategory, isValidSubcategory } from '../../constants/categoryStructure.js';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
 import { createIssue } from '../../firebaseClient.js';
-import { emptyDraft } from '../../utils/emptyDraft.js';
+import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
+import {
+  createHealthGuide,
+  createLifestyleGuide,
+  createParentingGuide
+} from '../../utils/themeDraftDefaults.js';
 import { loadDraftFromJson } from '../../utils/loadDraftFromJson.js';
 
 const STORAGE_KEY = 'adminDraftV6';
@@ -25,14 +36,6 @@ const CONSERVATIVE_NOTE =
   '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
 
-function createFreshDraft() {
-  return {
-    ...emptyDraft,
-    keyPoints: [...emptyDraft.keyPoints],
-    sources: [...emptyDraft.sources]
-  };
-}
-
 function restoreDraftFromStorage() {
   if (typeof window === 'undefined') {
     return createFreshDraft();
@@ -42,7 +45,7 @@ function restoreDraftFromStorage() {
     if (!stored) {
       return createFreshDraft();
     }
-    return loadDraftFromJson(stored);
+    return ensureThemeGuides(loadDraftFromJson(stored));
   } catch (error) {
     console.warn('로컬 스토리지 초안 복구 실패:', error);
     return createFreshDraft();
@@ -120,7 +123,7 @@ function AdminNewPage() {
       if (!isValidThemeId(parsed.theme)) {
         parsed.theme = DEFAULT_THEME_ID;
       }
-      setIssueDraft(parsed);
+      setIssueDraft(ensureThemeGuides(parsed));
       setJsonError('');
       setSubmitError('');
     } catch (error) {
@@ -158,6 +161,39 @@ function AdminNewPage() {
       ...prev,
       subcategory: isValidSubcategory(prev.category, value) ? value : ''
     }));
+  };
+
+  const handleThemeChange = (event) => {
+    const { value } = event.target;
+    const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
+    setIssueDraft((prev) => {
+      const base = ensureThemeGuides(prev);
+      const nextThemeMeta = THEME_CONFIG.find((item) => item.id === nextTheme);
+      const draft = {
+        ...base,
+        theme: nextTheme,
+        parentingGuide: base.parentingGuide ?? createParentingGuide(),
+        healthGuide: base.healthGuide ?? createHealthGuide(),
+        lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide()
+      };
+      if (!nextThemeMeta?.showPerspectives) {
+        draft.progressiveView = null;
+        draft.conservativeView = null;
+      }
+      return draft;
+    });
+  };
+
+  const handleParentingGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => ({ ...prev, parentingGuide: nextGuide }));
+  };
+
+  const handleHealthGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => ({ ...prev, healthGuide: nextGuide }));
+  };
+
+  const handleLifestyleGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => ({ ...prev, lifestyleGuide: nextGuide }));
   };
 
   const addKeyPoint = () => {
@@ -359,7 +395,10 @@ function AdminNewPage() {
         ...issueDraft,
         theme: selectedTheme,
         progressiveView: showPerspectiveSections ? issueDraft.progressiveView : null,
-        conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null
+        conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null,
+        parentingGuide: selectedTheme === 'parenting' ? issueDraft.parentingGuide : null,
+        healthGuide: selectedTheme === 'health' ? issueDraft.healthGuide : null,
+        lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null
       };
       const newId = await createIssue(payload);
       window.alert('등록 완료');
@@ -434,6 +473,11 @@ function AdminNewPage() {
                   ))}
                 </select>
                 <span className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</span>
+                {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    세부 영역: {themeMeta.keyAreas.join(' · ')}
+                  </span>
+                ) : null}
               </label>
               <label className="flex flex-col gap-2 text-sm">
                 <span className="font-medium">쉬운 요약 (일반인 설명용)</span>
@@ -549,13 +593,28 @@ function AdminNewPage() {
                     </button>
                   </div>
                 ))}
-              </div>
             </div>
+          </div>
 
-            {showPerspectiveSections ? (
-              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">진보 시각</h2>
+          {selectedTheme === 'parenting' ? (
+            <ParentingThemeEditor
+              guide={issueDraft.parentingGuide}
+              onChange={handleParentingGuideChange}
+            />
+          ) : null}
+
+          {selectedTheme === 'health' ? (
+            <HealthThemeEditor guide={issueDraft.healthGuide} onChange={handleHealthGuideChange} />
+          ) : null}
+
+          {selectedTheme === 'lifestyle' ? (
+            <LifestyleThemeEditor guide={issueDraft.lifestyleGuide} onChange={handleLifestyleGuideChange} />
+          ) : null}
+
+          {showPerspectiveSections ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">진보 시각</h2>
                 {issueDraft.progressiveView ? (
                   <button
                     type="button"
@@ -900,6 +959,14 @@ function AdminNewPage() {
                   <dt className="font-medium text-slate-500 dark:text-slate-400">테마</dt>
                   <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">{themeMeta?.label}</dd>
                 </div>
+                {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
+                  <div className="flex items-start justify-between gap-4">
+                    <dt className="font-medium text-slate-500 dark:text-slate-400">세부 영역</dt>
+                    <dd className="text-right text-xs text-slate-600 dark:text-slate-300">
+                      {themeMeta.keyAreas.join(' · ')}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between gap-4">
                   <dt className="font-medium text-slate-500 dark:text-slate-400">카테고리</dt>
                   <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
@@ -950,6 +1017,18 @@ function AdminNewPage() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">핵심 bullet을 입력하면 여기에 표시됩니다.</p>
               )}
             </SectionCard>
+
+            {selectedTheme === 'parenting' ? (
+              <ParentingThemePreview guide={issueDraft.parentingGuide} />
+            ) : null}
+
+            {selectedTheme === 'health' ? (
+              <HealthThemePreview guide={issueDraft.healthGuide} />
+            ) : null}
+
+            {selectedTheme === 'lifestyle' ? (
+              <LifestyleThemePreview guide={issueDraft.lifestyleGuide} />
+            ) : null}
 
             {issueDraft.progressiveView ? (
               <SectionCard title="진보 시각" tone="progressive" badgeText="진보">
@@ -1014,17 +1093,3 @@ function AdminNewPage() {
 }
 
 export default AdminNewPage;
-  const handleThemeChange = (event) => {
-    const { value } = event.target;
-    const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
-    setIssueDraft((prev) => {
-      const draft = { ...prev, theme: nextTheme };
-      const nextThemeMeta = THEME_CONFIG.find((item) => item.id === nextTheme);
-      if (!nextThemeMeta?.showPerspectives) {
-        draft.progressiveView = null;
-        draft.conservativeView = null;
-      }
-      return draft;
-    });
-  };
-

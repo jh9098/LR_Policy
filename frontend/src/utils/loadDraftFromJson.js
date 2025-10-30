@@ -3,7 +3,12 @@
 // 파싱 실패 시 예외를 던져서 AdminNewPage.jsx에서 빨간 경고를 표시하게 한다.
 import { isValidCategory, isValidSubcategory } from '../constants/categoryStructure.js';
 import { getThemeById, isValidThemeId } from '../constants/themeConfig.js';
-import { emptyDraft } from './emptyDraft.js';
+import { createEmptyDraft, ensureThemeGuides } from './emptyDraft.js';
+import {
+  normalizeHealthGuide,
+  normalizeLifestyleGuide,
+  normalizeParentingGuide
+} from './themeDraftDefaults.js';
 
 function toSafeString(value, fallback = '') {
   if (typeof value === 'string') {
@@ -67,10 +72,10 @@ export function loadDraftFromJson(rawText) {
     throw new Error('issueDraft JSON은 객체 구조여야 합니다.');
   }
 
-  const merged = {
-    ...emptyDraft,
+  const merged = ensureThemeGuides({
+    ...createEmptyDraft(),
     ...parsed
-  };
+  });
 
   merged.theme = isValidThemeId(parsed.theme) ? parsed.theme : getThemeById(parsed.theme)?.id;
   merged.easySummary = toSafeString(parsed.easySummary, '');
@@ -90,6 +95,9 @@ export function loadDraftFromJson(rawText) {
     parsed.conservativeView === undefined ? null : normalizePerspective(parsed.conservativeView);
   merged.impactToLife =
     parsed.impactToLife === undefined ? null : normalizeImpact(parsed.impactToLife);
+  merged.parentingGuide = normalizeParentingGuide(parsed.parentingGuide ?? merged.parentingGuide, { withPresets: true });
+  merged.healthGuide = normalizeHealthGuide(parsed.healthGuide ?? merged.healthGuide, { withPresets: true });
+  merged.lifestyleGuide = normalizeLifestyleGuide(parsed.lifestyleGuide ?? merged.lifestyleGuide);
 
   return merged;
 }
