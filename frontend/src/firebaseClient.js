@@ -61,6 +61,7 @@ function normalizeIssueData(issueId, data) {
     title: typeof data?.title === 'string' ? data.title : '',
     date: typeof data?.date === 'string' ? data.date : '',
     category: typeof data?.category === 'string' ? data.category : '기타',
+    subcategory: typeof data?.subcategory === 'string' ? data.subcategory : '',
     summaryCard: typeof data?.summaryCard === 'string' ? data.summaryCard : '',
     background: typeof data?.background === 'string' ? data.background : '',
     keyPoints: Array.isArray(data?.keyPoints)
@@ -148,7 +149,7 @@ export async function searchIssuesClient(keyword, limitCount = 50) {
     return baseList;
   }
   return baseList.filter((issue) => {
-    const haystack = [issue.title, issue.summaryCard, issue.easySummary, issue.category]
+    const haystack = [issue.title, issue.summaryCard, issue.easySummary, issue.category, issue.subcategory]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();

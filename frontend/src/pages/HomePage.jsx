@@ -6,9 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import IssueCard from '../components/IssueCard.jsx';
 import MediaLandscapeSection from '../components/MediaLandscapeSection.jsx';
 import MetaTags from '../components/MetaTags.jsx';
+import { CATEGORY_FILTER_OPTIONS, getSubcategoryOptions } from '../constants/categoryStructure.js';
 import { getRecentIssues, searchIssuesClient } from '../firebaseClient.js';
-
-const CATEGORY_OPTIONS = ['전체', '부동산', '노동/노조', '사법/검찰', '외교/안보', '기타'];
 
 function HomePage() {
   const [issues, setIssues] = useState([]);
@@ -16,8 +15,27 @@ function HomePage() {
   const [error, setError] = useState('');
 
   const [categoryDraft, setCategoryDraft] = useState('전체');
+  const [subcategoryDraft, setSubcategoryDraft] = useState('전체');
   const [queryDraft, setQueryDraft] = useState('');
-  const [activeFilters, setActiveFilters] = useState({ category: '전체', query: '' });
+  const [activeFilters, setActiveFilters] = useState({ category: '전체', subcategory: '전체', query: '' });
+
+  const effectiveCategory = categoryDraft === '전체' ? null : categoryDraft;
+  const subcategoryOptions = useMemo(
+    () => (effectiveCategory ? getSubcategoryOptions(effectiveCategory) : []),
+    [effectiveCategory]
+  );
+
+  useEffect(() => {
+    if (categoryDraft === '전체') {
+      if (subcategoryDraft !== '전체') {
+        setSubcategoryDraft('전체');
+      }
+      return;
+    }
+    if (!subcategoryOptions.includes(subcategoryDraft)) {
+      setSubcategoryDraft('전체');
+    }
+  }, [categoryDraft, subcategoryDraft, subcategoryOptions]);
 
   const fetchRecentIssues = useCallback(async () => {
     setIsLoading(true);
@@ -25,7 +43,8 @@ function HomePage() {
     try {
       const list = await getRecentIssues(50);
       setIssues(list);
-      setActiveFilters({ category: '전체', query: '' });
+      setActiveFilters({ category: '전체', subcategory: '전체', query: '' });
+      setSubcategoryDraft('전체');
     } catch (err) {
       console.error('Firestore에서 최근 이슈 불러오기 실패:', err);
       setError('최근 정책/사건 목록을 불러오지 못했습니다. 인터넷 연결 또는 Firestore 설정을 확인하세요.');
@@ -44,11 +63,20 @@ function HomePage() {
     try {
       // Firestore에서 최근 문서를 가져온 뒤 클라이언트에서 조건 필터링한다.
       const baseList = await searchIssuesClient(queryDraft, 80);
-      const filtered = baseList.filter((issue) =>
-        categoryDraft === '전체' ? true : issue.category === categoryDraft
-      );
+      const filtered = baseList.filter((issue) => {
+        const matchesCategory = categoryDraft === '전체' || issue.category === categoryDraft;
+        const matchesSubcategory =
+          categoryDraft === '전체' ||
+          subcategoryDraft === '전체' ||
+          issue.subcategory === subcategoryDraft;
+        return matchesCategory && matchesSubcategory;
+      });
       setIssues(filtered);
-      setActiveFilters({ category: categoryDraft, query: queryDraft.trim() });
+      setActiveFilters({
+        category: categoryDraft,
+        subcategory: categoryDraft === '전체' ? '전체' : subcategoryDraft,
+        query: queryDraft.trim()
+      });
     } catch (err) {
       console.error('Firestore 검색 실패:', err);
       setError('검색 중 문제가 발생했습니다. Firestore 권한 또는 네트워크를 확인하세요.');
@@ -80,7 +108,7 @@ function HomePage() {
         <p className="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">
           Firestore에서 최근 문서를 불러온 뒤 브라우저 메모리에서 필터링한다. 검색어 입력 후 검색 버튼을 누르면 즉시 반영된다.
         </p>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-[180px,1fr,auto]">
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-[180px,200px,1fr,auto]">
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
             카테고리
             <select
@@ -88,7 +116,24 @@ function HomePage() {
               onChange={(event) => setCategoryDraft(event.target.value)}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400"
             >
-              {CATEGORY_OPTIONS.map((option) => (
+              {CATEGORY_FILTER_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+            하위 카테고리
+            <select
+              value={subcategoryDraft}
+              onChange={(event) => setSubcategoryDraft(event.target.value)}
+              disabled={categoryDraft === '전체'}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
+            >
+              <option value="전체">전체</option>
+              {subcategoryOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
@@ -146,7 +191,8 @@ function HomePage() {
 
       <div className="text-xs text-slate-500 dark:text-slate-400">
         <p>
-          적용된 조건 · 카테고리: <strong>{activeFilters.category}</strong>, 검색어: <strong>{activeFilters.query || '없음'}</strong>
+          적용된 조건 · 카테고리: <strong>{activeFilters.category}</strong>, 하위 카테고리:{' '}
+          <strong>{activeFilters.subcategory}</strong>, 검색어: <strong>{activeFilters.query || '없음'}</strong>
         </p>
         <button
           type="button"

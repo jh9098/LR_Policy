@@ -6,10 +6,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
+import {
+  CATEGORY_OPTIONS,
+  getSubcategoryOptions,
+  isValidCategory,
+  isValidSubcategory
+} from '../../constants/categoryStructure.js';
 import { deleteIssue, getIssueById, updateIssue } from '../../firebaseClient.js';
 import { emptyDraft } from '../../utils/emptyDraft.js';
-
-const CATEGORY_OPTIONS = ['부동산', '노동/노조', '사법/검찰', '외교/안보', '기타'];
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const CONSERVATIVE_NOTE =
@@ -20,9 +24,13 @@ function normalizeDraft(raw) {
   if (!raw) {
     return { ...emptyDraft };
   }
+  const safeCategory = isValidCategory(raw.category) ? raw.category : '기타';
+  const safeSubcategory = isValidSubcategory(safeCategory, raw.subcategory) ? raw.subcategory : '';
   return {
     ...emptyDraft,
     ...raw,
+    category: safeCategory,
+    subcategory: safeSubcategory,
     keyPoints: Array.isArray(raw.keyPoints) ? raw.keyPoints.map((item) => String(item ?? '')) : [],
     progressiveView: raw.progressiveView
       ? {
@@ -71,6 +79,20 @@ function AdminEditPage() {
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const categoryValue = issueDraft?.category ?? '기타';
+  const subcategoryValue = issueDraft?.subcategory ?? '';
+
+  const subcategoryOptions = useMemo(() => getSubcategoryOptions(categoryValue), [categoryValue]);
+
+  useEffect(() => {
+    if (!issueDraft) {
+      return;
+    }
+    if (subcategoryValue && !subcategoryOptions.includes(subcategoryValue)) {
+      setIssueDraft((prev) => ({ ...prev, subcategory: '' }));
+    }
+  }, [issueDraft, subcategoryValue, subcategoryOptions]);
 
   useEffect(() => {
     if (!id) {
@@ -162,10 +184,32 @@ function AdminEditPage() {
 
   const handleCategoryChange = (event) => {
     const { value } = event.target;
-    setIssueDraft((prev) => ({
-      ...prev,
-      category: CATEGORY_OPTIONS.includes(value) ? value : prev.category
-    }));
+    setIssueDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const nextCategory = isValidCategory(value) ? value : prev.category;
+      const allowedSubcategories = getSubcategoryOptions(nextCategory);
+      const nextSubcategory = allowedSubcategories.includes(prev.subcategory) ? prev.subcategory : '';
+      return {
+        ...prev,
+        category: nextCategory,
+        subcategory: nextSubcategory
+      };
+    });
+  };
+
+  const handleSubcategoryChange = (event) => {
+    const { value } = event.target;
+    setIssueDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        subcategory: isValidSubcategory(prev.category, value) ? value : ''
+      };
+    });
   };
 
   const addKeyPoint = () => {
@@ -453,7 +497,7 @@ function AdminEditPage() {
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
               />
             </label>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <label className="flex flex-col gap-2 text-sm">
                 <span className="font-medium">날짜</span>
                 <input
@@ -471,6 +515,21 @@ function AdminEditPage() {
                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 >
                   {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm">
+                <span className="font-medium">하위 카테고리</span>
+                <select
+                  value={issueDraft.subcategory}
+                  onChange={handleSubcategoryChange}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="">하위 카테고리 선택</option>
+                  {subcategoryOptions.map((option) => (
                     <option key={option} value={option}>
                       {option}
                     </option>
@@ -862,6 +921,26 @@ function AdminEditPage() {
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               현재 입력 상태를 기반으로 상세 페이지가 어떻게 보이는지 확인하세요.
             </p>
+            <dl className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="font-medium text-slate-500 dark:text-slate-400">카테고리</dt>
+                <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
+                  {issueDraft?.category || '미선택'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="font-medium text-slate-500 dark:text-slate-400">하위 카테고리</dt>
+                <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
+                  {issueDraft?.subcategory || '미선택'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="font-medium text-slate-500 dark:text-slate-400">날짜</dt>
+                <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
+                  {issueDraft?.date || '정보 부족'}
+                </dd>
+              </div>
+            </dl>
           </div>
 
           {issueDraft.easySummary && (
