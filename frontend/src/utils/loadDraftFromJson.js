@@ -2,6 +2,7 @@
 // 상단 textarea에 붙여넣은 JSON 문자열을 issueDraft 구조에 맞게 파싱한다.
 // 파싱 실패 시 예외를 던져서 AdminNewPage.jsx에서 빨간 경고를 표시하게 한다.
 import { isValidCategory, isValidSubcategory } from '../constants/categoryStructure.js';
+import { getThemeById, isValidThemeId } from '../constants/themeConfig.js';
 import { emptyDraft } from './emptyDraft.js';
 
 function toSafeString(value, fallback = '') {
@@ -71,6 +72,7 @@ export function loadDraftFromJson(rawText) {
     ...parsed
   };
 
+  merged.theme = isValidThemeId(parsed.theme) ? parsed.theme : getThemeById(parsed.theme)?.id;
   merged.easySummary = toSafeString(parsed.easySummary, '');
   merged.title = toSafeString(parsed.title, '');
   merged.date = toSafeString(parsed.date, '');

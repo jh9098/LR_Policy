@@ -6,11 +6,12 @@ import { useEffect, useMemo, useState } from 'react';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
 import { CATEGORY_OPTIONS, getSubcategoryOptions, isValidCategory, isValidSubcategory } from '../../constants/categoryStructure.js';
+import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
 import { createIssue } from '../../firebaseClient.js';
 import { emptyDraft } from '../../utils/emptyDraft.js';
 import { loadDraftFromJson } from '../../utils/loadDraftFromJson.js';
 
-const STORAGE_KEY = 'adminDraftV5';
+const STORAGE_KEY = 'adminDraftV6';
 const SOURCE_TYPE_OPTIONS = [
   { value: 'official', label: '공식 발표' },
   { value: 'youtube', label: '유튜브' },
@@ -57,6 +58,9 @@ function AdminNewPage() {
 
   const categoryValue = issueDraft.category;
   const subcategoryValue = issueDraft.subcategory;
+  const selectedTheme = issueDraft.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
+  const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
+  const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
 
   const subcategoryOptions = useMemo(() => getSubcategoryOptions(categoryValue), [categoryValue]);
 
@@ -113,6 +117,9 @@ function AdminNewPage() {
   const handleLoadJson = () => {
     try {
       const parsed = loadDraftFromJson(jsonInput);
+      if (!isValidThemeId(parsed.theme)) {
+        parsed.theme = DEFAULT_THEME_ID;
+      }
       setIssueDraft(parsed);
       setJsonError('');
       setSubmitError('');
@@ -348,7 +355,13 @@ function AdminNewPage() {
     setSubmitError('');
     setIsSubmitting(true);
     try {
-      const newId = await createIssue(issueDraft);
+      const payload = {
+        ...issueDraft,
+        theme: selectedTheme,
+        progressiveView: showPerspectiveSections ? issueDraft.progressiveView : null,
+        conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null
+      };
+      const newId = await createIssue(payload);
       window.alert('등록 완료');
       console.info('새 문서 ID:', newId);
       resetDraft();
@@ -364,10 +377,10 @@ function AdminNewPage() {
     <div className="min-h-screen bg-slate-100 py-10 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6">
         <header className="space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-widest text-emerald-500">Admin · New Issue</p>
-          <h1 className="text-3xl font-extrabold">신규 이슈 등록</h1>
+          <p className="text-sm font-semibold uppercase tracking-widest text-emerald-500">infoall · Admin</p>
+          <h1 className="text-3xl font-extrabold">새 게시물 등록</h1>
           <p className="max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-            AI가 생성한 issueDraft JSON을 붙여넣고 불러오면 모든 필드가 자동으로 채워집니다. 지금은 인증 없이 누구나 Firestore에 직접 글을 올릴 수 있으니 URL을 외부에 공유하지 마세요.
+            AI가 생성한 JSON 초안을 붙여넣으면 모든 필드가 자동으로 채워집니다. infoall은 테마 기반 서비스이므로 반드시 적절한 테마를 선택해 주세요. 지금은 인증 없이 누구나 Firestore에 글을 올릴 수 있으니 URL을 외부에 공유하지 마세요.
           </p>
         </header>
 
@@ -407,6 +420,21 @@ function AdminNewPage() {
           <section className="space-y-6">
             <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <h2 className="text-lg font-semibold">기본 정보</h2>
+              <label className="flex flex-col gap-2 text-sm">
+                <span className="font-medium">테마</span>
+                <select
+                  value={selectedTheme}
+                  onChange={handleThemeChange}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  {THEME_CONFIG.map((theme) => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</span>
+              </label>
               <label className="flex flex-col gap-2 text-sm">
                 <span className="font-medium">쉬운 요약 (일반인 설명용)</span>
                 <textarea
@@ -524,9 +552,10 @@ function AdminNewPage() {
               </div>
             </div>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">진보 시각</h2>
+            {showPerspectiveSections ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">진보 시각</h2>
                 {issueDraft.progressiveView ? (
                   <button
                     type="button"
@@ -612,11 +641,13 @@ function AdminNewPage() {
                   </label>
                 </div>
               ) : null}
-            </section>
+              </section>
+            ) : null}
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">보수 시각</h2>
+            {showPerspectiveSections ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">보수 시각</h2>
                 {issueDraft.conservativeView ? (
                   <button
                     type="button"
@@ -702,7 +733,12 @@ function AdminNewPage() {
                   </label>
                 </div>
               ) : null}
-            </section>
+              </section>
+            ) : (
+              <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                선택한 테마에서는 진보/보수 비교 섹션을 사용하지 않습니다. 필요하면 테마를 "사건/정책"으로 변경해 두 시각을 입력하세요.
+              </section>
+            )}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-center justify-between">
@@ -861,6 +897,10 @@ function AdminNewPage() {
               </p>
               <dl className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
                 <div className="flex items-center justify-between gap-4">
+                  <dt className="font-medium text-slate-500 dark:text-slate-400">테마</dt>
+                  <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">{themeMeta?.label}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
                   <dt className="font-medium text-slate-500 dark:text-slate-400">카테고리</dt>
                   <dd className="text-right font-semibold text-slate-700 dark:text-slate-100">
                     {issueDraft.category || '미선택'}
@@ -974,3 +1014,17 @@ function AdminNewPage() {
 }
 
 export default AdminNewPage;
+  const handleThemeChange = (event) => {
+    const { value } = event.target;
+    const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
+    setIssueDraft((prev) => {
+      const draft = { ...prev, theme: nextTheme };
+      const nextThemeMeta = THEME_CONFIG.find((item) => item.id === nextTheme);
+      if (!nextThemeMeta?.showPerspectives) {
+        draft.progressiveView = null;
+        draft.conservativeView = null;
+      }
+      return draft;
+    });
+  };
+

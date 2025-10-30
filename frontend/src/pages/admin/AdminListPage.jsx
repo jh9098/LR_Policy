@@ -4,12 +4,14 @@
 
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { deleteIssue, getRecentIssues } from '../../firebaseClient.js';
+import { deleteIssue, getIssuesByTheme, getRecentIssues } from '../../firebaseClient.js';
+import { getThemeLabel, THEME_CONFIG } from '../../constants/themeConfig.js';
 
 function AdminListPage() {
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [themeFilter, setThemeFilter] = useState('all');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,7 +21,10 @@ function AdminListPage() {
       setIsLoading(true);
       setError('');
       try {
-        const data = await getRecentIssues(50);
+        const data =
+          themeFilter === 'all'
+            ? await getRecentIssues(80)
+            : await getIssuesByTheme(themeFilter, { sort: 'recent', limitCount: 80 });
         if (!isMounted) {
           return;
         }
@@ -41,7 +46,7 @@ function AdminListPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [themeFilter]);
 
   const handleDelete = async (id, title) => {
     if (!id) {
@@ -64,12 +69,27 @@ function AdminListPage() {
 
   return (
     <section className="space-y-4">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">등록된 글 목록</h2>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Firestore에서 직접 불러온 최근 문서를 확인합니다. 삭제 버튼을 누르면 즉시 Firestore에서 제거되므로 주의하세요.
+            Firestore에서 직접 불러온 문서를 테마별로 확인하고 관리할 수 있습니다. 삭제 버튼을 누르면 즉시 Firestore에서 제거되므로 주의하세요.
           </p>
+          <label className="inline-flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300 sm:flex-row sm:items-center sm:gap-2">
+            <span className="font-semibold">테마 필터</span>
+            <select
+              value={themeFilter}
+              onChange={(event) => setThemeFilter(event.target.value)}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 sm:w-60"
+            >
+              <option value="all">전체 테마</option>
+              {THEME_CONFIG.map((theme) => (
+                <option key={theme.id} value={theme.id}>
+                  {theme.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <button
           type="button"
@@ -90,6 +110,7 @@ function AdminListPage() {
         <table className="min-w-full divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white text-left shadow-sm dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900">
           <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
             <tr>
+              <th scope="col" className="px-4 py-3">테마</th>
               <th scope="col" className="px-4 py-3">날짜</th>
               <th scope="col" className="px-4 py-3">카테고리</th>
               <th scope="col" className="px-4 py-3">제목</th>
@@ -113,6 +134,7 @@ function AdminListPage() {
             ) : (
               items.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/60">
+                  <td className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">{getThemeLabel(item.theme)}</td>
                   <td className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">{item.date || '정보 부족'}</td>
                   <td className="px-4 py-4">
                     <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200">

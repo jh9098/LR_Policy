@@ -23,6 +23,8 @@ const CATEGORY_STRUCTURE = {
 };
 const CATEGORY_OPTIONS = new Set(Object.keys(CATEGORY_STRUCTURE));
 const SOURCE_TYPE_OPTIONS = new Set(['official', 'youtube', 'media', 'etc']);
+const THEME_OPTIONS = new Set(['policy', 'parenting', 'lifestyle', 'health']);
+const DEFAULT_THEME_ID = 'policy';
 
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
@@ -50,6 +52,11 @@ function toStringArray(raw) {
 function toSafeCategory(value) {
   const candidate = toSafeString(value);
   return CATEGORY_OPTIONS.has(candidate) ? candidate : '기타';
+}
+
+function toSafeTheme(value) {
+  const candidate = toSafeString(value);
+  return THEME_OPTIONS.has(candidate) ? candidate : DEFAULT_THEME_ID;
 }
 
 function toSafeSubcategory(category, value) {
@@ -121,6 +128,7 @@ function normalizeSourcesForSave(sources) {
 function buildIssueDocument(body) {
   const safeCategory = toSafeCategory(body.category);
   const base = {
+    theme: toSafeTheme(body.theme),
     easySummary: toSafeString(body.easySummary),
     title: toSafeString(body.title),
     date: toSafeString(body.date),

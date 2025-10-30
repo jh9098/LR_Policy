@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { THEME_NAV_ITEMS } from '../constants/themeConfig.js';
 
 const navBaseClass =
   'rounded-md px-2 py-1 text-sm font-medium transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:text-slate-100 dark:focus-visible:ring-offset-slate-900';
@@ -83,7 +84,7 @@ function SiteHeader() {
           to="/"
           className="rounded-md px-1 text-lg font-semibold tracking-tight text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
         >
-          사건 프레임 아카이브
+          infoall
         </Link>
         <div className="flex items-center gap-2 md:hidden">
           <button
@@ -109,8 +110,13 @@ function SiteHeader() {
           <NavLink to="/" className={navLinkClassName}>
             홈
           </NavLink>
+          {THEME_NAV_ITEMS.map((item) => (
+            <NavLink key={item.id} to={item.to} className={navLinkClassName}>
+              {item.label}
+            </NavLink>
+          ))}
           <NavLink to="/admin" className={navLinkClassName}>
-            관리자 대시보드
+            관리자
           </NavLink>
           <button
             type="button"
@@ -134,8 +140,13 @@ function SiteHeader() {
           <NavLink to="/" className={navLinkClassName}>
             홈
           </NavLink>
+          {THEME_NAV_ITEMS.map((item) => (
+            <NavLink key={item.id} to={item.to} className={navLinkClassName}>
+              {item.label}
+            </NavLink>
+          ))}
           <NavLink to="/admin" className={navLinkClassName}>
-            관리자 대시보드
+            관리자
           </NavLink>
         </div>
       </nav>

@@ -63,7 +63,7 @@ function AdminLayout() {
           <div className="flex items-center justify-between lg:block">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-300">운영 도구</p>
-              <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">관리자 대시보드</h1>
+              <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">infoall 관리자</h1>
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                 현재는 개발 편의를 위해 누구나 /admin에 접근할 수 있으며 Firestore에 직접 쓰기까지 가능하다.
                 {' '}TODO: 실제 서비스에서는 접근 자체를 보호해야 한다.
@@ -90,6 +90,7 @@ function AdminLayout() {
               <h2 className="text-xl font-semibold">운영 대시보드</h2>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                 모든 CRUD 작업이 Firestore Web SDK를 통해 브라우저에서 직접 이루어진다. 지금은 누구나 데이터를 변경할 수 있으니 URL을 외부에 공유하지 마라.
+                테마 필드를 꼭 선택해 infoall 홈과 테마 페이지에 정확히 반영되도록 관리해 달라.
               </p>
             </header>
             <div className="pb-16">
