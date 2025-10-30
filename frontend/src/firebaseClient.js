@@ -38,6 +38,7 @@ import {
   where
 } from 'firebase/firestore';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from './constants/themeConfig.js';
+import { getDefaultCategory, isValidCategory, isValidSubcategory } from './constants/categoryStructure.js';
 import {
   normalizeHealthGuide,
   normalizeLifestyleGuide,
@@ -62,14 +63,23 @@ const db = getFirestore(app);
 // 내부에서 사용하는 헬퍼: Firestore 문서를 issueDraft 스키마에 맞는 평범한 객체로 정규화한다.
 function normalizeIssueData(issueId, data) {
   // Firestore에서 특정 필드가 누락된 경우에도 UI가 안전하게 동작하도록 기본값을 강제한다.
+  const theme = typeof data?.theme === 'string' && isValidThemeId(data.theme) ? data.theme : DEFAULT_THEME_ID;
+  const defaultCategory = getDefaultCategory(theme);
+  const category =
+    typeof data?.category === 'string' && isValidCategory(theme, data.category) ? data.category : defaultCategory;
+  const subcategory =
+    typeof data?.subcategory === 'string' && isValidSubcategory(theme, category, data.subcategory)
+      ? data.subcategory
+      : '';
+
   return {
     id: issueId,
-    theme: typeof data?.theme === 'string' && isValidThemeId(data.theme) ? data.theme : DEFAULT_THEME_ID,
+    theme,
     easySummary: typeof data?.easySummary === 'string' ? data.easySummary : '',
     title: typeof data?.title === 'string' ? data.title : '',
     date: typeof data?.date === 'string' ? data.date : '',
-    category: typeof data?.category === 'string' ? data.category : '기타',
-    subcategory: typeof data?.subcategory === 'string' ? data.subcategory : '',
+    category,
+    subcategory,
     summaryCard: typeof data?.summaryCard === 'string' ? data.summaryCard : '',
     background: typeof data?.background === 'string' ? data.background : '',
     keyPoints: Array.isArray(data?.keyPoints)

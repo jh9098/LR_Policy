@@ -4,6 +4,7 @@
 // 주의: progressiveView / conservativeView / impactToLife 는 null일 수 있으며, 필요할 때만 추가 버튼으로 생성한다.
 
 import { DEFAULT_THEME_ID } from '../constants/themeConfig.js';
+import { getDefaultCategory } from '../constants/categoryStructure.js';
 import {
   createEmptyThemeSections,
   createHealthGuide,
@@ -18,7 +19,7 @@ export function createEmptyDraft() {
     easySummary: '',
     title: '',
     date: '',
-    category: '기타',
+    category: getDefaultCategory(DEFAULT_THEME_ID),
     subcategory: '',
     summaryCard: '',
     background: '',

@@ -13,7 +13,8 @@ import ParentingThemePreview from '../../components/admin/ParentingThemePreview.
 import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
 import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
 import {
-  CATEGORY_OPTIONS,
+  getCategoryOptions,
+  getDefaultCategory,
   getSubcategoryOptions,
   isValidCategory,
   isValidSubcategory
@@ -40,8 +41,12 @@ function normalizeDraft(raw) {
     return ensureThemeGuides({ ...emptyDraft });
   }
   const safeTheme = isValidThemeId(raw.theme) ? raw.theme : DEFAULT_THEME_ID;
-  const safeCategory = isValidCategory(raw.category) ? raw.category : '기타';
-  const safeSubcategory = isValidSubcategory(safeCategory, raw.subcategory) ? raw.subcategory : '';
+  const safeCategory = isValidCategory(safeTheme, raw.category)
+    ? raw.category
+    : getDefaultCategory(safeTheme);
+  const safeSubcategory = isValidSubcategory(safeTheme, safeCategory, raw.subcategory)
+    ? raw.subcategory
+    : '';
   const base = ensureThemeGuides({ ...emptyDraft, ...raw });
   return {
     ...base,
@@ -100,22 +105,48 @@ function AdminEditPage() {
   const [submitSuccess, setSubmitSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const categoryValue = issueDraft?.category ?? '기타';
-  const subcategoryValue = issueDraft?.subcategory ?? '';
   const selectedTheme = issueDraft?.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
+  const fallbackCategory = getDefaultCategory(selectedTheme);
+  const categoryValue = issueDraft?.category ?? fallbackCategory;
+  const subcategoryValue = issueDraft?.subcategory ?? '';
   const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
   const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
 
-  const subcategoryOptions = useMemo(() => getSubcategoryOptions(categoryValue), [categoryValue]);
+  const categoryOptions = useMemo(() => getCategoryOptions(selectedTheme), [selectedTheme]);
+  const subcategoryOptions = useMemo(
+    () => getSubcategoryOptions(selectedTheme, categoryValue),
+    [categoryValue, selectedTheme]
+  );
 
   useEffect(() => {
     if (!issueDraft) {
       return;
     }
-    if (subcategoryValue && !subcategoryOptions.includes(subcategoryValue)) {
+
+    if (categoryOptions.length === 0) {
+      if (categoryValue !== '' || subcategoryValue !== '') {
+        setIssueDraft((prev) => {
+          if (!prev || (prev.category === '' && prev.subcategory === '')) {
+            return prev;
+          }
+          return { ...prev, category: '', subcategory: '' };
+        });
+      }
+    } else if (!categoryOptions.includes(categoryValue)) {
+      const fallbackCategory = categoryOptions[0];
+      setIssueDraft((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        if (prev.category === fallbackCategory && prev.subcategory === '') {
+          return prev;
+        }
+        return { ...prev, category: fallbackCategory, subcategory: '' };
+      });
+    } else if (subcategoryValue && !subcategoryOptions.includes(subcategoryValue)) {
       setIssueDraft((prev) => ({ ...prev, subcategory: '' }));
     }
-  }, [issueDraft, subcategoryValue, subcategoryOptions]);
+  }, [categoryOptions, categoryValue, issueDraft, subcategoryOptions, subcategoryValue]);
 
   useEffect(() => {
     if (!id) {
@@ -216,6 +247,10 @@ function AdminEditPage() {
         healthGuide: base.healthGuide ?? createHealthGuide(),
         lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide()
       };
+      const defaultCategory = getDefaultCategory(nextTheme);
+      draft.category = isValidCategory(nextTheme, base.category) ? base.category : defaultCategory;
+      const allowedSubcategories = getSubcategoryOptions(nextTheme, draft.category);
+      draft.subcategory = allowedSubcategories.includes(base.subcategory) ? base.subcategory : '';
       if (!nextThemeMeta?.showPerspectives) {
         draft.progressiveView = null;
         draft.conservativeView = null;
@@ -247,8 +282,8 @@ function AdminEditPage() {
       if (!prev) {
         return prev;
       }
-      const nextCategory = isValidCategory(value) ? value : prev.category;
-      const allowedSubcategories = getSubcategoryOptions(nextCategory);
+      const nextCategory = isValidCategory(selectedTheme, value) ? value : prev.category;
+      const allowedSubcategories = getSubcategoryOptions(selectedTheme, nextCategory);
       const nextSubcategory = allowedSubcategories.includes(prev.subcategory) ? prev.subcategory : '';
       return {
         ...prev,
@@ -266,7 +301,7 @@ function AdminEditPage() {
       }
       return {
         ...prev,
-        subcategory: isValidSubcategory(prev.category, value) ? value : ''
+        subcategory: isValidSubcategory(selectedTheme, prev.category, value) ? value : ''
       };
     });
   };
@@ -603,11 +638,15 @@ function AdminEditPage() {
                   onChange={handleCategoryChange}
                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 >
-                  {CATEGORY_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
+                  {categoryOptions.length === 0 ? (
+                    <option value="">카테고리 없음</option>
+                  ) : (
+                    categoryOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))
+                  )}
                 </select>
               </label>
               <label className="flex flex-col gap-2 text-sm">
