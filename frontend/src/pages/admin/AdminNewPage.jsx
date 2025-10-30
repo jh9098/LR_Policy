@@ -38,9 +38,9 @@ const SOURCE_TYPE_OPTIONS = [
 ];
 
 const PROGRESSIVE_NOTE =
-  '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+  '아래 내용은 일부 진보측 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const CONSERVATIVE_NOTE =
-  '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+  '아래 내용은 일부 보수측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
 
 function restoreDraftFromStorage() {
@@ -576,16 +576,10 @@ function AdminNewPage() {
         <header className="space-y-3">
           <p className="text-sm font-semibold uppercase tracking-widest text-emerald-500">infoall · Admin</p>
           <h1 className="text-3xl font-extrabold">새 게시물 등록</h1>
-          <p className="max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-            AI가 생성한 JSON 초안을 붙여넣으면 모든 필드가 자동으로 채워집니다. infoall은 테마 기반 서비스이므로 반드시 적절한 테마를 선택해 주세요. 지금은 인증 없이 누구나 Firestore에 글을 올릴 수 있으니 URL을 외부에 공유하지 마세요.
-          </p>
         </header>
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <h2 className="text-lg font-semibold">테마 선택</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            먼저 테마를 고르면 분류 옵션과 프롬프트가 자동으로 맞춰집니다.
-          </p>
           <label className="flex flex-col gap-2 text-sm">
             <span className="font-medium">테마</span>
             <select
@@ -1164,17 +1158,11 @@ function AdminNewPage() {
             >
               {isSubmitting ? 'Firestore에 등록 중...' : '등록하기'}
             </button>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              TODO: 실서비스에서는 인증 없이 누구나 쓰기를 허용하면 안 된다. 보안 규칙을 잠그고 관리자 인증을 추가해야 한다.
-            </p>
           </section>
 
           <aside className="space-y-5">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <h2 className="text-lg font-semibold">미리보기</h2>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                아래 화면은 현재 입력값을 기반으로 사용자가 보게 될 상세 페이지 레이아웃을 즉시 반영한다.
-              </p>
               <dl className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
                 <div className="flex items-center justify-between gap-4">
                   <dt className="font-medium text-slate-500 dark:text-slate-400">테마</dt>
