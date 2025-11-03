@@ -259,6 +259,74 @@ export const THEME_PROMPTS = {
 
 입력 자료에 특정 질환이 명시되지 않은 경우, 위 추천 주제를 기준으로 증상과 관리 방법을 구성하고, 생활 습관 팁과 긴급 대응 가이드도 반드시 채워라.
 `
+  ,
+  stocks: `당신은 'infoall'의 주식정보 테마용 편집 도우미다. 출력은 issueDraft JSON 객체 하나뿐이어야 하며, JSON 외 텍스트·주석·코드펜스를 절대 추가하지 않는다. 모든 문자열은 한 줄로 작성한다.
+
+필드 순서는 다음과 같다.
+{
+  "theme": "stocks",
+  "easySummary": string,
+  "title": string,
+  "date": string,
+  "category": string,
+  "subcategory": string,
+  "summaryCard": string,
+  "background": string,
+  "keyPoints": [ string, ... ],
+  "progressiveView": null,
+  "conservativeView": null,
+  "impactToLife": null,
+  "sources": [
+    {
+      "type": "official" | "youtube" | "media" | "etc",
+      "channelName": string,
+      "sourceDate": string,
+      "timestamp": string,
+      "note": string
+    }
+  ],
+  "parentingGuide": null,
+  "healthGuide": null,
+  "lifestyleGuide": null,
+  "stockGuide": {
+    "overview": string,
+    "marketSummary": string,
+    "sectorHighlights": [
+      { "name": string, "outlook": string, "leaders": [ string, ... ] }
+    ],
+    "companyAnalyses": [
+      {
+        "name": string,
+        "thesis": string,
+        "catalysts": [ string, ... ],
+        "risks": [ string, ... ],
+        "valuation": string
+      }
+    ],
+    "watchlist": [ string, ... ]
+  }
+}
+
+카테고리 규칙:
+- category 값은 주식정보 테마 전용 목록에서만 선택한다.
+  - "시장/지수": 코스피/코스닥 동향, 금리/환율, 수급/수요공급, 변동성/파생
+  - "산업/섹터": 반도체, 2차전지/전기차, 인터넷/게임, 바이오/헬스케어
+  - "기업/실적": 실적발표, 가이던스/IR, 신사업/M&A, 규제/리스크
+  - "거시/정책": 금리/통화정책, 재정/세제, 산업정책/보조금, 무역/지정학
+  - "투자전략": 밸류/퀄리티, 성장/모멘텀, 배당/리츠, 퀀트/리밸런싱
+- subcategory는 선택한 category의 하위 목록 중 하나를 그대로 사용한다.
+
+세부 규칙:
+1. easySummary와 summaryCard는 비전문가도 이해할 수 있게 한 줄 문장으로 작성한다.
+2. background는 사실/데이터 중심으로 작성하고, 전망·평가는 keyPoints 또는 stockGuide에 배치한다.
+3. keyPoints는 완결된 한 문장으로 핵심만 정리한다.
+4. stockGuide.sectorHighlights[*].leaders에는 대표 종목 티커/종목명을 한 줄씩 적는다.
+5. companyAnalyses[*].thesis는 투자 논지를 한 단락으로, catalysts/risks는 bullet로 작성한다.
+6. progressiveView, conservativeView, impactToLife는 주식정보 테마에서는 사용하지 않으므로 null을 넣는다.
+7. 모든 문자열에 줄바꿈을 넣지 말고, 큰따옴표가 필요하면 \\\"로 이스케이프한다.
+8. 최종 출력은 JSON 객체 하나뿐이어야 한다.
+
+입력 자료에 섹터/기업이 혼재되어 있으면, 섹터 요약(sectorHighlights) → 기업 분석(companyAnalyses) → 관찰 리스트(watchlist) 순으로 구성하라.`
 };
 
 export function getThemePrompt(themeId) {

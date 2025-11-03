@@ -9,11 +9,12 @@ import {
   createEmptyThemeSections,
   createHealthGuide,
   createLifestyleGuide,
-  createParentingGuide
+  createParentingGuide,
+  createStockGuide
 } from './themeDraftDefaults.js';
 
 export function createEmptyDraft() {
-  const { parentingGuide, healthGuide, lifestyleGuide } = createEmptyThemeSections();
+  const { parentingGuide, healthGuide, lifestyleGuide, stockGuide } = createEmptyThemeSections();
   return {
     theme: DEFAULT_THEME_ID,
     easySummary: '',
@@ -30,7 +31,8 @@ export function createEmptyDraft() {
     sources: [],
     parentingGuide,
     healthGuide,
-    lifestyleGuide
+    lifestyleGuide,
+    stockGuide
   };
 }
 
@@ -50,7 +52,8 @@ export function ensureThemeGuides(draft) {
     ...draft,
     parentingGuide: draft?.parentingGuide ?? createParentingGuide(),
     healthGuide: draft?.healthGuide ?? createHealthGuide(),
-    lifestyleGuide: draft?.lifestyleGuide ?? createLifestyleGuide()
+    lifestyleGuide: draft?.lifestyleGuide ?? createLifestyleGuide(),
+    stockGuide: draft?.stockGuide ?? createStockGuide()
   };
 }
 

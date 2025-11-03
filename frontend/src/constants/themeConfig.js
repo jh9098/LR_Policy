@@ -15,6 +15,15 @@ export const THEME_CONFIG = [
     keyAreas: ['핵심 요약', '진보 시각', '보수 시각', '생활 영향', '공식/언론 출처']
   },
   {
+    id: 'stocks',
+    label: '주식정보',
+    description:
+      '시장 동향, 섹터/기업 분석, 투자 전략과 리스크를 한눈에 정리합니다. 공시/뉴스 기반으로 핵심 포인트를 요약합니다.',
+    accent: 'amber',
+    showPerspectives: false,
+    keyAreas: ['시장 동향', '섹터 분석', '기업 분석', '투자 전략', '공시/뉴스']
+  },
+  {
     id: 'parenting',
     label: '육아정보',
     description:

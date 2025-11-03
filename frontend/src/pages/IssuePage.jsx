@@ -10,6 +10,7 @@ import SectionCard from '../components/SectionCard.jsx';
 import ParentingGuideView from '../components/issue/ParentingGuideView.jsx';
 import LifestyleGuideView from '../components/issue/LifestyleGuideView.jsx';
 import HealthGuideView from '../components/issue/HealthGuideView.jsx';
+import StockGuideView from '../components/issue/StockGuideView.jsx';
 import { getThemeById } from '../constants/themeConfig.js';
 import { getIssueById } from '../firebaseClient.js';
 
@@ -115,6 +116,7 @@ function IssuePage() {
   const parentingGuide = issue?.parentingGuide ?? null;
   const lifestyleGuide = issue?.lifestyleGuide ?? null;
   const healthGuide = issue?.healthGuide ?? null;
+  const stockGuide = issue?.stockGuide ?? null;
 
   const handleCopyLink = async () => {
     if (typeof navigator === 'undefined') {
@@ -281,6 +283,10 @@ function IssuePage() {
 
           {issue.theme === 'health' && healthGuide ? (
             <HealthGuideView guide={healthGuide} />
+          ) : null}
+
+          {issue.theme === 'stocks' && stockGuide ? (
+            <StockGuideView guide={stockGuide} />
           ) : null}
 
           <SectionCard title="근거 자료" tone="neutral">

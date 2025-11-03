@@ -42,7 +42,8 @@ import { getDefaultCategory, isValidCategory, isValidSubcategory } from './const
 import {
   normalizeHealthGuide,
   normalizeLifestyleGuide,
-  normalizeParentingGuide
+  normalizeParentingGuide,
+  normalizeStockGuide
 } from './utils/themeDraftDefaults.js';
 
 // Vite 환경 변수 기반 Firebase 설정을 구성한다.
@@ -100,6 +101,7 @@ function normalizeIssueData(issueId, data) {
     parentingGuide: normalizeParentingGuide(data?.parentingGuide, { withPresets: true }),
     healthGuide: normalizeHealthGuide(data?.healthGuide, { withPresets: true }),
     lifestyleGuide: normalizeLifestyleGuide(data?.lifestyleGuide),
+    stockGuide: normalizeStockGuide(data?.stockGuide),
     createdAt: data?.createdAt ?? null,
     updatedAt: data?.updatedAt ?? null,
     views: typeof data?.views === 'number' ? data.views : 0
