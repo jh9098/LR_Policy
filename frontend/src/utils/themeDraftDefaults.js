@@ -211,10 +211,72 @@ export function cloneLifestyleGuide(raw) {
   return normalizeLifestyleGuide(raw);
 }
 
+// ---- Stocks (주식정보) ----
+export function createSectorHighlight(name = '') {
+  return {
+    name,
+    outlook: '',
+    leaders: []
+  };
+}
+
+export function createCompanyAnalysis(name = '') {
+  return {
+    name,
+    thesis: '',
+    catalysts: [],
+    risks: [],
+    valuation: ''
+  };
+}
+
+export function createStockGuide() {
+  return {
+    overview: '',
+    marketSummary: '',
+    sectorHighlights: [],
+    companyAnalyses: [],
+    watchlist: []
+  };
+}
+
+export function normalizeStockGuide(raw) {
+  const base = createStockGuide();
+  if (!raw || typeof raw !== 'object') {
+    return base;
+  }
+  return {
+    overview: typeof raw.overview === 'string' ? raw.overview : base.overview,
+    marketSummary: typeof raw.marketSummary === 'string' ? raw.marketSummary : base.marketSummary,
+    sectorHighlights: Array.isArray(raw.sectorHighlights)
+      ? raw.sectorHighlights.map((s) => ({
+          name: typeof s?.name === 'string' ? s.name : '',
+          outlook: typeof s?.outlook === 'string' ? s.outlook : '',
+          leaders: toStringArray(s?.leaders)
+        }))
+      : base.sectorHighlights,
+    companyAnalyses: Array.isArray(raw.companyAnalyses)
+      ? raw.companyAnalyses.map((c) => ({
+          name: typeof c?.name === 'string' ? c.name : '',
+          thesis: typeof c?.thesis === 'string' ? c.thesis : '',
+          catalysts: toStringArray(c?.catalysts),
+          risks: toStringArray(c?.risks),
+          valuation: typeof c?.valuation === 'string' ? c.valuation : ''
+        }))
+      : base.companyAnalyses,
+    watchlist: toStringArray(raw.watchlist)
+  };
+}
+
+export function cloneStockGuide(raw) {
+  return normalizeStockGuide(raw);
+}
+
 export function createEmptyThemeSections() {
   return {
     parentingGuide: createParentingGuide(),
     healthGuide: createHealthGuide(),
-    lifestyleGuide: createLifestyleGuide()
+    lifestyleGuide: createLifestyleGuide(),
+    stockGuide: createStockGuide()
   };
 }

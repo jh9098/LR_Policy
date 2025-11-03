@@ -11,6 +11,8 @@ import ParentingThemeEditor from '../../components/admin/ParentingThemeEditor.js
 import ParentingThemePreview from '../../components/admin/ParentingThemePreview.jsx';
 import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
 import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
+import StockThemeEditor from '../../components/admin/StockThemeEditor.jsx';
+import StockThemePreview from '../../components/admin/StockThemePreview.jsx';
 import {
   getCategoryOptions,
   getDefaultCategory,
@@ -354,6 +356,10 @@ function AdminNewPage() {
     setIssueDraft((prev) => ({ ...prev, lifestyleGuide: nextGuide }));
   };
 
+  const handleStockGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => ({ ...prev, stockGuide: nextGuide }));
+  };
+
   const addKeyPoint = () => {
     setIssueDraft((prev) => ({
       ...prev,
@@ -556,7 +562,8 @@ function AdminNewPage() {
         conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null,
         parentingGuide: selectedTheme === 'parenting' ? issueDraft.parentingGuide : null,
         healthGuide: selectedTheme === 'health' ? issueDraft.healthGuide : null,
-        lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null
+        lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null,
+        stockGuide: selectedTheme === 'stocks' ? issueDraft.stockGuide : null
       };
       const newId = await createIssue(payload);
       window.alert('등록 완료');
@@ -824,6 +831,10 @@ function AdminNewPage() {
 
           {selectedTheme === 'lifestyle' ? (
             <LifestyleThemeEditor guide={issueDraft.lifestyleGuide} onChange={handleLifestyleGuideChange} />
+          ) : null}
+
+          {selectedTheme === 'stocks' ? (
+            <StockThemeEditor guide={issueDraft.stockGuide} onChange={handleStockGuideChange} />
           ) : null}
 
           {showPerspectiveSections ? (
@@ -1237,6 +1248,10 @@ function AdminNewPage() {
 
             {selectedTheme === 'lifestyle' ? (
               <LifestyleThemePreview guide={issueDraft.lifestyleGuide} />
+            ) : null}
+
+            {selectedTheme === 'stocks' ? (
+              <StockThemePreview guide={issueDraft.stockGuide} />
             ) : null}
 
             {issueDraft.progressiveView ? (

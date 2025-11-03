@@ -39,6 +39,40 @@ export const THEME_CATEGORY_STRUCTURE = Object.freeze({
       ])
     })
   }),
+  stocks: Object.freeze({
+    categories: Object.freeze({
+      '시장/지수': Object.freeze([
+        '코스피/코스닥 동향',
+        '금리/환율',
+        '수급/수요공급',
+        '변동성/파생'
+      ]),
+      '산업/섹터': Object.freeze([
+        '반도체',
+        '2차전지/전기차',
+        '인터넷/게임',
+        '바이오/헬스케어'
+      ]),
+      '기업/실적': Object.freeze([
+        '실적발표',
+        '가이던스/IR',
+        '신사업/M&A',
+        '규제/리스크'
+      ]),
+      '거시/정책': Object.freeze([
+        '금리/통화정책',
+        '재정/세제',
+        '산업정책/보조금',
+        '무역/지정학'
+      ]),
+      투자전략: Object.freeze([
+        '밸류/퀄리티',
+        '성장/모멘텀',
+        '배당/리츠',
+        '퀀트/리밸런싱'
+      ])
+    })
+  }),
   parenting: Object.freeze({
     categories: Object.freeze({
       '임신/출산 준비': Object.freeze([
