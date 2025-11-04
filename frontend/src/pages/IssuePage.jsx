@@ -1,7 +1,4 @@
 // frontend/src/pages/IssuePage.jsx
-// Firestore Web SDK로 직접 개별 이슈를 불러와 상세 페이지를 렌더링한다.
-// TODO: 조회수(metrics) 누적은 현재 비활성 상태이며, Cloud Functions 등 별도 경로에서 처리해야 한다.
-
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import IntensityBar from '../components/IntensityBar.jsx';
@@ -117,15 +114,240 @@ function IssuePage() {
   const lifestyleGuide = issue?.lifestyleGuide ?? null;
   const healthGuide = issue?.healthGuide ?? null;
   const stockGuide = issue?.stockGuide ?? null;
-const generateHTML = () => {
+
+  const generateHTML = () => {
     if (!issue) return '';
     
+    const escapeHtml = (text) => {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    let themeSpecificContent = '';
+
+    // 육아 테마
+    if (issue.theme === 'parenting' && parentingGuide) {
+      if (parentingGuide.overview) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">육아 테마 개요</h2>
+      <p>${escapeHtml(parentingGuide.overview)}</p>
+    </div>`;
+      }
+      
+      if (Array.isArray(parentingGuide.generalTips) && parentingGuide.generalTips.length > 0) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">전체 공통 팁</h2>
+      <ul>${parentingGuide.generalTips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ul>
+    </div>`;
+      }
+
+      if (Array.isArray(parentingGuide.ageGroups)) {
+        parentingGuide.ageGroups.forEach(group => {
+          if (!group.ageRange && !group.focusSummary) return;
+          themeSpecificContent += `
+    <div class="section parenting">
+      <h2 class="section-title">${escapeHtml(group.ageRange || '연령대')}</h2>
+      ${group.focusSummary ? `<p>${escapeHtml(group.focusSummary)}</p>` : ''}
+      ${Array.isArray(group.developmentFocus) && group.developmentFocus.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">발달 포인트</h3>
+        <ul>${group.developmentFocus.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+      ${Array.isArray(group.careTips) && group.careTips.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">돌봄 팁</h3>
+        <ul>${group.careTips.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+      ${Array.isArray(group.resources) && group.resources.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">추천 자료</h3>
+        <ul>${group.resources.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+    </div>`;
+        });
+      }
+
+      if (Array.isArray(parentingGuide.emergencyContacts) && parentingGuide.emergencyContacts.length > 0) {
+        themeSpecificContent += `
+    <div class="section emergency">
+      <h2 class="section-title">긴급/상담 연락처</h2>
+      <ul>${parentingGuide.emergencyContacts.map(contact => `<li>${escapeHtml(contact)}</li>`).join('')}</ul>
+    </div>`;
+      }
+    }
+
+    // 건강 테마
+    if (issue.theme === 'health' && healthGuide) {
+      if (healthGuide.overview) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">건강 테마 개요</h2>
+      <p>${escapeHtml(healthGuide.overview)}</p>
+    </div>`;
+      }
+
+      if (Array.isArray(healthGuide.lifestyleTips) && healthGuide.lifestyleTips.length > 0) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">생활 습관 팁</h2>
+      <ul>${healthGuide.lifestyleTips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ul>
+    </div>`;
+      }
+
+      if (Array.isArray(healthGuide.conditions)) {
+        healthGuide.conditions.forEach(condition => {
+          if (!condition.name && !condition.summary) return;
+          themeSpecificContent += `
+    <div class="section health">
+      <h2 class="section-title">${escapeHtml(condition.name || '건강 주제')}</h2>
+      ${condition.summary ? `<p>${escapeHtml(condition.summary)}</p>` : ''}
+      ${Array.isArray(condition.warningSigns) && condition.warningSigns.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">경고 신호</h3>
+        <ul>${condition.warningSigns.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+      ${Array.isArray(condition.careTips) && condition.careTips.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">관리/돌봄 팁</h3>
+        <ul>${condition.careTips.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+      ${Array.isArray(condition.resources) && condition.resources.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">추천 자료</h3>
+        <ul>${condition.resources.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+    </div>`;
+        });
+      }
+
+      if (Array.isArray(healthGuide.emergencyGuide) && healthGuide.emergencyGuide.length > 0) {
+        themeSpecificContent += `
+    <div class="section emergency">
+      <h2 class="section-title">긴급 대응 가이드</h2>
+      <ul>${healthGuide.emergencyGuide.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+    </div>`;
+      }
+    }
+
+    // 생활정보 테마
+    if (issue.theme === 'lifestyle' && lifestyleGuide) {
+      if (lifestyleGuide.overview) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">생활정보 개요</h2>
+      <p>${escapeHtml(lifestyleGuide.overview)}</p>
+    </div>`;
+      }
+
+      if (Array.isArray(lifestyleGuide.quickTips) && lifestyleGuide.quickTips.length > 0) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">생활 꿀팁</h2>
+      <ul>${lifestyleGuide.quickTips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ul>
+    </div>`;
+      }
+
+      if (Array.isArray(lifestyleGuide.hotItems) && lifestyleGuide.hotItems.length > 0) {
+        themeSpecificContent += `
+    <div class="section lifestyle">
+      <h2 class="section-title">추천 아이템</h2>
+      ${lifestyleGuide.hotItems.map(item => `
+        <div class="item-card">
+          ${item.name ? `<h3>${escapeHtml(item.name)}</h3>` : ''}
+          ${item.highlight ? `<p>${escapeHtml(item.highlight)}</p>` : ''}
+          ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank">링크 바로가기</a>` : ''}
+        </div>
+      `).join('')}
+    </div>`;
+      }
+
+      if (Array.isArray(lifestyleGuide.hotDeals) && lifestyleGuide.hotDeals.length > 0) {
+        themeSpecificContent += `
+    <div class="section deal">
+      <h2 class="section-title">핫딜 정보</h2>
+      ${lifestyleGuide.hotDeals.map(deal => `
+        <div class="item-card">
+          ${deal.title ? `<h3>${escapeHtml(deal.title)}</h3>` : ''}
+          ${deal.description ? `<p>${escapeHtml(deal.description)}</p>` : ''}
+          ${deal.priceInfo ? `<p style="color: #059669; font-weight: 600;">${escapeHtml(deal.priceInfo)}</p>` : ''}
+          ${deal.link ? `<a href="${escapeHtml(deal.link)}" target="_blank">링크 바로가기</a>` : ''}
+        </div>
+      `).join('')}
+    </div>`;
+      }
+    }
+
+    // 주식정보 테마
+    if (issue.theme === 'stocks' && stockGuide) {
+      if (stockGuide.overview) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">주식정보 개요</h2>
+      <p>${escapeHtml(stockGuide.overview)}</p>
+    </div>`;
+      }
+
+      if (stockGuide.marketSummary) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">시장 요약</h2>
+      <p>${escapeHtml(stockGuide.marketSummary)}</p>
+    </div>`;
+      }
+
+      if (Array.isArray(stockGuide.sectorHighlights) && stockGuide.sectorHighlights.length > 0) {
+        themeSpecificContent += `
+    <div class="section stock">
+      <h2 class="section-title">섹터 하이라이트</h2>
+      ${stockGuide.sectorHighlights.map(sector => `
+        <div class="item-card">
+          ${sector.name ? `<h3>${escapeHtml(sector.name)}</h3>` : ''}
+          ${sector.outlook ? `<p>${escapeHtml(sector.outlook)}</p>` : ''}
+          ${Array.isArray(sector.leaders) && sector.leaders.length > 0 ? `
+            <p><strong>대표 종목:</strong> ${sector.leaders.map(l => escapeHtml(l)).join(', ')}</p>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>`;
+      }
+
+      if (Array.isArray(stockGuide.companyAnalyses) && stockGuide.companyAnalyses.length > 0) {
+        themeSpecificContent += `
+    <div class="section stock">
+      <h2 class="section-title">기업 분석</h2>
+      ${stockGuide.companyAnalyses.map(company => `
+        <div class="item-card">
+          ${company.name ? `<h3>${escapeHtml(company.name)}</h3>` : ''}
+          ${company.thesis ? `<p>${escapeHtml(company.thesis)}</p>` : ''}
+          ${Array.isArray(company.catalysts) && company.catalysts.length > 0 ? `
+            <p><strong style="color: #059669;">촉매:</strong></p>
+            <ul>${company.catalysts.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+          ` : ''}
+          ${Array.isArray(company.risks) && company.risks.length > 0 ? `
+            <p><strong style="color: #dc2626;">리스크:</strong></p>
+            <ul>${company.risks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+          ` : ''}
+          ${company.valuation ? `<p><em>${escapeHtml(company.valuation)}</em></p>` : ''}
+        </div>
+      `).join('')}
+    </div>`;
+      }
+
+      if (Array.isArray(stockGuide.watchlist) && stockGuide.watchlist.length > 0) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">워치리스트</h2>
+      <ul>${stockGuide.watchlist.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>
+    </div>`;
+      }
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${issue.title} - infoall</title>
+  <title>${escapeHtml(issue.title)} - infoall</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #1e293b; background: #f8fafc; padding: 2rem; }
@@ -137,56 +359,68 @@ const generateHTML = () => {
     .section { padding: 2rem; border-bottom: 1px solid #e2e8f0; }
     .section:last-child { border-bottom: none; }
     .section-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; }
-    .progressive { background: #ecfdf5; color: #064e3b; }
-    .conservative { background: #fef2f2; color: #7f1d1d; }
-    ul { margin-left: 1.5rem; }
+    .progressive { background: #ecfdf5; }
+    .conservative { background: #fef2f2; }
+    .parenting { background: #fce7f3; }
+    .health { background: #e0f2fe; }
+    .lifestyle { background: #d1fae5; }
+    .stock { background: #fef3c7; }
+    .deal { background: #fee2e2; }
+    .emergency { background: #fee2e2; border-left: 4px solid #dc2626; }
+    ul { margin-left: 1.5rem; margin-top: 0.5rem; }
     li { margin: 0.5rem 0; }
     .source-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0; }
+    .item-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin: 1rem 0; }
+    .item-card h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .item-card a { color: #3b82f6; text-decoration: none; }
+    .item-card a:hover { text-decoration: underline; }
+    h3 { margin-top: 1rem; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
       <div>
-        <span class="badge">${themeLabel}</span>
-        <span class="badge">${issue.date || '정보 부족'}</span>
+        <span class="badge">${escapeHtml(themeLabel)}</span>
+        <span class="badge">${escapeHtml(issue.date || '정보 부족')}</span>
       </div>
-      <h1 class="title">${issue.title}</h1>
-      <p class="summary">${issue.summaryCard}</p>
+      <h1 class="title">${escapeHtml(issue.title)}</h1>
+      <p class="summary">${escapeHtml(issue.summaryCard)}</p>
     </div>
     ${easySummary ? `<div class="section">
       <h2 class="section-title">쉬운 요약</h2>
-      <p>${easySummary}</p>
+      <p>${escapeHtml(easySummary)}</p>
     </div>` : ''}
     <div class="section">
       <h2 class="section-title">무슨 일이 있었나요?</h2>
-      ${backgroundParagraphs.map(p => `<p style="margin: 0.75rem 0;">${p}</p>`).join('')}
+      ${backgroundParagraphs.map(p => `<p style="margin: 0.75rem 0;">${escapeHtml(p)}</p>`).join('')}
     </div>
     <div class="section">
       <h2 class="section-title">핵심 쟁점 정리</h2>
-      <ul>${keyPoints.map(p => `<li>${p}</li>`).join('')}</ul>
+      <ul>${keyPoints.map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ul>
     </div>
     ${progressiveView ? `<div class="section progressive">
       <h2 class="section-title">진보 성향에서 보는 전망</h2>
-      <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem;">${progressiveView.headline}</h3>
-      <ul>${progressiveView.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+      <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem;">${escapeHtml(progressiveView.headline)}</h3>
+      <ul>${progressiveView.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>
     </div>` : ''}
     ${conservativeView ? `<div class="section conservative">
       <h2 class="section-title">보수 성향에서 보는 전망</h2>
-      <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem;">${conservativeView.headline}</h3>
-      <ul>${conservativeView.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+      <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem;">${escapeHtml(conservativeView.headline)}</h3>
+      <ul>${conservativeView.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>
     </div>` : ''}
     ${impactToLife ? `<div class="section">
       <h2 class="section-title">생활에 어떤 영향이 있나요?</h2>
-      <p>${impactToLife.text}</p>
+      <p>${escapeHtml(impactToLife.text)}</p>
     </div>` : ''}
+    ${themeSpecificContent}
     <div class="section">
       <h2 class="section-title">근거 자료</h2>
       ${Array.isArray(issue.sources) && issue.sources.length > 0 ? issue.sources.map(s => `
         <div class="source-item">
-          <strong>${s.channelName || '출처 미상'}</strong>
-          <p style="font-size: 0.875rem; color: #64748b; margin-top: 0.25rem;">${s.sourceDate || ''}</p>
-          <p style="margin-top: 0.5rem;">${s.note || ''}</p>
+          <strong>${escapeHtml(s.channelName || '출처 미상')}</strong>
+          <p style="font-size: 0.875rem; color: #64748b; margin-top: 0.25rem;">${escapeHtml(s.sourceDate || '')}</p>
+          <p style="margin-top: 0.5rem;">${escapeHtml(s.note || '')}</p>
         </div>
       `).join('') : '<p>등록된 출처가 없습니다.</p>'}
     </div>
@@ -221,18 +455,6 @@ const generateHTML = () => {
     }
   };
 
-  const handleCopyLink = async () => {
-    if (typeof navigator === 'undefined') {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setToastMessage('링크가 복사되었습니다.');
-    } catch (err) {
-      console.error('링크 복사 실패:', err);
-      setToastMessage('복사에 실패했습니다. 주소 표시줄에서 직접 복사해주세요.');
-    }
-  };
   const handleCopyLink = async () => {
     if (typeof navigator === 'undefined') {
       return;
@@ -298,6 +520,20 @@ const generateHTML = () => {
                 className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-400/60 dark:hover:text-indigo-300 dark:focus-visible:ring-offset-slate-900"
               >
                 링크 복사
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadHTML}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-400/60 dark:hover:text-indigo-300 dark:focus-visible:ring-offset-slate-900"
+              >
+                HTML 다운로드
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyHTML}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-400/60 dark:hover:text-indigo-300 dark:focus-visible:ring-offset-slate-900"
+              >
+                HTML 복사
               </button>
               <span>문서 ID: {issue.id}</span>
             </div>
