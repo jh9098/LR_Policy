@@ -13,6 +13,8 @@ import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
 import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
 import StockThemeEditor from '../../components/admin/StockThemeEditor.jsx';
 import StockThemePreview from '../../components/admin/StockThemePreview.jsx';
+import SupportThemeEditor from '../../components/admin/SupportThemeEditor.jsx';
+import SupportThemePreview from '../../components/admin/SupportThemePreview.jsx';
 import {
   getCategoryOptions,
   getDefaultCategory,
@@ -27,11 +29,12 @@ import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
 import {
   createHealthGuide,
   createLifestyleGuide,
-  createParentingGuide
+  createParentingGuide,
+  createSupportGuide
 } from '../../utils/themeDraftDefaults.js';
 import { loadDraftFromJson } from '../../utils/loadDraftFromJson.js';
 
-const STORAGE_KEY = 'adminDraftV6';
+const STORAGE_KEY = 'adminDraftV7';
 const SOURCE_TYPE_OPTIONS = [
   { value: 'official', label: '공식 발표' },
   { value: 'youtube', label: '유튜브' },
@@ -330,7 +333,8 @@ function AdminNewPage() {
         theme: nextTheme,
         parentingGuide: base.parentingGuide ?? createParentingGuide(),
         healthGuide: base.healthGuide ?? createHealthGuide(),
-        lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide()
+        lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide(),
+        supportGuide: base.supportGuide ?? createSupportGuide()
       };
       const defaultCategory = getDefaultCategory(nextTheme);
       draft.category = isValidCategory(nextTheme, base.category) ? base.category : defaultCategory;
@@ -358,6 +362,10 @@ function AdminNewPage() {
 
   const handleStockGuideChange = (nextGuide) => {
     setIssueDraft((prev) => ({ ...prev, stockGuide: nextGuide }));
+  };
+
+  const handleSupportGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => ({ ...prev, supportGuide: nextGuide }));
   };
 
   const addKeyPoint = () => {
@@ -563,7 +571,8 @@ function AdminNewPage() {
         parentingGuide: selectedTheme === 'parenting' ? issueDraft.parentingGuide : null,
         healthGuide: selectedTheme === 'health' ? issueDraft.healthGuide : null,
         lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null,
-        stockGuide: selectedTheme === 'stocks' ? issueDraft.stockGuide : null
+        stockGuide: selectedTheme === 'stocks' ? issueDraft.stockGuide : null,
+        supportGuide: selectedTheme === 'support' ? issueDraft.supportGuide : null
       };
       const newId = await createIssue(payload);
       window.alert('등록 완료');
@@ -835,6 +844,10 @@ function AdminNewPage() {
 
           {selectedTheme === 'stocks' ? (
             <StockThemeEditor guide={issueDraft.stockGuide} onChange={handleStockGuideChange} />
+          ) : null}
+          
+          {selectedTheme === 'support' ? (
+            <SupportThemeEditor guide={issueDraft.supportGuide} onChange={handleSupportGuideChange} />
           ) : null}
 
           {showPerspectiveSections ? (
@@ -1252,6 +1265,10 @@ function AdminNewPage() {
 
             {selectedTheme === 'stocks' ? (
               <StockThemePreview guide={issueDraft.stockGuide} />
+            ) : null}
+            
+            {selectedTheme === 'support' ? (
+              <SupportThemePreview guide={issueDraft.supportGuide} />
             ) : null}
 
             {issueDraft.progressiveView ? (

@@ -156,6 +156,14 @@ export const THEME_CATEGORY_STRUCTURE = Object.freeze({
         '영양·식단'
       ])
     })
+  }),
+  support: Object.freeze({
+    categories: Object.freeze({
+      생활지원: Object.freeze(['긴급복지·생계지원', '에너지·통신비 지원', '문화·여가 바우처', '기타 생활안정']),
+      '육아/교육': Object.freeze(['임신·출산 지원금', '영유아 보육·양육수당', '초중고 교육비 지원', '청년 교육·장학금']),
+      '취업/창업': Object.freeze(['구직활동·실업급여', '직업훈련·역량강화', '청년·중장년 일자리', '소상공인·창업자금']),
+      '주거/복지': Object.freeze(['주거안정·월세대출', '공공임대·주택공급', '의료비·건강보험 지원', '장애인·노인 복지'])
+    })
   })
 });
 

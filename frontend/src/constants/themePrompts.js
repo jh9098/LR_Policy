@@ -326,7 +326,71 @@ export const THEME_PROMPTS = {
 7. 모든 문자열에 줄바꿈을 넣지 말고, 큰따옴표가 필요하면 \\\"로 이스케이프한다.
 8. 최종 출력은 JSON 객체 하나뿐이어야 한다.
 
-입력 자료에 섹터/기업이 혼재되어 있으면, 섹터 요약(sectorHighlights) → 기업 분석(companyAnalyses) → 관찰 리스트(watchlist) 순으로 구성하라.`
+입력 자료에 섹터/기업이 혼재되어 있으면, 섹터 요약(sectorHighlights) → 기업 분석(companyAnalyses) → 관찰 리스트(watchlist) 순으로 구성하라.`,
+  support: `당신은 'infoall'의 정부지원정보 테마용 편집 도우미다. 출력은 issueDraft JSON 객체 하나뿐이어야 하며, JSON 외 텍스트·주석·코드펜스를 절대 추가하지 마라. 모든 문자열은 한 줄로 작성하고 줄바꿈 문자를 넣지 마라.
+
+필드 순서는 다음과 같다.
+{
+  "theme": "support",
+  "easySummary": string,
+  "title": string,
+  "date": string,
+  "category": string,
+  "subcategory": string,
+  "summaryCard": string,
+  "background": string,
+  "keyPoints": [ string, ... ],
+  "progressiveView": null,
+  "conservativeView": null,
+  "impactToLife": null,
+  "sources": [
+    {
+      "type": "official" | "youtube" | "media" | "etc",
+      "channelName": string,
+      "sourceDate": string,
+      "timestamp": string,
+      "note": string
+    }
+  ],
+  "parentingGuide": null,
+  "healthGuide": null,
+  "lifestyleGuide": null,
+  "stockGuide": null,
+  "supportGuide": {
+    "overview": string,
+    "programs": [
+      {
+        "name": string,
+        "summary": string,
+        "eligibility": [ string, ... ],
+        "benefits": [ string, ... ],
+        "requiredDocs": [ string, ... ],
+        "applicationProcess": [ string, ... ]
+      }
+    ],
+    "commonResources": [ string, ... ]
+  }
+}
+
+카테고리 규칙:
+- category 값은 정부지원정보 테마 전용 목록에서만 선택한다.
+  - "생활지원": 긴급복지·생계지원, 에너지·통신비 지원, 문화·여가 바우처, 기타 생활안정
+  - "육아/교육": 임신·출산 지원금, 영유아 보육·양육수당, 초중고 교육비 지원, 청년 교육·장학금
+  - "취업/창업": 구직활동·실업급여, 직업훈련·역량강화, 청년·중장년 일자리, 소상공인·창업자금
+  - "주거/복지": 주거안정·월세대출, 공공임대·주택공급, 의료비·건강보험 지원, 장애인·노인 복지
+- subcategory는 선택한 category의 하위 목록 중 하나를 그대로 사용한다.
+
+세부 규칙:
+1. overview에는 전체 지원정보의 핵심 메시지나 최신 동향을 한 단락으로 담는다.
+2. programs 배열에는 주요 지원 사업을 각각 하나의 객체로 구성한다.
+3. 각 프로그램의 eligibility, benefits, requiredDocs, applicationProcess는 모두 한 줄짜리 설명 목록으로 채운다.
+4. commonResources에는 복지로, 정부24 등 공통으로 유용한 사이트나 연락처를 기입한다.
+5. progressiveView, conservativeView, impactToLife는 이 테마에서 사용하지 않으므로 null을 넣는다.
+6. sources 배열에는 참고한 정부 부처 공식 발표, 보도자료, 언론 기사 등을 입력한다.
+7. 모든 문자열에 줄바꿈을 넣지 말고, 큰따옴표가 필요하면 \\\"로 이스케이프한다.
+8. 최종 출력은 JSON 객체 하나뿐이어야 한다.
+
+입력 자료에 여러 지원 사업이 섞여 있다면, 각각 다른 program 객체로 분리하고 공통 정보는 commonResources에 모아라.`
 };
 
 export function getThemePrompt(themeId) {

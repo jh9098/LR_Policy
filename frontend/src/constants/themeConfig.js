@@ -49,6 +49,15 @@ export const THEME_CONFIG = [
     accent: 'sky',
     showPerspectives: false,
     keyAreas: ['치매', '자폐 스펙트럼', 'ADHD', '우울/불안', '허리 통증', '심혈관 질환', '긴급 대응']
+  },
+  {
+    id: 'support',
+    label: '정부지원정보',
+    description:
+      '정부 및 지자체에서 제공하는 다양한 지원금, 바우처, 공공 서비스 정보를 정리합니다. 신청 자격과 방법을 쉽게 안내합니다.',
+    accent: 'violet',
+    showPerspectives: false,
+    keyAreas: ['생활안정', '육아/교육', '취업/창업', '주거/복지', '신청방법']
   }
 ];
 

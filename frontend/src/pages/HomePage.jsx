@@ -25,6 +25,14 @@ const ACCENT_STYLES = {
   sky: {
     badge: 'border-sky-200 bg-sky-50 text-sky-600 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200',
     link: 'text-sky-600 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-200'
+  },
+  amber: {
+    badge: 'border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
+    link: 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'
+  },
+  violet: {
+    badge: 'border-violet-200 bg-violet-50 text-violet-600 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-200',
+    link: 'text-violet-600 hover:text-violet-700 dark:text-violet-300 dark:hover:text-violet-200'
   }
 };
 

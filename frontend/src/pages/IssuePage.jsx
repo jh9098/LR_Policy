@@ -8,6 +8,7 @@ import ParentingGuideView from '../components/issue/ParentingGuideView.jsx';
 import LifestyleGuideView from '../components/issue/LifestyleGuideView.jsx';
 import HealthGuideView from '../components/issue/HealthGuideView.jsx';
 import StockGuideView from '../components/issue/StockGuideView.jsx';
+import SupportGuideView from '../components/issue/SupportGuideView.jsx';
 import { getThemeById } from '../constants/themeConfig.js';
 import { getIssueById } from '../firebaseClient.js';
 
@@ -114,6 +115,7 @@ function IssuePage() {
   const lifestyleGuide = issue?.lifestyleGuide ?? null;
   const healthGuide = issue?.healthGuide ?? null;
   const stockGuide = issue?.stockGuide ?? null;
+  const supportGuide = issue?.supportGuide ?? null;
 
   const generateHTML = () => {
     if (!issue) return '';
@@ -342,6 +344,52 @@ function IssuePage() {
       }
     }
 
+    // 정부지원정보 테마
+    if (issue.theme === 'support' && supportGuide) {
+      if (supportGuide.overview) {
+        themeSpecificContent += `
+    <div class="section">
+      <h2 class="section-title">정부지원정보 개요</h2>
+      <p>${escapeHtml(supportGuide.overview)}</p>
+    </div>`;
+      }
+
+      if (Array.isArray(supportGuide.programs)) {
+        supportGuide.programs.forEach(program => {
+          if (!program.name && !program.summary) return;
+          themeSpecificContent += `
+    <div class="section support">
+      <h2 class="section-title">${escapeHtml(program.name || '지원 프로그램')}</h2>
+      ${program.summary ? `<p>${escapeHtml(program.summary)}</p>` : ''}
+      ${Array.isArray(program.eligibility) && program.eligibility.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">지원 대상</h3>
+        <ul>${program.eligibility.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+      ${Array.isArray(program.benefits) && program.benefits.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">지원 내용</h3>
+        <ul>${program.benefits.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+      ${Array.isArray(program.requiredDocs) && program.requiredDocs.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">필요 서류</h3>
+        <ul>${program.requiredDocs.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+      ${Array.isArray(program.applicationProcess) && program.applicationProcess.length > 0 ? `
+        <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">신청 방법</h3>
+        <ul>${program.applicationProcess.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      ` : ''}
+    </div>`;
+        });
+      }
+
+      if (Array.isArray(supportGuide.commonResources) && supportGuide.commonResources.length > 0) {
+        themeSpecificContent += `
+    <div class="section emergency">
+      <h2 class="section-title">공통 참고자료</h2>
+      <ul>${supportGuide.commonResources.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+    </div>`;
+      }
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -365,6 +413,7 @@ function IssuePage() {
     .health { background: #e0f2fe; }
     .lifestyle { background: #d1fae5; }
     .stock { background: #fef3c7; }
+    .support { background: #f5f3ff; }
     .deal { background: #fee2e2; }
     .emergency { background: #fee2e2; border-left: 4px solid #dc2626; }
     ul { margin-left: 1.5rem; margin-top: 0.5rem; }
@@ -638,6 +687,10 @@ function IssuePage() {
 
           {issue.theme === 'stocks' && stockGuide ? (
             <StockGuideView guide={stockGuide} />
+          ) : null}
+          
+          {issue.theme === 'support' && supportGuide ? (
+            <SupportGuideView guide={supportGuide} />
           ) : null}
 
           <SectionCard title="근거 자료" tone="neutral">
