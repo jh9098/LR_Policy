@@ -271,6 +271,60 @@ export function normalizeStockGuide(raw) {
 export function cloneStockGuide(raw) {
   return normalizeStockGuide(raw);
 }
+// ---- Support (정부지원정보) ----
+export function createSupportProgram(name = '') {
+  return {
+    name,
+    summary: '',
+    eligibility: [],
+    benefits: [],
+    requiredDocs: [],
+    applicationProcess: []
+  };
+}
+
+export function normalizeSupportProgram(raw) {
+  const base = createSupportProgram();
+  if (!raw || typeof raw !== 'object') {
+    return base;
+  }
+  return {
+    name: typeof raw.name === 'string' ? raw.name : base.name,
+    summary: typeof raw.summary === 'string' ? raw.summary : base.summary,
+    eligibility: toStringArray(raw.eligibility),
+    benefits: toStringArray(raw.benefits),
+    requiredDocs: toStringArray(raw.requiredDocs),
+    applicationProcess: toStringArray(raw.applicationProcess)
+  };
+}
+
+export function createSupportGuide({ withPresets = true } = {}) {
+  return {
+    overview: '',
+    programs: [],
+    commonResources: []
+  };
+}
+
+export function normalizeSupportGuide(raw, { withPresets = true } = {}) {
+  const base = createSupportGuide({ withPresets });
+  if (!raw || typeof raw !== 'object') {
+    return base;
+  }
+  const programs = Array.isArray(raw.programs) && raw.programs.length > 0
+    ? raw.programs.map((item) => normalizeSupportProgram(item))
+    : base.programs;
+  return {
+    overview: typeof raw.overview === 'string' ? raw.overview : base.overview,
+    programs,
+    commonResources: toStringArray(raw.commonResources)
+  };
+}
+
+export function cloneSupportGuide(raw) {
+  return normalizeSupportGuide(raw, { withPresets: false });
+}
+
 
 export function createEmptyThemeSections() {
   return {
