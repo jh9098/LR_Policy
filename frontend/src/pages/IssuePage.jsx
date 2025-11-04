@@ -117,7 +117,122 @@ function IssuePage() {
   const lifestyleGuide = issue?.lifestyleGuide ?? null;
   const healthGuide = issue?.healthGuide ?? null;
   const stockGuide = issue?.stockGuide ?? null;
+const generateHTML = () => {
+    if (!issue) return '';
+    
+    const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${issue.title} - infoall</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #1e293b; background: #f8fafc; padding: 2rem; }
+    .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .header { padding: 2rem; border-bottom: 1px solid #e2e8f0; }
+    .badge { display: inline-block; background: #f1f5f9; color: #475569; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; margin-right: 0.5rem; }
+    .title { font-size: 2rem; font-weight: 700; margin: 1rem 0; }
+    .summary { color: #475569; margin-top: 1rem; }
+    .section { padding: 2rem; border-bottom: 1px solid #e2e8f0; }
+    .section:last-child { border-bottom: none; }
+    .section-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; }
+    .progressive { background: #ecfdf5; color: #064e3b; }
+    .conservative { background: #fef2f2; color: #7f1d1d; }
+    ul { margin-left: 1.5rem; }
+    li { margin: 0.5rem 0; }
+    .source-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <span class="badge">${themeLabel}</span>
+        <span class="badge">${issue.date || '정보 부족'}</span>
+      </div>
+      <h1 class="title">${issue.title}</h1>
+      <p class="summary">${issue.summaryCard}</p>
+    </div>
+    ${easySummary ? `<div class="section">
+      <h2 class="section-title">쉬운 요약</h2>
+      <p>${easySummary}</p>
+    </div>` : ''}
+    <div class="section">
+      <h2 class="section-title">무슨 일이 있었나요?</h2>
+      ${backgroundParagraphs.map(p => `<p style="margin: 0.75rem 0;">${p}</p>`).join('')}
+    </div>
+    <div class="section">
+      <h2 class="section-title">핵심 쟁점 정리</h2>
+      <ul>${keyPoints.map(p => `<li>${p}</li>`).join('')}</ul>
+    </div>
+    ${progressiveView ? `<div class="section progressive">
+      <h2 class="section-title">진보 성향에서 보는 전망</h2>
+      <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem;">${progressiveView.headline}</h3>
+      <ul>${progressiveView.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>` : ''}
+    ${conservativeView ? `<div class="section conservative">
+      <h2 class="section-title">보수 성향에서 보는 전망</h2>
+      <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem;">${conservativeView.headline}</h3>
+      <ul>${conservativeView.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>` : ''}
+    ${impactToLife ? `<div class="section">
+      <h2 class="section-title">생활에 어떤 영향이 있나요?</h2>
+      <p>${impactToLife.text}</p>
+    </div>` : ''}
+    <div class="section">
+      <h2 class="section-title">근거 자료</h2>
+      ${Array.isArray(issue.sources) && issue.sources.length > 0 ? issue.sources.map(s => `
+        <div class="source-item">
+          <strong>${s.channelName || '출처 미상'}</strong>
+          <p style="font-size: 0.875rem; color: #64748b; margin-top: 0.25rem;">${s.sourceDate || ''}</p>
+          <p style="margin-top: 0.5rem;">${s.note || ''}</p>
+        </div>
+      `).join('') : '<p>등록된 출처가 없습니다.</p>'}
+    </div>
+  </div>
+</body>
+</html>`;
+    return html;
+  };
 
+  const handleDownloadHTML = () => {
+    const html = generateHTML();
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${issue.title.replace(/[^a-zA-Z0-9가-힣]/g, '_')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setToastMessage('HTML 파일이 다운로드되었습니다.');
+  };
+
+  const handleCopyHTML = async () => {
+    const html = generateHTML();
+    try {
+      await navigator.clipboard.writeText(html);
+      setToastMessage('HTML이 복사되었습니다.');
+    } catch (err) {
+      console.error('HTML 복사 실패:', err);
+      setToastMessage('복사에 실패했습니다.');
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (typeof navigator === 'undefined') {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setToastMessage('링크가 복사되었습니다.');
+    } catch (err) {
+      console.error('링크 복사 실패:', err);
+      setToastMessage('복사에 실패했습니다. 주소 표시줄에서 직접 복사해주세요.');
+    }
+  };
   const handleCopyLink = async () => {
     if (typeof navigator === 'undefined') {
       return;
