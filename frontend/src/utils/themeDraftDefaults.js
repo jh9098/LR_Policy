@@ -237,11 +237,81 @@ export function normalizeStockGuide(raw) {
     watchlist: toStringArray(raw.watchlist)
   };
 }
+export function cloneStockGuide(raw) {
+  return normalizeStockGuide(raw);
+}
+export function createSupportProgram(name = '') {
+  return {
+    name,                 // 프로그램명
+    summary: '',          // 한줄 요약 / 핵심 설명
+    eligibility: [],      // 지원 대상 / 자격요건 (string[])
+    benefits: [],         // 지원 내용 / 혜택 (string[])
+    applicationProcess: [], // 신청 절차 (string[])
+    requiredDocs: [],     // 필요 서류 (string[])
+    links: []             // 참고 링크 (string[])
+  };
+}
+
+export function normalizeSupportProgram(raw) {
+  const base = createSupportProgram();
+  if (!raw || typeof raw !== 'object') return base;
+  return {
+    name: typeof raw.name === 'string' ? raw.name.trim() : base.name,
+    summary: typeof raw.summary === 'string' ? raw.summary.trim() : base.summary,
+    eligibility: toStringArray(raw.eligibility),
+    benefits: toStringArray(raw.benefits),
+    applicationProcess: toStringArray(raw.applicationProcess),
+    requiredDocs: toStringArray(raw.requiredDocs),
+    links: toStringArray(raw.links)
+  };
+}
+
+// 가이드 전체 기본 구조
+export function createSupportGuide() {
+  return {
+    overview: '',     // 테마 개요
+    programs: [],     // createSupportProgram()의 배열
+    regionalNotes: [],// 지역별 유의사항/팁 (string[])
+    faq: []           // 자주 묻는 질문 (string[])
+  };
+}
+
+export function normalizeSupportGuide(raw) {
+  const base = createSupportGuide();
+  if (!raw || typeof raw !== 'object') return base;
+  return {
+    overview: typeof raw.overview === 'string' ? raw.overview.trim() : base.overview,
+    programs: Array.isArray(raw.programs)
+      ? raw.programs
+          .map((p) => normalizeSupportProgram(p))
+          .filter(
+            (p) =>
+              p.name ||
+              p.summary ||
+              p.eligibility.length ||
+              p.benefits.length ||
+              p.applicationProcess.length ||
+              p.requiredDocs.length ||
+              p.links.length
+          )
+      : base.programs,
+    regionalNotes: toStringArray(raw.regionalNotes),
+    faq: toStringArray(raw.faq)
+  };
+}
+
+// 에디터가 사용할 복제기
+export function cloneSupportGuide(raw) {
+  return normalizeSupportGuide(raw);
+}
+
+// (참고) 앞서 안내한 공용 초기화 묶음도 함께 유지하세요.
 export function createEmptyThemeSections() {
   return {
     parentingGuide: createParentingGuide(),
     healthGuide: createHealthGuide(),
     lifestyleGuide: createLifestyleGuide(),
-    stockGuide: createStockGuide()
+    stockGuide: createStockGuide(),
+    supportGuide: createSupportGuide()
   };
 }
