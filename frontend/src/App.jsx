@@ -31,9 +31,10 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/theme/:themeId" element={<ThemePage />} />
         <Route path="/issue/:id" element={<IssuePage />} />
+        {/* ↓↓↓ 추가: 알 수 없는 경로는 홈으로 유도하거나 404 컴포넌트로 연결 */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
 
-      {/* 관리자는 별도 레이아웃을 사용한다. TODO: 실제 서비스에서는 /admin 전체에 인증을 붙여야 한다. */}
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<Navigate to="new" replace />} />
         <Route path="new" element={<AdminNewPage />} />

@@ -1,31 +1,53 @@
 // frontend/src/components/MetaTags.jsx
-// SPA 환경에서 Helmet을 사용해 문서 메타 태그를 주입한다.
-// Firestore 직행 구조와 무관하지만, SNS 공유 시 설명이 제대로 노출되도록 유지한다.
-
 import PropTypes from 'prop-types';
 import { Helmet } from 'react-helmet-async';
 
-function MetaTags({ title, description, url }) {
-  const resolvedTitle = title || '사건 프레임 아카이브';
+function buildCanonical(url) {
+  try {
+    const href = url || (typeof window !== 'undefined' ? window.location.href : '');
+    if (!href) return '';
+    const u = new URL(href);
+    // Netlify 배포 도메인 고정(필요 시 www 붙이면 여기서 정규화)
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return '';
+  }
+}
+
+function MetaTags({ title, description, url, image, type }) {
+  const siteName = 'infoall';
+  const resolvedTitle = title || 'infoall - 테마별 맞춤 정보';
   const resolvedDescription =
     description ||
-    '정책/사건의 배경을 먼저 이해하고, 필요 시 주요 쟁점과 진영별 시각을 함께 살펴보는 아카이브입니다.';
-  const resolvedUrl = url || (typeof window !== 'undefined' ? window.location.href : '');
+    '사건/정책, 육아, 생활, 건강 등 다양한 테마의 최신 정보를 한눈에 살펴보세요.';
+  const resolvedUrl = buildCanonical(url);
+  const resolvedImage = image || 'https://infoall.netlify.app/og-default.png'; // 없으면 추후 정적 파일 추가 권장
+  const resolvedType = type || 'website';
 
   return (
     <Helmet>
-      {/* TODO: 클라이언트 렌더링만으로는 일부 SNS 미리보기에 반영되지 않으니 장기적으로는 프리렌더/SSR을 검토한다. */}
       <title>{resolvedTitle}</title>
       <meta name="description" content={resolvedDescription} />
 
+      {/* Canonical */}
+      {resolvedUrl && <link rel="canonical" href={resolvedUrl} />}
+
+      {/* Open Graph */}
+      <meta property="og:site_name" content={siteName} />
+      <meta property="og:type" content={resolvedType} />
       <meta property="og:title" content={resolvedTitle} />
       <meta property="og:description" content={resolvedDescription} />
-      <meta property="og:url" content={resolvedUrl} />
-      <meta property="og:type" content="article" />
+      {resolvedUrl && <meta property="og:url" content={resolvedUrl} />}
+      <meta property="og:image" content={resolvedImage} />
 
+      {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={resolvedTitle} />
       <meta name="twitter:description" content={resolvedDescription} />
+      <meta name="twitter:image" content={resolvedImage} />
+
+      {/* 참고: SPA Helmet은 일부 크롤러에서 한계가 있으므로 장기적으로 프리렌더/SSR을 검토하세요. */}
     </Helmet>
   );
 }
@@ -33,13 +55,17 @@ function MetaTags({ title, description, url }) {
 MetaTags.propTypes = {
   title: PropTypes.string,
   description: PropTypes.string,
-  url: PropTypes.string
+  url: PropTypes.string,
+  image: PropTypes.string,
+  type: PropTypes.string
 };
 
 MetaTags.defaultProps = {
   title: '',
   description: '',
-  url: ''
+  url: '',
+  image: '',
+  type: ''
 };
 
 export default MetaTags;

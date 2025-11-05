@@ -3,24 +3,21 @@
 // AdminNewPage, AdminEditPage, Firestore 정규화 로직이 공통으로 사용한다.
 
 const toStringArray = (raw) => {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
+  if (!Array.isArray(raw)) return [];
   return raw
     .map((item) => {
-      if (typeof item === 'string') {
-        return item;
-      }
-      if (item === null || item === undefined) {
-        return '';
-      }
+      if (typeof item === 'string') return item;
+      if (item === null || item === undefined) return '';
       try {
         return String(item);
-      } catch (error) {
+      } catch {
         return '';
       }
     })
-    .map((item) => item.trimStart());
+    // 🔧 기존 trimStart() → trim()으로 변경 (양끝 공백 제거)
+    .map((item) => item.trim())
+    // 완전 빈 문자열 제거
+    .filter((item) => item.length > 0);
 };
 
 export const PARENTING_AGE_GROUP_PRESETS = [
@@ -44,12 +41,10 @@ export function createParentingAgeGroup(ageRange = '') {
 
 export function normalizeParentingAgeGroup(raw) {
   const base = createParentingAgeGroup();
-  if (!raw || typeof raw !== 'object') {
-    return base;
-  }
+  if (!raw || typeof raw !== 'object') return base;
   return {
-    ageRange: typeof raw.ageRange === 'string' ? raw.ageRange : base.ageRange,
-    focusSummary: typeof raw.focusSummary === 'string' ? raw.focusSummary : base.focusSummary,
+    ageRange: typeof raw.ageRange === 'string' ? raw.ageRange.trim() : base.ageRange,
+    focusSummary: typeof raw.focusSummary === 'string' ? raw.focusSummary.trim() : base.focusSummary,
     developmentFocus: toStringArray(raw.developmentFocus),
     careTips: toStringArray(raw.careTips),
     resources: toStringArray(raw.resources)
@@ -70,14 +65,13 @@ export function createParentingGuide({ withPresets = true } = {}) {
 
 export function normalizeParentingGuide(raw, { withPresets = true } = {}) {
   const base = createParentingGuide({ withPresets });
-  if (!raw || typeof raw !== 'object') {
-    return base;
-  }
-  const ageGroups = Array.isArray(raw.ageGroups) && raw.ageGroups.length > 0
-    ? raw.ageGroups.map((item) => normalizeParentingAgeGroup(item))
-    : base.ageGroups;
+  if (!raw || typeof raw !== 'object') return base;
+  const ageGroups =
+    Array.isArray(raw.ageGroups) && raw.ageGroups.length > 0
+      ? raw.ageGroups.map((item) => normalizeParentingAgeGroup(item))
+      : base.ageGroups;
   return {
-    overview: typeof raw.overview === 'string' ? raw.overview : base.overview,
+    overview: typeof raw.overview === 'string' ? raw.overview.trim() : base.overview,
     ageGroups,
     generalTips: toStringArray(raw.generalTips),
     emergencyContacts: toStringArray(raw.emergencyContacts)
@@ -109,12 +103,10 @@ export function createHealthCondition(name = '') {
 
 export function normalizeHealthCondition(raw) {
   const base = createHealthCondition();
-  if (!raw || typeof raw !== 'object') {
-    return base;
-  }
+  if (!raw || typeof raw !== 'object') return base;
   return {
-    name: typeof raw.name === 'string' ? raw.name : base.name,
-    summary: typeof raw.summary === 'string' ? raw.summary : base.summary,
+    name: typeof raw.name === 'string' ? raw.name.trim() : base.name,
+    summary: typeof raw.summary === 'string' ? raw.summary.trim() : base.summary,
     warningSigns: toStringArray(raw.warningSigns),
     careTips: toStringArray(raw.careTips),
     resources: toStringArray(raw.resources)
@@ -122,9 +114,7 @@ export function normalizeHealthCondition(raw) {
 }
 
 export function createHealthGuide({ withPresets = true } = {}) {
-  const conditions = withPresets
-    ? HEALTH_CONDITION_PRESETS.map((name) => createHealthCondition(name))
-    : [];
+  const conditions = withPresets ? HEALTH_CONDITION_PRESETS.map((n) => createHealthCondition(n)) : [];
   return {
     overview: '',
     conditions,
@@ -135,14 +125,13 @@ export function createHealthGuide({ withPresets = true } = {}) {
 
 export function normalizeHealthGuide(raw, { withPresets = true } = {}) {
   const base = createHealthGuide({ withPresets });
-  if (!raw || typeof raw !== 'object') {
-    return base;
-  }
-  const conditions = Array.isArray(raw.conditions) && raw.conditions.length > 0
-    ? raw.conditions.map((item) => normalizeHealthCondition(item))
-    : base.conditions;
+  if (!raw || typeof raw !== 'object') return base;
+  const conditions =
+    Array.isArray(raw.conditions) && raw.conditions.length > 0
+      ? raw.conditions.map((item) => normalizeHealthCondition(item))
+      : base.conditions;
   return {
-    overview: typeof raw.overview === 'string' ? raw.overview : base.overview,
+    overview: typeof raw.overview === 'string' ? raw.overview.trim() : base.overview,
     conditions,
     lifestyleTips: toStringArray(raw.lifestyleTips),
     emergencyGuide: toStringArray(raw.emergencyGuide)
@@ -154,20 +143,10 @@ export function cloneHealthGuide(raw) {
 }
 
 export function createLifestyleItem(name = '') {
-  return {
-    name,
-    highlight: '',
-    link: ''
-  };
+  return { name, highlight: '', link: '' };
 }
-
 export function createHotDeal(title = '') {
-  return {
-    title,
-    description: '',
-    link: '',
-    priceInfo: ''
-  };
+  return { title, description: '', link: '', priceInfo: '' };
 }
 
 export function createLifestyleGuide() {
@@ -182,26 +161,28 @@ export function createLifestyleGuide() {
 
 export function normalizeLifestyleGuide(raw) {
   const base = createLifestyleGuide();
-  if (!raw || typeof raw !== 'object') {
-    return base;
-  }
+  if (!raw || typeof raw !== 'object') return base;
   return {
-    overview: typeof raw.overview === 'string' ? raw.overview : base.overview,
+    overview: typeof raw.overview === 'string' ? raw.overview.trim() : base.overview,
     quickTips: toStringArray(raw.quickTips),
     hotItems: Array.isArray(raw.hotItems)
-      ? raw.hotItems.map((item) => ({
-          name: typeof item?.name === 'string' ? item.name : '',
-          highlight: typeof item?.highlight === 'string' ? item.highlight : '',
-          link: typeof item?.link === 'string' ? item.link : ''
-        }))
+      ? raw.hotItems
+          .map((item) => ({
+            name: typeof item?.name === 'string' ? item.name.trim() : '',
+            highlight: typeof item?.highlight === 'string' ? item.highlight.trim() : '',
+            link: typeof item?.link === 'string' ? item.link.trim() : ''
+          }))
+          .filter((x) => x.name || x.highlight || x.link)
       : base.hotItems,
     hotDeals: Array.isArray(raw.hotDeals)
-      ? raw.hotDeals.map((deal) => ({
-          title: typeof deal?.title === 'string' ? deal.title : '',
-          description: typeof deal?.description === 'string' ? deal.description : '',
-          link: typeof deal?.link === 'string' ? deal.link : '',
-          priceInfo: typeof deal?.priceInfo === 'string' ? deal.priceInfo : ''
-        }))
+      ? raw.hotDeals
+          .map((deal) => ({
+            title: typeof deal?.title === 'string' ? deal.title.trim() : '',
+            description: typeof deal?.description === 'string' ? deal.description.trim() : '',
+            link: typeof deal?.link === 'string' ? deal.link.trim() : '',
+            priceInfo: typeof deal?.priceInfo === 'string' ? deal.priceInfo.trim() : ''
+          }))
+          .filter((x) => x.title || x.description || x.link || x.priceInfo)
       : base.hotDeals,
     affiliateNotes: toStringArray(raw.affiliateNotes)
   };
@@ -213,23 +194,11 @@ export function cloneLifestyleGuide(raw) {
 
 // ---- Stocks (주식정보) ----
 export function createSectorHighlight(name = '') {
-  return {
-    name,
-    outlook: '',
-    leaders: []
-  };
+  return { name, outlook: '', leaders: [] };
 }
-
 export function createCompanyAnalysis(name = '') {
-  return {
-    name,
-    thesis: '',
-    catalysts: [],
-    risks: [],
-    valuation: ''
-  };
+  return { name, thesis: '', catalysts: [], risks: [], valuation: '' };
 }
-
 export function createStockGuide() {
   return {
     overview: '',
@@ -239,93 +208,35 @@ export function createStockGuide() {
     watchlist: []
   };
 }
-
 export function normalizeStockGuide(raw) {
   const base = createStockGuide();
-  if (!raw || typeof raw !== 'object') {
-    return base;
-  }
+  if (!raw || typeof raw !== 'object') return base;
   return {
-    overview: typeof raw.overview === 'string' ? raw.overview : base.overview,
-    marketSummary: typeof raw.marketSummary === 'string' ? raw.marketSummary : base.marketSummary,
+    overview: typeof raw.overview === 'string' ? raw.overview.trim() : base.overview,
+    marketSummary: typeof raw.marketSummary === 'string' ? raw.marketSummary.trim() : base.marketSummary,
     sectorHighlights: Array.isArray(raw.sectorHighlights)
-      ? raw.sectorHighlights.map((s) => ({
-          name: typeof s?.name === 'string' ? s.name : '',
-          outlook: typeof s?.outlook === 'string' ? s.outlook : '',
-          leaders: toStringArray(s?.leaders)
-        }))
+      ? raw.sectorHighlights
+          .map((s) => ({
+            name: typeof s?.name === 'string' ? s.name.trim() : '',
+            outlook: typeof s?.outlook === 'string' ? s.outlook.trim() : '',
+            leaders: toStringArray(s?.leaders)
+          }))
+          .filter((x) => x.name || x.outlook || (x.leaders && x.leaders.length))
       : base.sectorHighlights,
     companyAnalyses: Array.isArray(raw.companyAnalyses)
-      ? raw.companyAnalyses.map((c) => ({
-          name: typeof c?.name === 'string' ? c.name : '',
-          thesis: typeof c?.thesis === 'string' ? c.thesis : '',
-          catalysts: toStringArray(c?.catalysts),
-          risks: toStringArray(c?.risks),
-          valuation: typeof c?.valuation === 'string' ? c.valuation : ''
-        }))
+      ? raw.companyAnalyses
+          .map((c) => ({
+            name: typeof c?.name === 'string' ? c.name.trim() : '',
+            thesis: typeof c?.thesis === 'string' ? c.thesis.trim() : '',
+            catalysts: toStringArray(c?.catalysts),
+            risks: toStringArray(c?.risks),
+            valuation: typeof c?.valuation === 'string' ? c.valuation.trim() : ''
+          }))
+          .filter((x) => x.name || x.thesis || x.valuation || (x.catalysts && x.catalysts.length) || (x.risks && x.risks.length))
       : base.companyAnalyses,
     watchlist: toStringArray(raw.watchlist)
   };
 }
-
-export function cloneStockGuide(raw) {
-  return normalizeStockGuide(raw);
-}
-// ---- Support (정부지원정보) ----
-export function createSupportProgram(name = '') {
-  return {
-    name,
-    summary: '',
-    eligibility: [],
-    benefits: [],
-    requiredDocs: [],
-    applicationProcess: []
-  };
-}
-
-export function normalizeSupportProgram(raw) {
-  const base = createSupportProgram();
-  if (!raw || typeof raw !== 'object') {
-    return base;
-  }
-  return {
-    name: typeof raw.name === 'string' ? raw.name : base.name,
-    summary: typeof raw.summary === 'string' ? raw.summary : base.summary,
-    eligibility: toStringArray(raw.eligibility),
-    benefits: toStringArray(raw.benefits),
-    requiredDocs: toStringArray(raw.requiredDocs),
-    applicationProcess: toStringArray(raw.applicationProcess)
-  };
-}
-
-export function createSupportGuide({ withPresets = true } = {}) {
-  return {
-    overview: '',
-    programs: [],
-    commonResources: []
-  };
-}
-
-export function normalizeSupportGuide(raw, { withPresets = true } = {}) {
-  const base = createSupportGuide({ withPresets });
-  if (!raw || typeof raw !== 'object') {
-    return base;
-  }
-  const programs = Array.isArray(raw.programs) && raw.programs.length > 0
-    ? raw.programs.map((item) => normalizeSupportProgram(item))
-    : base.programs;
-  return {
-    overview: typeof raw.overview === 'string' ? raw.overview : base.overview,
-    programs,
-    commonResources: toStringArray(raw.commonResources)
-  };
-}
-
-export function cloneSupportGuide(raw) {
-  return normalizeSupportGuide(raw, { withPresets: false });
-}
-
-
 export function createEmptyThemeSections() {
   return {
     parentingGuide: createParentingGuide(),

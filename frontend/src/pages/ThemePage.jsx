@@ -24,6 +24,7 @@ function ThemePage() {
   const requestedThemeId = params.themeId ?? DEFAULT_THEME_ID;
   const theme = getThemeById(requestedThemeId);
   const isUnknownTheme = requestedThemeId !== theme.id;
+
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -38,35 +39,25 @@ function ThemePage() {
   const hasCategoryFilter = categoryOptions.length > 0;
 
   const subcategoryOptions = useMemo(() => {
-    if (!hasCategoryFilter || categoryFilter === '전체') {
-      return [];
-    }
+    if (!hasCategoryFilter || categoryFilter === '전체') return [];
     return getSubcategoryOptions(theme.id, categoryFilter);
   }, [categoryFilter, hasCategoryFilter, theme.id]);
 
+  // 필터 UI 상태 정합성 유지
   useEffect(() => {
     if (!hasCategoryFilter) {
-      if (categoryFilter !== '전체') {
-        setCategoryFilter('전체');
-      }
-      if (subcategoryFilter !== '전체') {
-        setSubcategoryFilter('전체');
-      }
+      if (categoryFilter !== '전체') setCategoryFilter('전체');
+      if (subcategoryFilter !== '전체') setSubcategoryFilter('전체');
       return;
     }
-
     if (categoryFilter === '전체') {
-      if (subcategoryFilter !== '전체') {
-        setSubcategoryFilter('전체');
-      }
+      if (subcategoryFilter !== '전체') setSubcategoryFilter('전체');
       return;
     }
-
     if (!categoryOptions.includes(categoryFilter)) {
       setCategoryFilter('전체');
       return;
     }
-
     if (subcategoryFilter !== '전체' && !subcategoryOptions.includes(subcategoryFilter)) {
       setSubcategoryFilter('전체');
     }
@@ -112,7 +103,7 @@ function ThemePage() {
         setIsLoading(false);
       }
     },
-    [loadIssues, searchKeyword, theme.id]
+    [loadIssues, searchKeyword, sortOption, theme.id]
   );
 
   const handleReset = useCallback(() => {
@@ -123,15 +114,18 @@ function ThemePage() {
     loadIssues();
   }, [loadIssues]);
 
+  // 🔧 버그 수정: 카테고리·서브카테고리 매칭 로직을 명시적으로 분리
   const filteredItems = useMemo(() => {
-    if (!hasCategoryFilter) {
-      return items;
-    }
+    if (!hasCategoryFilter) return items;
+
     return items.filter((item) => {
-      const matchesCategory = categoryFilter === '전체' || item.category === categoryFilter;
-      const matchesSubcategory =
-        !matchesCategory || subcategoryFilter === '전체' || item.subcategory === subcategoryFilter;
-      return matchesCategory && matchesSubcategory;
+      const categoryOk = categoryFilter === '전체' || item.category === categoryFilter;
+      if (!categoryOk) return false;
+
+      const subcategoryOk =
+        subcategoryFilter === '전체' || item.subcategory === subcategoryFilter;
+
+      return subcategoryOk;
     });
   }, [categoryFilter, hasCategoryFilter, items, subcategoryFilter]);
 
@@ -168,7 +162,10 @@ function ThemePage() {
           </Link>
         </div>
 
-        <form className="mt-6 grid gap-4 md:grid-cols-[minmax(240px,1fr),minmax(160px,200px),minmax(160px,200px),auto]" onSubmit={handleSearch}>
+        <form
+          className="mt-6 grid gap-4 md:grid-cols-[minmax(240px,1fr),minmax(160px,200px),minmax(160px,200px),auto]"
+          onSubmit={handleSearch}
+        >
           <label className="flex flex-col gap-2 text-sm">
             <span className="font-medium text-slate-700 dark:text-slate-200">검색어</span>
             <input
@@ -211,13 +208,14 @@ function ThemePage() {
                   ))}
                 </select>
               </label>
+
               <label className="flex flex-col gap-2 text-sm">
-                <span className="font-medium text-slate-700 dark:text-slate-200">하위 카테고리</span>
+                <span className="font-medium text-slate-700 dark:text-slate-200">세부 카테고리</span>
                 <select
                   value={subcategoryFilter}
                   onChange={(event) => setSubcategoryFilter(event.target.value)}
                   disabled={categoryFilter === '전체'}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 disabled:opacity-50"
                 >
                   <option value="전체">전체</option>
                   {subcategoryOptions.map((option) => (
@@ -228,23 +226,19 @@ function ThemePage() {
                 </select>
               </label>
             </>
-          ) : (
-            <div className="flex flex-col justify-end text-xs text-slate-500 dark:text-slate-400">
-              <p>이 테마는 별도 카테고리 없이 정렬 기준만 적용됩니다.</p>
-            </div>
-          )}
+          ) : null}
 
-          <div className="flex items-end gap-2">
+          <div className="flex items-end">
             <button
               type="submit"
-              className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
             >
               검색
             </button>
             <button
               type="button"
               onClick={handleReset}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900"
+              className="ml-2 inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
             >
               초기화
             </button>
@@ -252,42 +246,23 @@ function ThemePage() {
         </form>
       </header>
 
-      {isLoading && (
-        <p className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-          데이터를 불러오는 중입니다...
-        </p>
-      )}
+      {error ? (
+        <p className="rounded-lg bg-rose-50 p-4 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-200">{error}</p>
+      ) : null}
 
-      {error && (
-        <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
-          {error}
-        </p>
-      )}
-
-      {!isLoading && !error && (
-        <div className="space-y-4 text-xs text-slate-500 dark:text-slate-400">
-          <p>
-            정렬: <strong>{SORT_OPTIONS.find((option) => option.value === sortOption)?.label}</strong>
-            {hasCategoryFilter && (
-              <>
-                , 카테고리: <strong>{categoryFilter}</strong>, 하위 카테고리: <strong>{subcategoryFilter}</strong>
-              </>
-            )}
-            , 검색: <strong>{isSearchMode ? searchKeyword.trim() || '전체' : '전체'}</strong>
-          </p>
-          <p>총 {filteredItems.length}건이 현재 조건에 맞습니다.</p>
-        </div>
-      )}
-
-      <div className="grid gap-5 md:grid-cols-2">
-        {filteredItems.length === 0 ? (
-          <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-300">
-            조건에 맞는 게시물이 없습니다. 검색어나 필터를 조정해 주세요.
-          </div>
-        ) : (
-          filteredItems.map((issue) => <IssueCard key={issue.id} issue={issue} />)
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {(isLoading ? Array.from({ length: 6 }) : filteredItems).map((item, idx) =>
+          isLoading ? (
+            <div key={idx} className="h-40 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-700/40" />
+          ) : (
+            <IssueCard key={item.id} issue={item} />
+          )
         )}
       </div>
+
+      {!isLoading && !error && filteredItems.length === 0 ? (
+        <p className="text-center text-sm text-slate-500">조건에 맞는 게시글이 없습니다.</p>
+      ) : null}
     </section>
   );
 }
