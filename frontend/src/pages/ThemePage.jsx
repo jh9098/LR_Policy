@@ -1,6 +1,4 @@
 // frontend/src/pages/ThemePage.jsx
-// 특정 테마에 속한 게시물을 정렬/검색/필터링해 보여주는 페이지.
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import IssueCard from '../components/IssueCard.jsx';
@@ -19,6 +17,8 @@ const SORT_OPTIONS = [
   { value: 'title', label: '제목순 (가나다)' }
 ];
 
+const ITEMS_PER_PAGE = 6;
+
 function ThemePage() {
   const params = useParams();
   const requestedThemeId = params.themeId ?? DEFAULT_THEME_ID;
@@ -33,6 +33,7 @@ function ThemePage() {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('전체');
   const [subcategoryFilter, setSubcategoryFilter] = useState('전체');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const categoryOptions = useMemo(() => getCategoryOptions(theme.id), [theme.id]);
   const categoryFilterOptions = useMemo(() => getCategoryFilterOptions(theme.id), [theme.id]);
@@ -43,7 +44,6 @@ function ThemePage() {
     return getSubcategoryOptions(theme.id, categoryFilter);
   }, [categoryFilter, hasCategoryFilter, theme.id]);
 
-  // 필터 UI 상태 정합성 유지
   useEffect(() => {
     if (!hasCategoryFilter) {
       if (categoryFilter !== '전체') setCategoryFilter('전체');
@@ -66,6 +66,7 @@ function ThemePage() {
   const loadIssues = useCallback(async () => {
     setIsLoading(true);
     setError('');
+    setCurrentPage(1);
     try {
       const list = await getIssuesByTheme(theme.id, { sort: sortOption, limitCount: 100 });
       setItems(list);
@@ -92,6 +93,7 @@ function ThemePage() {
       }
       setIsLoading(true);
       setError('');
+      setCurrentPage(1);
       try {
         const list = await searchIssuesByTheme(theme.id, keyword, { limitCount: 120, sort: sortOption });
         setItems(list);
@@ -111,10 +113,10 @@ function ThemePage() {
     setCategoryFilter('전체');
     setSubcategoryFilter('전체');
     setSortOption('recent');
+    setCurrentPage(1);
     loadIssues();
   }, [loadIssues]);
 
-  // 🔧 버그 수정: 카테고리·서브카테고리 매칭 로직을 명시적으로 분리
   const filteredItems = useMemo(() => {
     if (!hasCategoryFilter) return items;
 
@@ -122,12 +124,22 @@ function ThemePage() {
       const categoryOk = categoryFilter === '전체' || item.category === categoryFilter;
       if (!categoryOk) return false;
 
-      const subcategoryOk =
-        subcategoryFilter === '전체' || item.subcategory === subcategoryFilter;
-
+      const subcategoryOk = subcategoryFilter === '전체' || item.subcategory === subcategoryFilter;
       return subcategoryOk;
     });
   }, [categoryFilter, hasCategoryFilter, items, subcategoryFilter]);
+
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = useMemo(() => {
+    const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredItems.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  }, [filteredItems, currentPage]);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const siteUrl = useMemo(
     () => (typeof window !== 'undefined' ? `${window.location.origin}/theme/${theme.id}` : ''),
@@ -251,7 +263,7 @@ function ThemePage() {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {(isLoading ? Array.from({ length: 6 }) : filteredItems).map((item, idx) =>
+        {(isLoading ? Array.from({ length: 6 }) : paginatedItems).map((item, idx) =>
           isLoading ? (
             <div key={idx} className="h-40 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-700/40" />
           ) : (
@@ -263,6 +275,43 @@ function ThemePage() {
       {!isLoading && !error && filteredItems.length === 0 ? (
         <p className="text-center text-sm text-slate-500">조건에 맞는 게시글이 없습니다.</p>
       ) : null}
+
+      {!isLoading && !error && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+          >
+            ←
+          </button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <button
+              key={page}
+              type="button"
+              onClick={() => handlePageChange(page)}
+              className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border text-sm font-semibold shadow-sm transition ${
+                currentPage === page
+                  ? 'border-indigo-600 bg-indigo-600 text-white dark:border-indigo-500 dark:bg-indigo-500'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+          
+          <button
+            type="button"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+          >
+            →
+          </button>
+        </div>
+      )}
     </section>
   );
 }

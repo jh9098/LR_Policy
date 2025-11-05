@@ -1,7 +1,4 @@
 // frontend/src/pages/HomePage.jsx
-// 요구사항: (1) 최상단 최근 등록 10개(테마 무관, "테마명 | 제목" 한 줄), (2) 테마별 최근 5개(제목만 한 줄),
-// (3) 검색(q) 쿼리 감지 시 검색모드로 동작. 카드형은 모두 제거하고 Title-only 리스트로 통일.
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import MetaTags from '../components/MetaTags.jsx';
@@ -20,17 +17,36 @@ function getThemeLabel(themeId) {
   return t?.label ?? themeId ?? '기타';
 }
 
+// 테마별 색상 클래스 매핑
+const THEME_COLOR_CLASSES = {
+  policy: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',
+  stocks: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
+  parenting: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200',
+  lifestyle: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
+  health: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200',
+  support: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200'
+};
+
 // 제목 한 줄 리스트 아이템
 function TitleItem({ to, title, date, theme }) {
-  const themedTitle = theme ? `${getThemeLabel(theme)} | ${title || '제목 없음'}` : (title || '제목 없음');
+  const themeLabel = theme ? getThemeLabel(theme) : null;
+  const themeColorClass = theme ? (THEME_COLOR_CLASSES[theme] || 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200') : '';
+  
   return (
     <li className="flex items-center justify-between gap-3">
       <Link
         to={to}
-        className="block truncate text-sm text-slate-800 hover:text-indigo-600 dark:text-slate-100 dark:hover:text-indigo-200"
-        title={themedTitle}
+        className="flex min-w-0 flex-1 items-center gap-2 text-sm hover:text-indigo-600 dark:hover:text-indigo-200"
+        title={themeLabel ? `${themeLabel} | ${title || '제목 없음'}` : (title || '제목 없음')}
       >
-        {themedTitle}
+        {themeLabel && (
+          <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${themeColorClass}`}>
+            {themeLabel}
+          </span>
+        )}
+        <span className="truncate text-slate-800 dark:text-slate-100">
+          {title || '제목 없음'}
+        </span>
       </Link>
       {date ? <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{date}</span> : null}
     </li>
@@ -38,11 +54,21 @@ function TitleItem({ to, title, date, theme }) {
 }
 
 // 섹션 카드(제목 리스트 전용)
-function TitleSection({ heading, items, emptyMessage, viewMoreTo, showThemePrefix = false }) {
+function TitleSection({ heading, items, emptyMessage, viewMoreTo, showThemePrefix = false, themeId }) {
+  // 테마별 색상 클래스 (themeId가 있을 때만 적용)
+  const themeColorClass = themeId ? (THEME_COLOR_CLASSES[themeId] || 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200') : '';
+  
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{heading}</h2>
+        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+          {themeId && (
+            <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${themeColorClass}`}>
+              {heading.split(' ')[0]}
+            </span>
+          )}
+          <span>{heading}</span>
+        </h2>
         {viewMoreTo ? (
           <Link
             to={viewMoreTo}
@@ -64,7 +90,6 @@ function TitleSection({ heading, items, emptyMessage, viewMoreTo, showThemePrefi
               to={`/issue/${it.id}`}
               title={it.title}
               date={it.date}
-              // 상단 "최근등록 10개"에는 테마 프리픽스 표시, 테마 섹션은 기본(제목만)
               theme={showThemePrefix ? it.theme : undefined}
             />
           ))}
@@ -90,10 +115,10 @@ function HomePage() {
     setError('');
     try {
       const [recent, perTheme] = await Promise.all([
-        getRecentIssues(10), // 테마 무관 최신 10개
+        getRecentIssues(10),
         Promise.all(
           THEME_CONFIG.map(async (t) => {
-            const list = await getTopIssuesByTheme(t.id, 5); // 테마별 최신 5개
+            const list = await getTopIssuesByTheme(t.id, 5);
             return [t.id, list];
           })
         )
@@ -114,13 +139,11 @@ function HomePage() {
     setLoading(true);
     setError('');
     try {
-      // 검색은 테마별 5개로 잘라서 표시
       const map = await searchIssuesAcrossThemes(q, { limitPerTheme: 40, sort: 'recent' });
       const buckets = createEmptyBuckets();
       for (const t of THEME_CONFIG) {
         buckets[t.id] = (map?.[t.id] ?? []).slice(0, 5);
       }
-      // 상단 "최근 10개" 영역도 검색 모드에서는 "검색 상위 10개(테마 무관)"로 대체
       const merged = Object.values(map ?? {}).flat();
       const top10 = merged
         .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
@@ -148,12 +171,11 @@ function HomePage() {
         url={siteUrl}
       />
 
-      {/* 최상단: 최근 등록 10개(테마 무관) + '테마명 | 제목' 표기 */}
       <TitleSection
         heading={q ? `검색 상위 10개 (${q})` : '최근 등록 10개'}
         items={recent10}
         emptyMessage={q ? '검색 결과가 없습니다.' : '아직 등록된 글이 없습니다.'}
-        viewMoreTo={q ? '' : '/theme/stocks'} // 필요시 링크 변경/제거 가능
+        viewMoreTo=""
         showThemePrefix
       />
 
@@ -168,7 +190,6 @@ function HomePage() {
         </p>
       )}
 
-      {/* 테마별 최근 5개 제목 리스트 (여긴 기존처럼 제목만) */}
       <div className="grid gap-6 md:grid-cols-2">
         {THEME_CONFIG.map((t) => (
           <TitleSection
@@ -177,6 +198,7 @@ function HomePage() {
             items={(themeBuckets[t.id] ?? []).slice(0, 5)}
             emptyMessage="아직 항목이 없습니다."
             viewMoreTo={`/theme/${t.id}`}
+            themeId={t.id}  // 이 줄 추가
           />
         ))}
       </div>
