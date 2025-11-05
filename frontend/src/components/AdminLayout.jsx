@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import SiteHeader from './SiteHeader.jsx';
 
 const NAV_ITEMS = [
   { type: 'route', label: '새 글 작성', to: '/admin/new', description: 'AI JSON 붙여넣기 + Firestore 등록' },
@@ -11,11 +12,15 @@ const NAV_ITEMS = [
   { type: 'placeholder', label: '환경/설정 (준비 중)', description: 'TODO: 향후 접근 제한 및 감사 로그' }
 ];
 
-function AdminLayout() {
+export default function AdminLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
+    <div className="min-h-screen bg-slate-50 text-slate-900 transition-colors dark:bg-slate-900 dark:text-slate-100">
+      {/* ✅ 사이트 공용 상단 메뉴 (Home과 동일) */}
+      <SiteHeader />
+
+      {/* Admin 전용 상단 바 */}
       <header className="border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 lg:px-8">
           <div className="flex items-start justify-between gap-4">
@@ -33,6 +38,8 @@ function AdminLayout() {
               {isMenuOpen ? '닫기' : '메뉴'}
             </button>
           </div>
+
+          {/* Admin 탭 네비게이션 */}
           <nav
             className={`${isMenuOpen ? 'flex' : 'hidden'} flex-col gap-2 border-t border-slate-200 pt-3 text-sm lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:gap-3 lg:border-none lg:pt-0`}
           >
@@ -75,6 +82,7 @@ function AdminLayout() {
         </div>
       </header>
 
+      {/* 본문 */}
       <main className="bg-slate-50/40 px-4 py-6 dark:bg-slate-900/40 lg:px-8 lg:py-10">
         <div className="mx-auto w-full max-w-6xl space-y-6">
           <header className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -88,5 +96,3 @@ function AdminLayout() {
     </div>
   );
 }
-
-export default AdminLayout;
