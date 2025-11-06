@@ -11,8 +11,10 @@ import {
 import SimpleListEditor from './SimpleListEditor.jsx';
 
 function HealthThemeEditor({ guide, onChange }) {
+  // guide가 없으면 기본 템플릿 만들어서 씀
   const safeGuide = guide ?? createHealthGuide({ withPresets: true });
 
+  // 매번 불변성 유지해서 상위로 올려주기
   const updateGuide = (updater) => {
     const draft = cloneHealthGuide(safeGuide);
     updater(draft);
@@ -49,17 +51,29 @@ function HealthThemeEditor({ guide, onChange }) {
     });
   };
 
+  // 개별 필드(이름, 요약 등) 수정
   const handleConditionField = (index, field, value) => {
     updateGuide((draft) => {
-      if (!draft.conditions[index]) draft.conditions[index] = createHealthCondition();
-      draft.conditions[index] = { ...draft.conditions[index], [field]: value };
+      if (!draft.conditions[index]) {
+        draft.conditions[index] = createHealthCondition();
+      }
+      draft.conditions[index] = {
+        ...draft.conditions[index],
+        [field]: value
+      };
     });
   };
 
+  // 리스트형 필드(경고 신호, 관리/돌봄 팁, 추천 자료) 수정
   const handleConditionList = (index, field, list) => {
     updateGuide((draft) => {
-      if (!draft.conditions[index]) draft.conditions[index] = createHealthCondition();
-      draft.conditions[index] = { ...draft.conditions[index], [field]: list };
+      if (!draft.conditions[index]) {
+        draft.conditions[index] = createHealthCondition();
+      }
+      draft.conditions[index] = {
+        ...draft.conditions[index],
+        [field]: list
+      };
     });
   };
 
@@ -71,39 +85,39 @@ function HealthThemeEditor({ guide, onChange }) {
           추천 주제: {HEALTH_CONDITION_PRESETS.join(' / ')}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          운영 원칙: 병명 심층 콘텐츠는 <strong className="font-semibold text-emerald-700 dark:text-emerald-300">‘질병관리’</strong>에서만 다룹니다.
-          예방/응급·증상·검사 글에서는 병태생리 상세 기술을 피하고, 필요한 경우 관련 질병관리 문서로 링크하세요.
+          운영 원칙: 병명 심층 콘텐츠는 <strong className="font-semibold text-emerald-700 dark:text-emerald-300">‘질병관리’</strong>에서만
+          다룹니다. 예방/응급·증상·검사 글에서는 병태생리 상세 기술을 피하고, 필요한 경우 관련 질병관리 문서로 링크하세요.
         </p>
       </header>
 
       <label className="flex flex-col gap-2 text-sm">
-        <span className="font-medium">건강 테마 개요</span>
+        <span className="font-medium">전체 개요</span>
         <textarea
           value={safeGuide.overview}
           onChange={handleOverviewChange}
-          className="min-h-[120px] rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-slate-900 dark:text-slate-100"
-          placeholder="전체 건강 테마에서 전달할 핵심 메시지를 정리해 주세요."
+          className="min-h-[100px] rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-slate-900 dark:text-slate-100"
+          placeholder="질환군 전체를 한눈에 볼 수 있는 설명을 입력하세요. (예: 암 고위험군 생활수칙, 만성질환 관리 공통원칙)"
         />
       </label>
 
       <SimpleListEditor
-        title="생활 습관 팁"
-        description="운동, 식습관, 수면 등 꾸준히 실천할 수 있는 행동을 정리합니다."
+        title="생활/관리 팁"
+        description="질환과 관계없이 공통으로 안내할 수 있는 생활습관, 운동, 식단, 상담 채널 등을 입력합니다."
         items={safeGuide.lifestyleTips}
         onChange={handleLifestyleTips}
         addLabel="생활 팁 추가"
-        itemPlaceholder="예: 하루 30분 이상 가벼운 유산소 운동으로 혈류를 개선하세요."
+        itemPlaceholder="예: 주 3회 30분 이상 유산소 운동"
       />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">상태별 세부 가이드</h3>
+          <h3 className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">질환별 세부 가이드</h3>
           <button
             type="button"
             onClick={addCondition}
-            className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            className="inline-flex items-center rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
           >
-            건강 주제 추가
+            + 건강 주제 추가
           </button>
         </div>
 
@@ -142,11 +156,11 @@ function HealthThemeEditor({ guide, onChange }) {
               <label className="flex flex-col gap-2 text-sm">
                 <span className="font-medium">한눈에 보는 요약</span>
                 <textarea
-                  value={condition.summary}
-                  onChange={(event) => handleConditionField(index, 'summary', event.target.value)}
-                  className="min-h-[100px] rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-slate-900 dark:text-slate-100"
-                  placeholder="질환 원인, 진행 특징, 진료 시기 등을 요약해 주세요."
-                />
+                    value={condition.summary}
+                    onChange={(event) => handleConditionField(index, 'summary', event.target.value)}
+                    className="min-h-[100px] rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-slate-900 dark:text-slate-100"
+                    placeholder="질환 원인, 진행 특징, 진료 시기 등을 요약해 주세요."
+                  />
               </label>
 
               <SimpleListEditor
