@@ -6,12 +6,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
-import LifestyleThemeEditor from '../../components/admin/LifestyleThemeEditor.jsx';
-import LifestyleThemePreview from '../../components/admin/LifestyleThemePreview.jsx';
-import ParentingThemeEditor from '../../components/admin/ParentingThemeEditor.jsx';
-import ParentingThemePreview from '../../components/admin/ParentingThemePreview.jsx';
-import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
-import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
+import StockThemeEditor from '../../components/admin/StockThemeEditor.jsx';
+import StockThemePreview from '../../components/admin/StockThemePreview.jsx';
+import SupportThemeEditor from '../../components/admin/SupportThemeEditor.jsx';
+import SupportThemePreview from '../../components/admin/SupportThemePreview.jsx';
+import {
+  createHealthGuide,
+  createLifestyleGuide,
+  createParentingGuide,
+  createStockGuide,
+  createSupportGuide,
+  normalizeHealthGuide,
+  normalizeLifestyleGuide,
+  normalizeParentingGuide,
+  normalizeStockGuide,
+  normalizeSupportGuide
+} from '../../utils/themeDraftDefaults.js';
 import {
   getCategoryOptions,
   getDefaultCategory,
@@ -22,14 +32,6 @@ import {
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
 import { deleteIssue, getIssueById, updateIssue } from '../../firebaseClient.js';
 import { emptyDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
-import {
-  createHealthGuide,
-  createLifestyleGuide,
-  createParentingGuide,
-  normalizeHealthGuide,
-  normalizeLifestyleGuide,
-  normalizeParentingGuide
-} from '../../utils/themeDraftDefaults.js';
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const CONSERVATIVE_NOTE =
@@ -62,7 +64,7 @@ function normalizeDraft(raw) {
             : [''],
           intensity:
             typeof raw.progressiveView.intensity === 'number' ? raw.progressiveView.intensity : -1,
-          note: raw.progressiveView.note || PROGRESSIVE_NOTE
+          note: raw.progressiveView.note || '아래 내용은 일부 진보측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.'
         }
       : null,
     conservativeView: raw.conservativeView
@@ -73,11 +75,11 @@ function normalizeDraft(raw) {
             : [''],
           intensity:
             typeof raw.conservativeView.intensity === 'number' ? raw.conservativeView.intensity : -1,
-          note: raw.conservativeView.note || CONSERVATIVE_NOTE
+          note: raw.conservativeView.note || '아래 내용은 일부 보수측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.'
         }
       : null,
     impactToLife: raw.impactToLife
-      ? { text: raw.impactToLife.text ?? '', note: raw.impactToLife.note || IMPACT_NOTE }
+      ? { text: raw.impactToLife.text ?? '', note: '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)' }
       : null,
     sources: Array.isArray(raw.sources)
       ? raw.sources.map((source) => ({
@@ -88,9 +90,12 @@ function normalizeDraft(raw) {
           note: source?.note ?? ''
         }))
       : [],
+    // ✅ 가이드 정규화 추가/유지
     parentingGuide: normalizeParentingGuide(raw.parentingGuide ?? base.parentingGuide, { withPresets: true }),
     healthGuide: normalizeHealthGuide(raw.healthGuide ?? base.healthGuide, { withPresets: true }),
-    lifestyleGuide: normalizeLifestyleGuide(raw.lifestyleGuide ?? base.lifestyleGuide)
+    lifestyleGuide: normalizeLifestyleGuide(raw.lifestyleGuide ?? base.lifestyleGuide),
+    stockGuide: normalizeStockGuide(raw.stockGuide ?? base.stockGuide),
+    supportGuide: normalizeSupportGuide(raw.supportGuide ?? base.supportGuide, { withPresets: true })
   };
 }
 
@@ -231,34 +236,40 @@ function AdminEditPage() {
     setIssueDraft((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleThemeChange = (event) => {
-    const { value } = event.target;
-    const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
-    setIssueDraft((prev) => {
-      if (!prev) {
-        return prev;
-      }
-      const base = ensureThemeGuides(prev);
-      const nextThemeMeta = THEME_CONFIG.find((item) => item.id === nextTheme);
-      const draft = {
-        ...base,
-        theme: nextTheme,
-        parentingGuide: base.parentingGuide ?? createParentingGuide(),
-        healthGuide: base.healthGuide ?? createHealthGuide(),
-        lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide()
-      };
-      const defaultCategory = getDefaultCategory(nextTheme);
-      draft.category = isValidCategory(nextTheme, base.category) ? base.category : defaultCategory;
-      const allowedSubcategories = getSubcategoryOptions(nextTheme, draft.category);
-      draft.subcategory = allowedSubcategories.includes(base.subcategory) ? base.subcategory : '';
-      if (!nextThemeMeta?.showPerspectives) {
-        draft.progressiveView = null;
-        draft.conservativeView = null;
-      }
-      return draft;
-    });
-  };
+// REPLACE handleThemeChange
+const handleThemeChange = (event) => {
+  const { value } = event.target;
+  const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
+  setIssueDraft((prev) => {
+    if (!prev) return prev;
 
+    const base = ensureThemeGuides(prev);
+    const nextThemeMeta = THEME_CONFIG.find((t) => t.id === nextTheme);
+
+    const draft = {
+      ...base,
+      theme: nextTheme,
+      parentingGuide: base.parentingGuide ?? createParentingGuide(),
+      healthGuide: base.healthGuide ?? createHealthGuide(),
+      lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide(),
+      stockGuide: base.stockGuide ?? createStockGuide(),
+      supportGuide: base.supportGuide ?? createSupportGuide({ withPresets: true })
+    };
+
+    const defaultCategory = getDefaultCategory(nextTheme);
+    draft.category = isValidCategory(nextTheme, base.category) ? base.category : defaultCategory;
+    const allowedSubcategories = getSubcategoryOptions(nextTheme, draft.category);
+    draft.subcategory = allowedSubcategories.includes(base.subcategory) ? base.subcategory : '';
+
+    if (!nextThemeMeta?.showPerspectives) {
+      draft.progressiveView = null;
+      draft.conservativeView = null;
+    }
+
+    return draft;
+  });
+};
+  
   const handleParentingGuideChange = (nextGuide) => {
     setIssueDraft((prev) => (prev ? { ...prev, parentingGuide: nextGuide } : prev));
   };
@@ -496,8 +507,11 @@ function AdminEditPage() {
         conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null,
         parentingGuide: selectedTheme === 'parenting' ? issueDraft.parentingGuide : null,
         healthGuide: selectedTheme === 'health' ? issueDraft.healthGuide : null,
-        lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null
+        lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null,
+        stockGuide: selectedTheme === 'stocks' ? issueDraft.stockGuide : null,
+        supportGuide: selectedTheme === 'support' ? issueDraft.supportGuide : null
       };
+            
       await updateIssue(id, payload);
       setIssueDraft(payload);
       setSubmitSuccess('수정이 완료되어 Firestore에 반영되었습니다.');
@@ -727,6 +741,19 @@ function AdminEditPage() {
 
           {selectedTheme === 'lifestyle' ? (
             <LifestyleThemeEditor guide={issueDraft.lifestyleGuide} onChange={handleLifestyleGuideChange} />
+          ) : null}
+          {selectedTheme === 'stocks' ? (
+            <StockThemeEditor
+              guide={issueDraft.stockGuide}
+              onChange={(next) => setIssueDraft((prev) => (prev ? { ...prev, stockGuide: next } : prev))}
+            />
+          ) : null}
+
+          {selectedTheme === 'support' ? (
+            <SupportThemeEditor
+              guide={issueDraft.supportGuide}
+              onChange={(next) => setIssueDraft((prev) => (prev ? { ...prev, supportGuide: next } : prev))}
+            />
           ) : null}
 
           {showPerspectiveSections ? (
@@ -1140,6 +1167,13 @@ function AdminEditPage() {
 
           {selectedTheme === 'lifestyle' ? (
             <LifestyleThemePreview guide={issueDraft.lifestyleGuide} />
+          ) : null}
+          {selectedTheme === 'stocks' ? (
+            <StockThemePreview guide={issueDraft.stockGuide} />
+          ) : null}
+
+          {selectedTheme === 'support' ? (
+            <SupportThemePreview guide={issueDraft.supportGuide} />
           ) : null}
 
           {issueDraft.progressiveView ? (
