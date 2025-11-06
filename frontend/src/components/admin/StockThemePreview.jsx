@@ -1,22 +1,59 @@
 // frontend/src/components/admin/StockThemePreview.jsx
-// 주식정보 테마 전용 미리보기 카드.
+// 주식정보 테마 전용 미리보기 카드 (amber 톤 가이드 + 텍스트 내 URL 자동 링크)
 
 import PropTypes from 'prop-types';
 import SectionCard from '../SectionCard.jsx';
 
 function filterList(items) {
-  if (!Array.isArray(items)) {
-    return [];
-  }
+  if (!Array.isArray(items)) return [];
   return items
     .map((item) => (typeof item === 'string' ? item.trim() : String(item ?? '').trim()))
     .filter((item) => item.length > 0);
 }
 
-function StockThemePreview({ guide }) {
-  if (!guide) {
-    return null;
+// 텍스트 안의 URL을 자동으로 <a>로 바꿔 렌더링
+function splitByUrls(text) {
+  if (typeof text !== 'string' || text.length === 0) return [text];
+  const urlRegex = /https?:\/\/\S+/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    parts.push({ url: match[0] });
+    lastIndex = urlRegex.lastIndex;
   }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts.length ? parts : [text];
+}
+
+function TextWithLinks({ text }) {
+  const parts = splitByUrls(text);
+  return (
+    <>
+      {parts.map((part, i) =>
+        typeof part === 'string' ? (
+          <span key={i}>{part}</span>
+        ) : (
+          <a
+            key={i}
+            href={part.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 text-amber-600 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-amber-300"
+          >
+            {part.url}
+          </a>
+        )
+      )}
+    </>
+  );
+}
+
+TextWithLinks.propTypes = { text: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired };
+
+function StockThemePreview({ guide }) {
+  if (!guide) return null;
 
   const watchlist = filterList(guide.watchlist);
 
@@ -24,13 +61,17 @@ function StockThemePreview({ guide }) {
     <div className="space-y-5">
       {guide.overview ? (
         <SectionCard title="주식정보 개요" tone="neutral">
-          <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{guide.overview}</p>
+          <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+            <TextWithLinks text={guide.overview} />
+          </p>
         </SectionCard>
       ) : null}
 
       {guide.marketSummary ? (
         <SectionCard title="시장 요약" tone="neutral">
-          <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{guide.marketSummary}</p>
+          <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+            <TextWithLinks text={guide.marketSummary} />
+          </p>
         </SectionCard>
       ) : null}
 
@@ -42,7 +83,11 @@ function StockThemePreview({ guide }) {
               .map((s, index) => (
                 <li key={`sector-${index}`} className="space-y-1">
                   {s.name ? <p className="font-semibold text-slate-800 dark:text-slate-100">{s.name}</p> : null}
-                  {s.outlook ? <p className="text-xs text-slate-600 dark:text-slate-300">{s.outlook}</p> : null}
+                  {s.outlook ? (
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      <TextWithLinks text={s.outlook} />
+                    </p>
+                  ) : null}
                   {Array.isArray(s.leaders) && s.leaders.length > 0 ? (
                     <ul className="list-disc pl-5 text-xs">
                       {s.leaders.map((name, i) => (
@@ -60,17 +105,31 @@ function StockThemePreview({ guide }) {
         <SectionCard title="기업 분석" tone="impact" badgeText="기업">
           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {guide.companyAnalyses
-              .filter((c) => c && (c.name || c.thesis || (c.catalysts && c.catalysts.length) || (c.risks && c.risks.length) || c.valuation))
+              .filter(
+                (c) =>
+                  c &&
+                  (c.name ||
+                    c.thesis ||
+                    (c.catalysts && c.catalysts.length) ||
+                    (c.risks && c.risks.length) ||
+                    c.valuation)
+              )
               .map((c, index) => (
                 <li key={`company-${index}`} className="space-y-1">
                   {c.name ? <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p> : null}
-                  {c.thesis ? <p className="text-xs text-slate-600 dark:text-slate-300">{c.thesis}</p> : null}
+                  {c.thesis ? (
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      <TextWithLinks text={c.thesis} />
+                    </p>
+                  ) : null}
                   {Array.isArray(c.catalysts) && c.catalysts.length > 0 ? (
                     <div className="space-y-1">
                       <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">촉매</p>
                       <ul className="list-disc pl-5 text-xs">
                         {c.catalysts.map((item, i) => (
-                          <li key={`cat-${index}-${i}`}>{item}</li>
+                          <li key={`cat-${index}-${i}`}>
+                            <TextWithLinks text={item} />
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -80,12 +139,18 @@ function StockThemePreview({ guide }) {
                       <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">리스크</p>
                       <ul className="list-disc pl-5 text-xs">
                         {c.risks.map((item, i) => (
-                          <li key={`risk-${index}-${i}`}>{item}</li>
+                          <li key={`risk-${index}-${i}`}>
+                            <TextWithLinks text={item} />
+                          </li>
                         ))}
                       </ul>
                     </div>
                   ) : null}
-                  {c.valuation ? <p className="text-xs text-slate-600 dark:text-slate-300">{c.valuation}</p> : null}
+                  {c.valuation ? (
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      <TextWithLinks text={c.valuation} />
+                    </p>
+                  ) : null}
                 </li>
               ))}
           </ul>
@@ -96,7 +161,9 @@ function StockThemePreview({ guide }) {
         <SectionCard title="워치리스트" tone="neutral" badgeText="관찰">
           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {watchlist.map((w, index) => (
-              <li key={`watch-${index}`}>{w}</li>
+              <li key={`watch-${index}`}>
+                <TextWithLinks text={w} />
+              </li>
             ))}
           </ul>
         </SectionCard>
@@ -129,10 +196,6 @@ StockThemePreview.propTypes = {
   })
 };
 
-StockThemePreview.defaultProps = {
-  guide: null
-};
+StockThemePreview.defaultProps = { guide: null };
 
 export default StockThemePreview;
-
-

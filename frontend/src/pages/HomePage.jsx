@@ -17,13 +17,13 @@ function getThemeLabel(themeId) {
   return t?.label ?? themeId ?? '기타';
 }
 
-// 테마별 색상 클래스 매핑
+// 테마별 색상 클래스 매핑 (일관 팔레트)
 const THEME_COLOR_CLASSES = {
   policy: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',
   stocks: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
-  parenting: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200',
-  lifestyle: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
-  health: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200',
+  parenting: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200',
+  lifestyle: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200',
+  health: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
   support: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200'
 };
 
@@ -64,7 +64,7 @@ function TitleSection({ heading, items, emptyMessage, viewMoreTo, showThemePrefi
         <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-slate-100">
           {themeId && (
             <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${themeColorClass}`}>
-              {heading.split(' ')[0]}
+              {getThemeLabel(themeId)}
             </span>
           )}
           <span>{heading}</span>
@@ -198,7 +198,7 @@ function HomePage() {
             items={(themeBuckets[t.id] ?? []).slice(0, 5)}
             emptyMessage="아직 항목이 없습니다."
             viewMoreTo={`/theme/${t.id}`}
-            themeId={t.id}  // 이 줄 추가
+            themeId={t.id}
           />
         ))}
       </div>

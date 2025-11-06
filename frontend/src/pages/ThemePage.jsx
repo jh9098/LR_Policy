@@ -10,7 +10,6 @@ import {
 } from '../constants/categoryStructure.js';
 import { DEFAULT_THEME_ID, getThemeById } from '../constants/themeConfig.js';
 import { getIssuesByTheme, searchIssuesByTheme } from '../firebaseClient.js';
-
 const SORT_OPTIONS = [
   { value: 'recent', label: '최신순 (date desc)' },
   { value: 'popular', label: '조회순 (views desc)' },
@@ -128,6 +127,18 @@ function ThemePage() {
       return subcategoryOk;
     });
   }, [categoryFilter, hasCategoryFilter, items, subcategoryFilter]);
+// ✅ 필터(대분류/소분류) 바뀌면 1페이지로 리셋
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, subcategoryFilter]);
+
+  // ✅ 현재 페이지가 범위를 벗어나면 1페이지로 보정
+  useEffect(() => {
+    const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+    if (startIdx >= filteredItems.length && currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [filteredItems.length, currentPage]);
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);

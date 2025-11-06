@@ -1,5 +1,5 @@
 // frontend/src/components/admin/SupportThemeEditor.jsx
-// 정부지원정보 테마 전용 입력 UI.
+// 정부지원정보 테마 전용 입력 UI (violet 톤 + 리스트 에디터 tone 지정 + 가이드 보강).
 
 import PropTypes from 'prop-types';
 import {
@@ -44,18 +44,14 @@ function SupportThemeEditor({ guide, onChange }) {
 
   const handleProgramField = (index, field, value) => {
     updateGuide((draft) => {
-      if (!draft.programs[index]) {
-        draft.programs[index] = createSupportProgram();
-      }
+      if (!draft.programs[index]) draft.programs[index] = createSupportProgram();
       draft.programs[index] = { ...draft.programs[index], [field]: value };
     });
   };
 
   const handleProgramList = (index, field, list) => {
     updateGuide((draft) => {
-      if (!draft.programs[index]) {
-        draft.programs[index] = createSupportProgram();
-      }
+      if (!draft.programs[index]) draft.programs[index] = createSupportProgram();
       draft.programs[index] = { ...draft.programs[index], [field]: list };
     });
   };
@@ -65,7 +61,7 @@ function SupportThemeEditor({ guide, onChange }) {
       <header className="space-y-2">
         <h2 className="text-lg font-semibold text-violet-700 dark:text-violet-200">정부지원정보 · 프로그램별 구성</h2>
         <p className="text-xs text-violet-600/80 dark:text-violet-200/80">
-          주요 지원 프로그램별 자격, 혜택, 구비 서류, 신청 절차를 JSON으로 관리합니다.
+          지원 대상/혜택/서류/절차를 한눈에 비교할 수 있도록 JSON으로 관리합니다. (미리보기에서 URL은 자동 링크 처리)
         </p>
       </header>
 
@@ -75,7 +71,7 @@ function SupportThemeEditor({ guide, onChange }) {
           value={safeGuide.overview}
           onChange={handleOverviewChange}
           className="min-h-[120px] rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:border-violet-500/40 dark:bg-slate-900 dark:text-slate-100"
-          placeholder="전체 지원정보 테마의 핵심 메시지를 요약해 주세요."
+          placeholder="정부24/복지로/지자체 포털 등 주요 경로와 안내 방식을 요약하세요. (URL 입력 가능)"
         />
       </label>
 
@@ -109,7 +105,7 @@ function SupportThemeEditor({ guide, onChange }) {
                   <input
                     type="text"
                     value={program.name}
-                    onChange={(event) => handleProgramField(index, 'name', event.target.value)}
+                    onChange={(e) => handleProgramField(index, 'name', e.target.value)}
                     className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:border-violet-500/60 dark:bg-slate-900 dark:text-slate-100"
                     placeholder="예: 청년월세 한시 특별지원"
                   />
@@ -127,46 +123,50 @@ function SupportThemeEditor({ guide, onChange }) {
                 <span className="font-medium">한눈에 보는 요약</span>
                 <textarea
                   value={program.summary}
-                  onChange={(event) => handleProgramField(index, 'summary', event.target.value)}
+                  onChange={(e) => handleProgramField(index, 'summary', e.target.value)}
                   className="min-h-[100px] rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:border-violet-500/40 dark:bg-slate-900 dark:text-slate-100"
-                  placeholder="누가, 무엇을, 얼마나 받을 수 있는지 핵심 내용을 요약합니다."
+                  placeholder="누가, 무엇을, 얼마나 받을 수 있는지 핵심 요약 (URL 입력 가능)"
                 />
               </label>
 
               <SimpleListEditor
+                tone="violet"
                 title="지원 대상 (자격)"
-                description="소득, 연령, 거주지 등 구체적인 자격 요건을 정리합니다."
+                description="소득·연령·거주지 등 구체적인 자격 요건"
                 items={program.eligibility}
                 onChange={(list) => handleProgramList(index, 'eligibility', list)}
                 addLabel="자격 조건 추가"
-                itemPlaceholder="예: 만 19~34세 이하 부모와 별도 거주하는 무주택 청년"
+                itemPlaceholder="예: 만 19~34세, 부모와 별도 거주, 무주택, 기준 중위소득 100% 이하"
               />
 
               <SimpleListEditor
+                tone="violet"
                 title="지원 내용 (혜택)"
-                description="지원금액, 지원기간, 현물/서비스 내용 등을 정리합니다."
+                description="지원 금액·기간·현물/서비스 내용"
                 items={program.benefits}
                 onChange={(list) => handleProgramList(index, 'benefits', list)}
                 addLabel="혜택 추가"
-                itemPlaceholder="예: 실제 납부하는 임대료 범위 내 월 최대 20만원, 12개월간 지원"
+                itemPlaceholder="예: 월 최대 20만원, 12개월간 / 전기요금 30% 감면"
               />
 
               <SimpleListEditor
+                tone="violet"
                 title="필요 서류"
-                description="신청 시 제출해야 하는 서류 목록을 정리합니다."
+                description="신청 시 제출해야 하는 서류 목록"
                 items={program.requiredDocs}
                 onChange={(list) => handleProgramList(index, 'requiredDocs', list)}
                 addLabel="서류 추가"
-                itemPlaceholder="예: 월세지원 신청서, 소득·재산 신고서, 임대차계약서 등"
+                itemPlaceholder="예: 임대차계약서, 주민등록등본, 재학증명서/근로소득원천징수영수증"
               />
 
               <SimpleListEditor
+                tone="violet"
                 title="신청 방법/절차"
-                description="온라인/오프라인 신청 방법과 절차를 단계별로 안내합니다."
+                description="온라인/오프라인 신청 경로와 단계"
                 items={program.applicationProcess}
                 onChange={(list) => handleProgramList(index, 'applicationProcess', list)}
                 addLabel="절차 추가"
-                itemPlaceholder="예: 복지로 홈페이지 또는 앱에서 온라인 신청"
+                itemPlaceholder="예: 복지로 앱 접속 → 본인인증 → 대상자 확인 → 증빙서류 업로드 → 접수"
               />
             </div>
           ))}
@@ -174,12 +174,13 @@ function SupportThemeEditor({ guide, onChange }) {
       </div>
 
       <SimpleListEditor
+        tone="violet"
         title="공통 참고자료"
-        description="복지로, 정부24 등 여러 프로그램에서 공통으로 참고할 수 있는 사이트나 연락처를 정리합니다."
+        description="복지로·정부24·지자체 포털, 문의전화 등 공통 자료 (URL 가능)"
         items={safeGuide.commonResources}
         onChange={handleCommonResourcesChange}
         addLabel="자료 추가"
-        itemPlaceholder="예: 복지로 (bokjiro.go.kr), 정부24 (gov.kr)"
+        itemPlaceholder="예: 복지로 https://www.bokjiro.go.kr / 정부24 https://www.gov.kr / 보건복지상담센터 129"
       />
     </section>
   );
@@ -203,8 +204,6 @@ SupportThemeEditor.propTypes = {
   onChange: PropTypes.func.isRequired
 };
 
-SupportThemeEditor.defaultProps = {
-  guide: null
-};
+SupportThemeEditor.defaultProps = { guide: null };
 
 export default SupportThemeEditor;

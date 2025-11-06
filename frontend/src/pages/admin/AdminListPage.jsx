@@ -12,6 +12,7 @@ function AdminListPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [themeFilter, setThemeFilter] = useState('all');
+  const [keyword, setKeyword] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,22 +24,16 @@ function AdminListPage() {
       try {
         const data =
           themeFilter === 'all'
-            ? await getRecentIssues(80)
-            : await getIssuesByTheme(themeFilter, { sort: 'recent', limitCount: 80 });
-        if (!isMounted) {
-          return;
-        }
+            ? await getRecentIssues(120)
+            : await getIssuesByTheme(themeFilter, { sort: 'recent', limitCount: 120 });
+        if (!isMounted) return;
         setItems(data);
       } catch (err) {
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted) return;
         console.error('Firestore 목록 불러오기 실패:', err);
         setError('Firestore에서 이슈 목록을 불러오지 못했습니다. 네트워크와 권한을 확인하세요.');
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     }
 
@@ -49,13 +44,9 @@ function AdminListPage() {
   }, [themeFilter]);
 
   const handleDelete = async (id, title) => {
-    if (!id) {
-      return;
-    }
+    if (!id) return;
     const ok = window.confirm(`정말로 "${title}" 문서를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`);
-    if (!ok) {
-      return;
-    }
+    if (!ok) return;
 
     try {
       await deleteIssue(id);
@@ -67,27 +58,47 @@ function AdminListPage() {
     }
   };
 
+  const filtered = items.filter((it) => {
+    if (!keyword.trim()) return true;
+    const hay = `${it.title || ''} ${it.easySummary || ''} ${it.summaryCard || ''} ${it.category || ''}`.toLowerCase();
+    return hay.includes(keyword.trim().toLowerCase());
+  });
+
   return (
     <section className="space-y-4">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">등록된 글 목록</h2>
-          <label className="inline-flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300 sm:flex-row sm:items-center sm:gap-2">
-            <span className="font-semibold">테마 필터</span>
-            <select
-              value={themeFilter}
-              onChange={(event) => setThemeFilter(event.target.value)}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 sm:w-60"
-            >
-              <option value="all">전체 테마</option>
-              {THEME_CONFIG.map((theme) => (
-                <option key={theme.id} value={theme.id}>
-                  {theme.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="inline-flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300 sm:flex-row sm:items-center sm:gap-2">
+              <span className="font-semibold">테마 필터</span>
+              <select
+                value={themeFilter}
+                onChange={(e) => setThemeFilter(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 sm:w-60"
+              >
+                <option value="all">전체 테마</option>
+                {THEME_CONFIG.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="inline-flex flex-1 flex-col gap-1 text-xs text-slate-600 dark:text-slate-300 sm:max-w-xs">
+              <span className="font-semibold">키워드</span>
+              <input
+                type="search"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="제목/요약/카테고리 검색"
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+          </div>
         </div>
+
         <button
           type="button"
           onClick={() => navigate('/admin/new')}
@@ -118,18 +129,14 @@ function AdminListPage() {
           <tbody className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-300">
-                  데이터를 불러오는 중입니다...
-                </td>
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500 dark:text-slate-300">데이터를 불러오는 중입니다...</td>
               </tr>
-            ) : items.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-300">
-                  등록된 문서가 없습니다. 새 글을 작성해 주세요.
-                </td>
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500 dark:text-slate-300">등록된 문서가 없습니다. 새 글을 작성해 주세요.</td>
               </tr>
             ) : (
-              items.map((item) => (
+              filtered.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/60">
                   <td className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">{getThemeLabel(item.theme)}</td>
                   <td className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">{item.date || '정보 부족'}</td>
@@ -163,7 +170,6 @@ function AdminListPage() {
           </tbody>
         </table>
       </div>
-
     </section>
   );
 }

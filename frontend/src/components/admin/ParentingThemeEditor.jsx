@@ -1,5 +1,5 @@
 // frontend/src/components/admin/ParentingThemeEditor.jsx
-// 육아 테마 전용 입력 UI를 제공한다.
+// 육아 테마 전용 입력 UI (sky 톤 + URL 안내 + 영유아 0~7세 권장 문구 반영)
 
 import PropTypes from 'prop-types';
 import {
@@ -40,18 +40,14 @@ function ParentingThemeEditor({ guide, onChange }) {
 
   const handleAgeGroupField = (index, field, value) => {
     updateGuide((draft) => {
-      if (!draft.ageGroups[index]) {
-        draft.ageGroups[index] = createParentingAgeGroup();
-      }
+      if (!draft.ageGroups[index]) draft.ageGroups[index] = createParentingAgeGroup();
       draft.ageGroups[index] = { ...draft.ageGroups[index], [field]: value };
     });
   };
 
   const handleAgeGroupList = (index, field, list) => {
     updateGuide((draft) => {
-      if (!draft.ageGroups[index]) {
-        draft.ageGroups[index] = createParentingAgeGroup();
-      }
+      if (!draft.ageGroups[index]) draft.ageGroups[index] = createParentingAgeGroup();
       draft.ageGroups[index] = { ...draft.ageGroups[index], [field]: list };
     });
   };
@@ -69,14 +65,15 @@ function ParentingThemeEditor({ guide, onChange }) {
   };
 
   return (
-    <section className="space-y-5 rounded-2xl border border-rose-200 bg-white p-6 shadow-sm dark:border-rose-500/30 dark:bg-slate-900/40">
+    <section className="space-y-5 rounded-2xl border border-sky-200 bg-white p-6 shadow-sm dark:border-sky-500/30 dark:bg-slate-900/40">
       <header className="space-y-2">
-        <h2 className="text-lg font-semibold text-rose-700 dark:text-rose-200">육아정보 · 연령별 구성</h2>
-        <p className="text-xs text-rose-600/80 dark:text-rose-200/80">
+        <h2 className="text-lg font-semibold text-sky-700 dark:text-sky-200">육아정보 · 연령별 구성</h2>
+        <p className="text-xs text-sky-600/80 dark:text-sky-200/80">
           기본 연령대 추천: {PARENTING_AGE_GROUP_PRESETS.join(' / ')}
         </p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          각 연령대별 핵심 발달 포인트, 돌봄 팁, 참고 자료를 한 줄씩 정리해 주세요. 필요 없는 연령대는 삭제하고 직접 추가도 가능합니다.
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          안내: <strong className="text-sky-700 dark:text-sky-300">영유아는 0~7세</strong>로 통합 권장(기존 0~5세 → 0~7세). 연령대 라벨은
+          “영유아(0~7세) · 초등학생 · 중학생 · 고등학생”과 같이 큰 구간으로도 사용할 수 있어요.
         </p>
       </header>
 
@@ -85,34 +82,34 @@ function ParentingThemeEditor({ guide, onChange }) {
         <textarea
           value={safeGuide.overview}
           onChange={handleOverviewChange}
-          className="min-h-[120px] rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/50 dark:bg-slate-900 dark:text-slate-100"
-          placeholder="전체 육아 정보를 한 눈에 보여줄 수 있도록 요약해 주세요."
+          className="min-h-[120px] rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-sky-500/50 dark:bg-slate-900 dark:text-slate-100"
+          placeholder="전체 육아 정보를 한눈에 보여줄 개요를 입력하세요. (URL 입력 시 미리보기에서 자동 링크)"
         />
       </label>
 
       <SimpleListEditor
         title="전체 공통 팁"
-        description="육아 전반에 적용되는 체크리스트나 생활 팁을 정리합니다."
+        description="육아 전반에 적용되는 체크리스트나 생활 팁을 정리합니다. (URL 자동 링크)"
         items={safeGuide.generalTips}
         onChange={handleGeneralTipsChange}
         addLabel="공통 팁 추가"
-        itemPlaceholder="예: 예방접종 일정은 출생 직후부터 캘린더에 기록해 두세요."
+        itemPlaceholder="예: 예방접종 일정은 출생 직후부터 캘린더에 기록해 두세요. https://nip.kdca.go.kr"
       />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-rose-700 dark:text-rose-200">연령대별 세부 정보</h3>
+          <h3 className="text-sm font-semibold text-sky-700 dark:text-sky-200">연령대별 세부 정보</h3>
           <button
             type="button"
             onClick={addAgeGroup}
-            className="inline-flex items-center rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+            className="inline-flex items-center rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
           >
             연령대 추가
           </button>
         </div>
 
         {safeGuide.ageGroups.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-rose-300 px-4 py-4 text-center text-xs text-rose-600 dark:border-rose-500/50 dark:text-rose-200">
+          <p className="rounded-lg border border-dashed border-sky-300 px-4 py-4 text-center text-xs text-sky-600 dark:border-sky-500/50 dark:text-sky-200">
             연령대를 추가해 세부 정보를 채워주세요.
           </p>
         ) : null}
@@ -121,23 +118,23 @@ function ParentingThemeEditor({ guide, onChange }) {
           {safeGuide.ageGroups.map((group, index) => (
             <div
               key={`parenting-group-${index}`}
-              className="space-y-4 rounded-2xl border border-rose-200 bg-rose-50/40 p-5 dark:border-rose-500/40 dark:bg-slate-900"
+              className="space-y-4 rounded-2xl border border-sky-200 bg-sky-50/40 p-5 dark:border-sky-500/40 dark:bg-slate-900"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <label className="flex flex-1 flex-col gap-2 text-xs">
-                  <span className="font-medium uppercase tracking-wide text-rose-700 dark:text-rose-200">연령대 이름</span>
+                  <span className="font-medium uppercase tracking-wide text-sky-700 dark:text-sky-200">연령대 이름</span>
                   <input
                     type="text"
                     value={group.ageRange}
                     onChange={(event) => handleAgeGroupField(index, 'ageRange', event.target.value)}
-                    className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/60 dark:bg-slate-900 dark:text-slate-100"
-                    placeholder="예: 0~6개월 영아"
+                    className="rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-sky-500/60 dark:bg-slate-900 dark:text-slate-100"
+                    placeholder="예: 영유아(0~7세) / 초등학생 / 중학생 / 고등학생"
                   />
                 </label>
                 <button
                   type="button"
                   onClick={() => removeAgeGroup(index)}
-                  className="inline-flex items-center rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/60 dark:hover:bg-rose-500/10"
+                  className="inline-flex items-center rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-sky-500/60 dark:text-sky-200 dark:hover:bg-sky-500/10"
                 >
                   연령대 삭제
                 </button>
@@ -148,8 +145,8 @@ function ParentingThemeEditor({ guide, onChange }) {
                 <textarea
                   value={group.focusSummary}
                   onChange={(event) => handleAgeGroupField(index, 'focusSummary', event.target.value)}
-                  className="min-h-[100px] rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/50 dark:bg-slate-900 dark:text-slate-100"
-                  placeholder="발달 포인트와 부모가 주의할 점을 한 문단으로 정리해 주세요."
+                  className="min-h-[100px] rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:border-sky-500/50 dark:bg-slate-900 dark:text-slate-100"
+                  placeholder="발달 포인트와 부모 주의점을 한 문단으로 정리하세요. (URL 입력 시 미리보기에서 자동 링크)"
                 />
               </label>
 
@@ -159,7 +156,7 @@ function ParentingThemeEditor({ guide, onChange }) {
                 items={group.developmentFocus}
                 onChange={(list) => handleAgeGroupList(index, 'developmentFocus', list)}
                 addLabel="발달 포인트 추가"
-                itemPlaceholder="예: 목 가누기가 가능해지므로 엎드려 있는 시간을 늘리고, 충분한 관찰이 필요합니다."
+                itemPlaceholder="예: 4~6세 언어폭발기 — 질문에 충분히 대답하고 책 읽기 루틴을 만듭니다."
               />
 
               <SimpleListEditor
@@ -168,16 +165,16 @@ function ParentingThemeEditor({ guide, onChange }) {
                 items={group.careTips}
                 onChange={(list) => handleAgeGroupList(index, 'careTips', list)}
                 addLabel="돌봄 팁 추가"
-                itemPlaceholder="예: 같은 시간에 잠을 재우고, 낮잠 시간은 2회 이내로 유지하세요."
+                itemPlaceholder="예: 취침 1시간 전 스크린 오프, 낮 활동량 확보로 야간 각성 감소."
               />
 
               <SimpleListEditor
                 title="추천 자료"
-                description="공공기관 가이드, 전문가 칼럼, 강의 등 신뢰할 수 있는 자료 링크를 정리합니다."
+                description="공공기관 가이드, 전문가 칼럼, 강의 등 신뢰 자료 링크를 정리합니다."
                 items={group.resources}
                 onChange={(list) => handleAgeGroupList(index, 'resources', list)}
                 addLabel="자료 추가"
-                itemPlaceholder="예: 보건복지부 육아 종합 가이드 (https://...)"
+                itemPlaceholder="예: 보건복지부 영유아 건강검진 안내 (https://...)"
               />
             </div>
           ))}
@@ -186,11 +183,11 @@ function ParentingThemeEditor({ guide, onChange }) {
 
       <SimpleListEditor
         title="긴급/상담 연락처"
-        description="소아과 야간 진료, 부모 상담센터 등 긴급 시 참고할 연락처를 정리합니다."
+        description="소아과 야간 진료, 부모 상담센터 등 긴급 시 참고할 연락처를 정리합니다. (URL/전화번호 입력 가능)"
         items={safeGuide.emergencyContacts}
         onChange={handleEmergencyContactsChange}
         addLabel="연락처 추가"
-        itemPlaceholder="예: 보건복지상담센터(129)"
+        itemPlaceholder="예: 129(보건복지상담센터), 1339(질병관리청), 지역 보건소 번호"
       />
     </section>
   );
@@ -214,8 +211,6 @@ ParentingThemeEditor.propTypes = {
   onChange: PropTypes.func.isRequired
 };
 
-ParentingThemeEditor.defaultProps = {
-  guide: null
-};
+ParentingThemeEditor.defaultProps = { guide: null };
 
 export default ParentingThemeEditor;
