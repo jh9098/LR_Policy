@@ -1,0 +1,145 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/frontend/src/constants/categoryStructure.js b/frontend/src/constants/categoryStructure.js
+index 4b619084b7747409a1b275c59aa57d5726a097f7..979141d71315e8dcc5290810012cbca2b91aa461 100644
+--- a/frontend/src/constants/categoryStructure.js
++++ b/frontend/src/constants/categoryStructure.js
+@@ -26,54 +26,76 @@ export const THEME_CATEGORY_STRUCTURE = Object.freeze({
+         '감찰·징계·인사'
+       ]),
+       '외교/안보': Object.freeze([
+         '정상외교·국제협력',
+         '군사·방위 정책',
+         '동맹 현안',
+         '대북·통일 정책'
+       ]),
+       기타: Object.freeze([
+         '국회·정당·정치개혁',
+         '복지·보건·교육 정책',
+         '과학·디지털·규제 혁신',
+         '환경·에너지 전환'
+       ])
+     })
+   }),
+   stocks: Object.freeze({
+     categories: Object.freeze({
+       '시장/지수': Object.freeze([
+         '코스피/코스닥 동향',
+         '금리/환율',
+         '수급/수요공급',
+         '변동성/파생'
+       ]),
+       '산업/섹터': Object.freeze([
++        '2차전지',
+         '반도체',
+-        '2차전지/전기차',
+-        '인터넷/게임',
+-        '바이오/헬스케어'
++        'AI·로봇',
++        '스마트폰·모바일',
++        '전력·에너지',
++        '원자력',
++        '친환경·탄소',
++        '자원·소재',
++        '자동차·모빌리티',
++        '항공·우주',
++        '조선·해운·LNG',
++        '건설·인프라',
++        '철강',
++        '화학·정유·윤활유·LPG',
++        'IT·통신',
++        '금융',
++        '유통·소비',
++        '여행·레저',
++        '엔터·캐릭터',
++        '헬스케어·바이오',
++        '감염병·방역',
++        '식품·생활',
++        '제조장비·공작기계',
++        '보안·양자',
++        '정책·국산화·매크로',
++        'IPO·SPAC·개별기업'
+       ]),
+       '기업/실적': Object.freeze([
+         '실적발표',
+         '가이던스/IR',
+         '신사업/M&A',
+         '규제/리스크'
+       ]),
+       '거시/정책': Object.freeze([
+         '금리/통화정책',
+         '재정/세제',
+         '산업정책/보조금',
+         '무역/지정학'
+       ]),
+       투자전략: Object.freeze([
+         '밸류/퀄리티',
+         '성장/모멘텀',
+         '배당/리츠',
+         '퀀트/리밸런싱'
+       ])
+     })
+   }),
+   parenting: Object.freeze({
+     categories: Object.freeze({
+       '임신/출산 준비': Object.freeze([
+         '임신 건강관리',
+diff --git a/frontend/src/constants/themePrompts.js b/frontend/src/constants/themePrompts.js
+index 7a81e7c3eac2f7ccf3ee8d4e101932003fc35ae8..0de03098de93b9e6eb2195f0a426371210c7cfdb 100644
+--- a/frontend/src/constants/themePrompts.js
++++ b/frontend/src/constants/themePrompts.js
+@@ -313,51 +313,51 @@ export const THEME_PROMPTS = {
+   "parentingGuide": null,
+   "healthGuide": null,
+   "lifestyleGuide": null,
+   "stockGuide": {
+     "overview": string,
+     "marketSummary": string,
+     "sectorHighlights": [
+       { "name": string, "outlook": string, "leaders": [ string, ... ] }
+     ],
+     "companyAnalyses": [
+       {
+         "name": string,
+         "thesis": string,
+         "catalysts": [ string, ... ],
+         "risks": [ string, ... ],
+         "valuation": string
+       }
+     ],
+     "watchlist": [ string, ... ]
+   }
+ }
+ 
+ 카테고리 규칙:
+ - category 값은 주식정보 테마 전용 목록에서만 선택한다.
+   - "시장/지수": 코스피/코스닥 동향, 금리/환율, 수급/수요공급, 변동성/파생
+-  - "산업/섹터": 반도체, 2차전지/전기차, 인터넷/게임, 바이오/헬스케어
++  - "산업/섹터": 2차전지, 반도체, AI·로봇, 스마트폰·모바일, 전력·에너지, 원자력, 친환경·탄소, 자원·소재, 자동차·모빌리티, 항공·우주, 조선·해운·LNG, 건설·인프라, 철강, 화학·정유·윤활유·LPG, IT·통신, 금융, 유통·소비, 여행·레저, 엔터·캐릭터, 헬스케어·바이오, 감염병·방역, 식품·생활, 제조장비·공작기계, 보안·양자, 정책·국산화·매크로, IPO·SPAC·개별기업
+   - "기업/실적": 실적발표, 가이던스/IR, 신사업/M&A, 규제/리스크
+   - "거시/정책": 금리/통화정책, 재정/세제, 산업정책/보조금, 무역/지정학
+   - "투자전략": 밸류/퀄리티, 성장/모멘텀, 배당/리츠, 퀀트/리밸런싱
+ - subcategory는 선택한 category의 하위 목록 중 하나를 그대로 사용한다.
+ 
+ 세부 규칙:
+ 1. easySummary와 summaryCard는 비전문가도 이해할 수 있게 한 줄 문장으로 작성한다.
+ 2. background는 사실/데이터 중심으로 작성하고, 전망·평가는 keyPoints 또는 stockGuide에 배치한다.
+ 3. keyPoints는 완결된 한 문장으로 핵심만 정리한다.
+ 4. stockGuide.sectorHighlights[*].leaders에는 대표 종목 티커/종목명을 한 줄씩 적는다.
+ 5. companyAnalyses[*].thesis는 투자 논지를 한 단락으로, catalysts/risks는 bullet로 작성한다.
+ 6. progressiveView, conservativeView, impactToLife는 주식정보 테마에서는 사용하지 않으므로 null을 넣는다.
+ 7. 모든 문자열에 줄바꿈을 넣지 말고, 큰따옴표가 필요하면 \\\"로 이스케이프한다.
+ 8. 최종 출력은 오직 JSON 객체 한 줄로만 제공한다.
+ 
+ 입력 자료에 섹터/기업이 혼재되어 있으면, 섹터 요약(sectorHighlights) → 기업 분석(companyAnalyses) → 관찰 리스트(watchlist) 순으로 구성하라.`,
+   support: `당신은 'infoall'의 정부지원정보 테마용 편집 도우미다. 출력은 반드시 issueDraft JSON 객체 **하나**뿐이어야 하며, JSON 외 텍스트·주석·코드펜스·출처표시·인용부호·링크를 절대 추가하지 않는다. 
+ 모든 문자열은 한 줄로 작성하고 줄바꿈(\n)을 넣지 않는다. 
+ 
+ ⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다. 
+ 오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
+ 
+ 필드 순서는 다음과 같다.
+ 
+ {
+ 
+EOF
+)
