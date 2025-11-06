@@ -146,8 +146,15 @@ export const STOCK_SECTOR_PRESETS = [
 export function createSectorHighlight(name = '', outlook = '', leaders = []) {
   return { name: String(name ?? ''), outlook: String(outlook ?? ''), leaders: toStringArray(leaders) };
 }
-export function createCompanyAnalysis(name = '', thesis = '', catalysts = [], risks = [], valuation = '') {
-  return { name: String(name ?? ''), thesis: String(thesis ?? ''), catalysts: toStringArray(catalysts), risks: toStringArray(risks), valuation: String(valuation ?? '') };
+export function createCompanyAnalysis(name = '', thesis = '', catalysts = [], risks = [], valuation = '', technicalLevels = '') {
+  return {
+    name: String(name ?? ''),
+    thesis: String(thesis ?? ''),
+    catalysts: toStringArray(catalysts),
+    risks: toStringArray(risks),
+    valuation: String(valuation ?? ''),
+    technicalLevels: String(technicalLevels ?? '')
+  };
 }
 export function createWatchItem(symbol = '', note = '') { return { symbol: String(symbol ?? ''), note: String(note ?? '') }; }
 export function createStockGuide() {
@@ -170,7 +177,7 @@ export function normalizeStockGuide(raw = {}) {
       createSectorHighlight(s?.name, s?.outlook, s?.leaders ?? s?.stocks ?? [])
     ) : [],
     companyAnalyses: Array.isArray(r.companyAnalyses) ? r.companyAnalyses.map((c) =>
-      createCompanyAnalysis(c?.name, c?.thesis, c?.catalysts, c?.risks, c?.valuation)
+      createCompanyAnalysis(c?.name, c?.thesis, c?.catalysts, c?.risks, c?.valuation, c?.technicalLevels)
     ) : [],
     watchlist: normalizeWatch(r.watchlist)
   };

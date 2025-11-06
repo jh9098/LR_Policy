@@ -112,7 +112,8 @@ function StockGuideView({ guide }) {
                     c.thesis ||
                     (c.catalysts && c.catalysts.length) ||
                     (c.risks && c.risks.length) ||
-                    c.valuation)
+                    c.valuation ||
+                    c.technicalLevels)
               )
               .map((c, index) => (
                 <li key={`company-${index}`} className="space-y-1">
@@ -150,6 +151,14 @@ function StockGuideView({ guide }) {
                     <p className="text-xs text-slate-600 dark:text-slate-300">
                       <TextWithLinks text={c.valuation} />
                     </p>
+                  ) : null}
+                  {c.technicalLevels ? (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">기술적 구간</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        <TextWithLinks text={c.technicalLevels} />
+                      </p>
+                    </div>
                   ) : null}
                 </li>
               ))}
@@ -189,7 +198,8 @@ StockGuideView.propTypes = {
         thesis: PropTypes.string,
         catalysts: PropTypes.arrayOf(PropTypes.string),
         risks: PropTypes.arrayOf(PropTypes.string),
-        valuation: PropTypes.string
+        valuation: PropTypes.string,
+        technicalLevels: PropTypes.string
       })
     ),
     watchlist: PropTypes.arrayOf(PropTypes.string)

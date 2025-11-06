@@ -1,145 +1,496 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/frontend/src/constants/categoryStructure.js b/frontend/src/constants/categoryStructure.js
-index 4b619084b7747409a1b275c59aa57d5726a097f7..979141d71315e8dcc5290810012cbca2b91aa461 100644
---- a/frontend/src/constants/categoryStructure.js
-+++ b/frontend/src/constants/categoryStructure.js
-@@ -26,54 +26,76 @@ export const THEME_CATEGORY_STRUCTURE = Object.freeze({
-         '감찰·징계·인사'
-       ]),
-       '외교/안보': Object.freeze([
-         '정상외교·국제협력',
-         '군사·방위 정책',
-         '동맹 현안',
-         '대북·통일 정책'
-       ]),
-       기타: Object.freeze([
-         '국회·정당·정치개혁',
-         '복지·보건·교육 정책',
-         '과학·디지털·규제 혁신',
-         '환경·에너지 전환'
-       ])
-     })
-   }),
-   stocks: Object.freeze({
-     categories: Object.freeze({
-       '시장/지수': Object.freeze([
-         '코스피/코스닥 동향',
-         '금리/환율',
-         '수급/수요공급',
-         '변동성/파생'
-       ]),
-       '산업/섹터': Object.freeze([
-+        '2차전지',
-         '반도체',
--        '2차전지/전기차',
--        '인터넷/게임',
--        '바이오/헬스케어'
-+        'AI·로봇',
-+        '스마트폰·모바일',
-+        '전력·에너지',
-+        '원자력',
-+        '친환경·탄소',
-+        '자원·소재',
-+        '자동차·모빌리티',
-+        '항공·우주',
-+        '조선·해운·LNG',
-+        '건설·인프라',
-+        '철강',
-+        '화학·정유·윤활유·LPG',
-+        'IT·통신',
-+        '금융',
-+        '유통·소비',
-+        '여행·레저',
-+        '엔터·캐릭터',
-+        '헬스케어·바이오',
-+        '감염병·방역',
-+        '식품·생활',
-+        '제조장비·공작기계',
-+        '보안·양자',
-+        '정책·국산화·매크로',
-+        'IPO·SPAC·개별기업'
-       ]),
-       '기업/실적': Object.freeze([
-         '실적발표',
-         '가이던스/IR',
-         '신사업/M&A',
-         '규제/리스크'
-       ]),
-       '거시/정책': Object.freeze([
-         '금리/통화정책',
-         '재정/세제',
-         '산업정책/보조금',
-         '무역/지정학'
-       ]),
-       투자전략: Object.freeze([
-         '밸류/퀄리티',
-         '성장/모멘텀',
-         '배당/리츠',
-         '퀀트/리밸런싱'
-       ])
-     })
-   }),
-   parenting: Object.freeze({
-     categories: Object.freeze({
-       '임신/출산 준비': Object.freeze([
-         '임신 건강관리',
-diff --git a/frontend/src/constants/themePrompts.js b/frontend/src/constants/themePrompts.js
-index 7a81e7c3eac2f7ccf3ee8d4e101932003fc35ae8..0de03098de93b9e6eb2195f0a426371210c7cfdb 100644
---- a/frontend/src/constants/themePrompts.js
-+++ b/frontend/src/constants/themePrompts.js
-@@ -313,51 +313,51 @@ export const THEME_PROMPTS = {
-   "parentingGuide": null,
-   "healthGuide": null,
-   "lifestyleGuide": null,
-   "stockGuide": {
-     "overview": string,
-     "marketSummary": string,
-     "sectorHighlights": [
-       { "name": string, "outlook": string, "leaders": [ string, ... ] }
-     ],
-     "companyAnalyses": [
-       {
-         "name": string,
-         "thesis": string,
-         "catalysts": [ string, ... ],
-         "risks": [ string, ... ],
-         "valuation": string
-       }
-     ],
-     "watchlist": [ string, ... ]
-   }
+diff --git a/frontend/src/components/admin/StockThemeEditor.jsx b/frontend/src/components/admin/StockThemeEditor.jsx
+index a2f5f0b2f73c329a304858e3370ff67c8b46622e..3123bfc3825494e9f5c673bc70a72f1e56eb5f05 100644
+--- a/frontend/src/components/admin/StockThemeEditor.jsx
++++ b/frontend/src/components/admin/StockThemeEditor.jsx
+@@ -246,71 +246,82 @@ function StockThemeEditor({ guide, onChange }) {
+                 items={c.catalysts || []}
+                 onChange={(list) => handleCompanyArrayField(index, 'catalysts', list)}
+                 addLabel="촉매 추가"
+                 itemPlaceholder="예: 신규 제품 출시, 원가 하락, 고객사 증설 기사 링크"
+               />
+ 
+               <SimpleListEditor
+                 tone="amber"
+                 title="리스크(Risks)"
+                 description="투자 논지를 훼손할 수 있는 리스크를 bullet로 작성"
+                 items={c.risks || []}
+                 onChange={(list) => handleCompanyArrayField(index, 'risks', list)}
+                 addLabel="리스크 추가"
+                 itemPlaceholder="예: 규제 강화, 수요 둔화, 고객 이탈, 악재 기사 링크"
+               />
+ 
+               <label className="flex flex-col gap-2 text-sm">
+                 <span className="font-medium">밸류에이션/메모</span>
+                 <textarea
+                   value={c.valuation}
+                   onChange={(e) => handleCompanyField(index, 'valuation', e.target.value)}
+                   className="min-h-[80px] rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-500/40 dark:bg-slate-900 dark:text-slate-100"
+                   placeholder="멀티플/밴드, 목표가 근거, 체크 포인트 (URL 입력 가능)"
+                 />
+               </label>
++
++              <label className="flex flex-col gap-2 text-sm">
++                <span className="font-medium">기술적 구간 · 지지/저항</span>
++                <textarea
++                  value={c.technicalLevels ?? ''}
++                  onChange={(e) => handleCompanyField(index, 'technicalLevels', e.target.value)}
++                  className="min-h-[80px] rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-500/40 dark:bg-slate-900 dark:text-slate-100"
++                  placeholder="주요 지지선·저항선, 이동평균, 거래량 구간 등 기술적 메모"
++                />
++              </label>
+             </div>
+           ))}
+         </div>
+       </div>
+ 
+       <SimpleListEditor
+         tone="amber"
+         title="워치리스트"
+         description="관찰이 필요한 종목/지표를 한 줄씩"
+         items={safeGuide.watchlist}
+         onChange={handleWatchlistChange}
+         addLabel="항목 추가"
+         itemPlaceholder="예: 달러인덱스, 유가, 특정 종목 티커/뉴스 링크"
+       />
+     </section>
+   );
  }
  
- 카테고리 규칙:
- - category 값은 주식정보 테마 전용 목록에서만 선택한다.
-   - "시장/지수": 코스피/코스닥 동향, 금리/환율, 수급/수요공급, 변동성/파생
--  - "산업/섹터": 반도체, 2차전지/전기차, 인터넷/게임, 바이오/헬스케어
-+  - "산업/섹터": 2차전지, 반도체, AI·로봇, 스마트폰·모바일, 전력·에너지, 원자력, 친환경·탄소, 자원·소재, 자동차·모빌리티, 항공·우주, 조선·해운·LNG, 건설·인프라, 철강, 화학·정유·윤활유·LPG, IT·통신, 금융, 유통·소비, 여행·레저, 엔터·캐릭터, 헬스케어·바이오, 감염병·방역, 식품·생활, 제조장비·공작기계, 보안·양자, 정책·국산화·매크로, IPO·SPAC·개별기업
-   - "기업/실적": 실적발표, 가이던스/IR, 신사업/M&A, 규제/리스크
-   - "거시/정책": 금리/통화정책, 재정/세제, 산업정책/보조금, 무역/지정학
-   - "투자전략": 밸류/퀄리티, 성장/모멘텀, 배당/리츠, 퀀트/리밸런싱
- - subcategory는 선택한 category의 하위 목록 중 하나를 그대로 사용한다.
+ StockThemeEditor.propTypes = {
+   guide: PropTypes.shape({
+     overview: PropTypes.string,
+     marketSummary: PropTypes.string,
+     sectorHighlights: PropTypes.arrayOf(
+       PropTypes.shape({
+         name: PropTypes.string,
+         outlook: PropTypes.string,
+         leaders: PropTypes.arrayOf(PropTypes.string)
+       })
+     ),
+     companyAnalyses: PropTypes.arrayOf(
+       PropTypes.shape({
+         name: PropTypes.string,
+         thesis: PropTypes.string,
+         catalysts: PropTypes.arrayOf(PropTypes.string),
+         risks: PropTypes.arrayOf(PropTypes.string),
+-        valuation: PropTypes.string
++        valuation: PropTypes.string,
++        technicalLevels: PropTypes.string
+       })
+     ),
+     watchlist: PropTypes.arrayOf(PropTypes.string)
+   }),
+   onChange: PropTypes.func.isRequired
+ };
  
- 세부 규칙:
- 1. easySummary와 summaryCard는 비전문가도 이해할 수 있게 한 줄 문장으로 작성한다.
- 2. background는 사실/데이터 중심으로 작성하고, 전망·평가는 keyPoints 또는 stockGuide에 배치한다.
- 3. keyPoints는 완결된 한 문장으로 핵심만 정리한다.
- 4. stockGuide.sectorHighlights[*].leaders에는 대표 종목 티커/종목명을 한 줄씩 적는다.
- 5. companyAnalyses[*].thesis는 투자 논지를 한 단락으로, catalysts/risks는 bullet로 작성한다.
- 6. progressiveView, conservativeView, impactToLife는 주식정보 테마에서는 사용하지 않으므로 null을 넣는다.
- 7. 모든 문자열에 줄바꿈을 넣지 말고, 큰따옴표가 필요하면 \\\"로 이스케이프한다.
- 8. 최종 출력은 오직 JSON 객체 한 줄로만 제공한다.
+ StockThemeEditor.defaultProps = { guide: null };
  
- 입력 자료에 섹터/기업이 혼재되어 있으면, 섹터 요약(sectorHighlights) → 기업 분석(companyAnalyses) → 관찰 리스트(watchlist) 순으로 구성하라.`,
-   support: `당신은 'infoall'의 정부지원정보 테마용 편집 도우미다. 출력은 반드시 issueDraft JSON 객체 **하나**뿐이어야 하며, JSON 외 텍스트·주석·코드펜스·출처표시·인용부호·링크를 절대 추가하지 않는다. 
- 모든 문자열은 한 줄로 작성하고 줄바꿈(\n)을 넣지 않는다. 
+ export default StockThemeEditor;
+diff --git a/frontend/src/components/admin/StockThemePreview.jsx b/frontend/src/components/admin/StockThemePreview.jsx
+index e2337736d2e586de0489ac7ad89338c25b559984..06763801645c57f5b0319e46225f6c488f92b2c3 100644
+--- a/frontend/src/components/admin/StockThemePreview.jsx
++++ b/frontend/src/components/admin/StockThemePreview.jsx
+@@ -90,112 +90,122 @@ function StockThemePreview({ guide }) {
+                   ) : null}
+                   {Array.isArray(s.leaders) && s.leaders.length > 0 ? (
+                     <ul className="list-disc pl-5 text-xs">
+                       {s.leaders.map((name, i) => (
+                         <li key={`leader-${index}-${i}`}>{name}</li>
+                       ))}
+                     </ul>
+                   ) : null}
+                 </li>
+               ))}
+           </ul>
+         </SectionCard>
+       ) : null}
  
- ⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다. 
- 오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
+       {Array.isArray(guide.companyAnalyses) && guide.companyAnalyses.length > 0 ? (
+         <SectionCard title="기업 분석" tone="impact" badgeText="기업">
+           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+             {guide.companyAnalyses
+               .filter(
+                 (c) =>
+                   c &&
+                   (c.name ||
+                     c.thesis ||
+                     (c.catalysts && c.catalysts.length) ||
+                     (c.risks && c.risks.length) ||
+-                    c.valuation)
++                    c.valuation ||
++                    c.technicalLevels)
+               )
+               .map((c, index) => (
+                 <li key={`company-${index}`} className="space-y-1">
+                   {c.name ? <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p> : null}
+                   {c.thesis ? (
+                     <p className="text-xs text-slate-600 dark:text-slate-300">
+                       <TextWithLinks text={c.thesis} />
+                     </p>
+                   ) : null}
+                   {Array.isArray(c.catalysts) && c.catalysts.length > 0 ? (
+                     <div className="space-y-1">
+                       <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">촉매</p>
+                       <ul className="list-disc pl-5 text-xs">
+                         {c.catalysts.map((item, i) => (
+                           <li key={`cat-${index}-${i}`}>
+                             <TextWithLinks text={item} />
+                           </li>
+                         ))}
+                       </ul>
+                     </div>
+                   ) : null}
+                   {Array.isArray(c.risks) && c.risks.length > 0 ? (
+                     <div className="space-y-1">
+                       <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">리스크</p>
+                       <ul className="list-disc pl-5 text-xs">
+                         {c.risks.map((item, i) => (
+                           <li key={`risk-${index}-${i}`}>
+                             <TextWithLinks text={item} />
+                           </li>
+                         ))}
+                       </ul>
+                     </div>
+                   ) : null}
+                   {c.valuation ? (
+                     <p className="text-xs text-slate-600 dark:text-slate-300">
+                       <TextWithLinks text={c.valuation} />
+                     </p>
+                   ) : null}
++                  {c.technicalLevels ? (
++                    <div className="space-y-1">
++                      <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">기술적 구간</p>
++                      <p className="text-xs text-slate-600 dark:text-slate-300">
++                        <TextWithLinks text={c.technicalLevels} />
++                      </p>
++                    </div>
++                  ) : null}
+                 </li>
+               ))}
+           </ul>
+         </SectionCard>
+       ) : null}
  
- 필드 순서는 다음과 같다.
+       {watchlist.length > 0 ? (
+         <SectionCard title="워치리스트" tone="neutral" badgeText="관찰">
+           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+             {watchlist.map((w, index) => (
+               <li key={`watch-${index}`}>
+                 <TextWithLinks text={w} />
+               </li>
+             ))}
+           </ul>
+         </SectionCard>
+       ) : null}
+     </div>
+   );
+ }
  
- {
+ StockThemePreview.propTypes = {
+   guide: PropTypes.shape({
+     overview: PropTypes.string,
+     marketSummary: PropTypes.string,
+     sectorHighlights: PropTypes.arrayOf(
+       PropTypes.shape({
+         name: PropTypes.string,
+         outlook: PropTypes.string,
+         leaders: PropTypes.arrayOf(PropTypes.string)
+       })
+     ),
+     companyAnalyses: PropTypes.arrayOf(
+       PropTypes.shape({
+         name: PropTypes.string,
+         thesis: PropTypes.string,
+         catalysts: PropTypes.arrayOf(PropTypes.string),
+         risks: PropTypes.arrayOf(PropTypes.string),
+-        valuation: PropTypes.string
++        valuation: PropTypes.string,
++        technicalLevels: PropTypes.string
+       })
+     ),
+     watchlist: PropTypes.arrayOf(PropTypes.string)
+   })
+ };
+ 
+ StockThemePreview.defaultProps = { guide: null };
+ 
+ export default StockThemePreview;
+diff --git a/frontend/src/components/issue/StockGuideView.jsx b/frontend/src/components/issue/StockGuideView.jsx
+index 18af0777b7d6e97e667dcfec9063107a7de18377..c24fffe6963f47da0fd6b7fa1b91012ed252a901 100644
+--- a/frontend/src/components/issue/StockGuideView.jsx
++++ b/frontend/src/components/issue/StockGuideView.jsx
+@@ -90,112 +90,122 @@ function StockGuideView({ guide }) {
+                     <ul className="list-disc pl-5 text-xs">
+                       {s.leaders.map((name, i) => (
+                         <li key={`leader-${index}-${i}`}>
+                           <TextWithLinks text={name} />
+                         </li>
+                       ))}
+                     </ul>
+                   ) : null}
+                 </li>
+               ))}
+           </ul>
+         </SectionCard>
+       ) : null}
+ 
+       {Array.isArray(guide.companyAnalyses) && guide.companyAnalyses.length > 0 ? (
+         <SectionCard title="기업 분석" tone="impact" badgeText="기업">
+           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+             {guide.companyAnalyses
+               .filter(
+                 (c) =>
+                   c &&
+                   (c.name ||
+                     c.thesis ||
+                     (c.catalysts && c.catalysts.length) ||
+                     (c.risks && c.risks.length) ||
+-                    c.valuation)
++                    c.valuation ||
++                    c.technicalLevels)
+               )
+               .map((c, index) => (
+                 <li key={`company-${index}`} className="space-y-1">
+                   {c.name ? <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p> : null}
+                   {c.thesis ? (
+                     <p className="text-xs text-slate-600 dark:text-slate-300">
+                       <TextWithLinks text={c.thesis} />
+                     </p>
+                   ) : null}
+                   {Array.isArray(c.catalysts) && c.catalysts.length > 0 ? (
+                     <div className="space-y-1">
+                       <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">촉매</p>
+                       <ul className="list-disc pl-5 text-xs">
+                         {c.catalysts.map((item, i) => (
+                           <li key={`cat-${index}-${i}`}>
+                             <TextWithLinks text={item} />
+                           </li>
+                         ))}
+                       </ul>
+                     </div>
+                   ) : null}
+                   {Array.isArray(c.risks) && c.risks.length > 0 ? (
+                     <div className="space-y-1">
+                       <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">리스크</p>
+                       <ul className="list-disc pl-5 text-xs">
+                         {c.risks.map((item, i) => (
+                           <li key={`risk-${index}-${i}`}>
+                             <TextWithLinks text={item} />
+                           </li>
+                         ))}
+                       </ul>
+                     </div>
+                   ) : null}
+                   {c.valuation ? (
+                     <p className="text-xs text-slate-600 dark:text-slate-300">
+                       <TextWithLinks text={c.valuation} />
+                     </p>
+                   ) : null}
++                  {c.technicalLevels ? (
++                    <div className="space-y-1">
++                      <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">기술적 구간</p>
++                      <p className="text-xs text-slate-600 dark:text-slate-300">
++                        <TextWithLinks text={c.technicalLevels} />
++                      </p>
++                    </div>
++                  ) : null}
+                 </li>
+               ))}
+           </ul>
+         </SectionCard>
+       ) : null}
+ 
+       {watchlist.length > 0 ? (
+         <SectionCard title="워치리스트" tone="neutral" badgeText="관찰">
+           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+             {watchlist.map((w, index) => (
+               <li key={`watch-${index}`}>
+                 <TextWithLinks text={w} />
+               </li>
+             ))}
+           </ul>
+         </SectionCard>
+       ) : null}
+     </div>
+   );
+ }
+ 
+ StockGuideView.propTypes = {
+   guide: PropTypes.shape({
+     overview: PropTypes.string,
+     marketSummary: PropTypes.string,
+     sectorHighlights: PropTypes.arrayOf(
+       PropTypes.shape({
+         name: PropTypes.string,
+         outlook: PropTypes.string,
+         leaders: PropTypes.arrayOf(PropTypes.string)
+       })
+     ),
+     companyAnalyses: PropTypes.arrayOf(
+       PropTypes.shape({
+         name: PropTypes.string,
+         thesis: PropTypes.string,
+         catalysts: PropTypes.arrayOf(PropTypes.string),
+         risks: PropTypes.arrayOf(PropTypes.string),
+-        valuation: PropTypes.string
++        valuation: PropTypes.string,
++        technicalLevels: PropTypes.string
+       })
+     ),
+     watchlist: PropTypes.arrayOf(PropTypes.string)
+   })
+ };
+ 
+ StockGuideView.defaultProps = { guide: null };
+ 
+ export default StockGuideView;
+diff --git a/frontend/src/pages/IssuePage.jsx b/frontend/src/pages/IssuePage.jsx
+index 0e547990bd989ef73ba855afc71d8537052d27b6..8833a621db38935587df8e08fda8beae435d814e 100644
+--- a/frontend/src/pages/IssuePage.jsx
++++ b/frontend/src/pages/IssuePage.jsx
+@@ -308,50 +308,51 @@ function IssuePage() {
+           ${Array.isArray(sector.leaders) && sector.leaders.length > 0 ? `
+             <p><strong>대표 종목:</strong> ${sector.leaders.map(l => escapeHtml(l)).join(', ')}</p>
+           ` : ''}
+         </div>
+       `).join('')}
+     </div>`;
+       }
+ 
+       if (Array.isArray(stockGuide.companyAnalyses) && stockGuide.companyAnalyses.length > 0) {
+         themeSpecificContent += `
+     <div class="section stock">
+       <h2 class="section-title">기업 분석</h2>
+       ${stockGuide.companyAnalyses.map(company => `
+         <div class="item-card">
+           ${company.name ? `<h3>${escapeHtml(company.name)}</h3>` : ''}
+           ${company.thesis ? `<p>${escapeHtml(company.thesis)}</p>` : ''}
+           ${Array.isArray(company.catalysts) && company.catalysts.length > 0 ? `
+             <p><strong style="color: #059669;">촉매:</strong></p>
+             <ul>${company.catalysts.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+           ` : ''}
+           ${Array.isArray(company.risks) && company.risks.length > 0 ? `
+             <p><strong style="color: #dc2626;">리스크:</strong></p>
+             <ul>${company.risks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+           ` : ''}
+           ${company.valuation ? `<p><em>${escapeHtml(company.valuation)}</em></p>` : ''}
++          ${company.technicalLevels ? `<p><strong>기술적 구간:</strong> ${escapeHtml(company.technicalLevels)}</p>` : ''}
+         </div>
+       `).join('')}
+     </div>`;
+       }
+ 
+       if (Array.isArray(stockGuide.watchlist) && stockGuide.watchlist.length > 0) {
+         themeSpecificContent += `
+     <div class="section">
+       <h2 class="section-title">워치리스트</h2>
+       <ul>${stockGuide.watchlist.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>
+     </div>`;
+       }
+     }
+ 
+     // 정부지원정보 테마
+     if (issue.theme === 'support' && supportGuide) {
+       if (supportGuide.overview) {
+         themeSpecificContent += `
+     <div class="section">
+       <h2 class="section-title">정부지원정보 개요</h2>
+       <p>${escapeHtml(supportGuide.overview)}</p>
+     </div>`;
+       }
+ 
+       if (Array.isArray(supportGuide.programs)) {
+diff --git a/frontend/src/utils/themeDraftDefaults.js b/frontend/src/utils/themeDraftDefaults.js
+index cca8a96797da7379a062a8b5efc746ff29ed23f5..81c2575285b7bc834ceff9a47dd639965d212815 100644
+--- a/frontend/src/utils/themeDraftDefaults.js
++++ b/frontend/src/utils/themeDraftDefaults.js
+@@ -124,75 +124,82 @@ export function normalizeHealthGuide(raw = {}, { withPresets = false } = {}) {
+   const base = createHealthGuide({ withPresets });
+   const r = asObject(raw, {});
+   return {
+     overview: String(r.overview ?? ''),
+     lifestyleTips: toStringArray(r.lifestyleTips ?? base.lifestyleTips),
+     conditions: Array.isArray(r.conditions) ? r.conditions.map((c) => createHealthCondition({
+       name: c?.name, summary: c?.summary, warningSigns: c?.warningSigns, careTips: c?.careTips, resources: c?.resources
+     })) : base.conditions,
+     emergencyGuide: toStringArray(r.emergencyGuide ?? base.emergencyGuide)
+   };
+ }
+ export function cloneHealthGuide(raw = {}, opts) { return normalizeHealthGuide(raw, opts); }
+ 
+ //////////////////////////////
+ // Stocks (주식정보)
+ //////////////////////////////
+ 
+ export const STOCK_SECTOR_PRESETS = [
+   { name: '반도체', outlook: '메모리 가격 회복·AI 서버 수요 확대', leaders: ['삼성전자','SK하이닉스'] },
+   { name: '2차전지', outlook: '중국 공급과잉 변수, 선별적 접근', leaders: ['LG에너지솔루션','에코프로'] },
+   { name: '로봇', outlook: '산업/서비스 로봇 수요 확대, 정책 모멘텀', leaders: ['두산로보틱스','포스코DX'] }
+ ];
+ export function createSectorHighlight(name = '', outlook = '', leaders = []) {
+   return { name: String(name ?? ''), outlook: String(outlook ?? ''), leaders: toStringArray(leaders) };
+ }
+-export function createCompanyAnalysis(name = '', thesis = '', catalysts = [], risks = [], valuation = '') {
+-  return { name: String(name ?? ''), thesis: String(thesis ?? ''), catalysts: toStringArray(catalysts), risks: toStringArray(risks), valuation: String(valuation ?? '') };
++export function createCompanyAnalysis(name = '', thesis = '', catalysts = [], risks = [], valuation = '', technicalLevels = '') {
++  return {
++    name: String(name ?? ''),
++    thesis: String(thesis ?? ''),
++    catalysts: toStringArray(catalysts),
++    risks: toStringArray(risks),
++    valuation: String(valuation ?? ''),
++    technicalLevels: String(technicalLevels ?? '')
++  };
+ }
+ export function createWatchItem(symbol = '', note = '') { return { symbol: String(symbol ?? ''), note: String(note ?? '') }; }
+ export function createStockGuide() {
+   return { overview: '', marketSummary: '', sectorHighlights: [], companyAnalyses: [], watchlist: [] };
+ }
+ export function normalizeStockGuide(raw = {}) {
+   const r = asObject(raw, {});
+   const normalizeWatch = (arr) => {
+     if (!Array.isArray(arr)) return [];
+     const hasObject = arr.some((x) => x && typeof x === 'object');
+     if (hasObject) {
+       return arr.map((w) => ({ symbol: String(w?.symbol ?? ''), note: String(w?.note ?? '') })).filter((w) => w.symbol);
+     }
+     return toStringArray(arr);
+   };
+   return {
+     overview: String(r.overview ?? ''),
+     marketSummary: String(r.marketSummary ?? ''),
+     sectorHighlights: Array.isArray(r.sectorHighlights) ? r.sectorHighlights.map((s) =>
+       createSectorHighlight(s?.name, s?.outlook, s?.leaders ?? s?.stocks ?? [])
+     ) : [],
+     companyAnalyses: Array.isArray(r.companyAnalyses) ? r.companyAnalyses.map((c) =>
+-      createCompanyAnalysis(c?.name, c?.thesis, c?.catalysts, c?.risks, c?.valuation)
++      createCompanyAnalysis(c?.name, c?.thesis, c?.catalysts, c?.risks, c?.valuation, c?.technicalLevels)
+     ) : [],
+     watchlist: normalizeWatch(r.watchlist)
+   };
+ }
+ export function cloneStockGuide(raw = {}) { return normalizeStockGuide(raw); }
+ 
+ //////////////////////////////
+ // Support (정부지원)
+ //////////////////////////////
+ 
+ export const SUPPORT_COMMON_RESOURCES_PRESETS = [
+   '정부24 https://www.gov.kr',
+   '복지로 https://www.bokjiro.go.kr',
+   '보건복지 상담 129'
+ ];
+ export function createSupportProgram(name = '') {
+   return { name, summary: '', eligibility: [], benefits: [], requiredDocs: [], applicationProcess: [] };
+ }
+ export function createSupportGuide({ withPresets = true } = {}) {
+   return { overview: '', programs: withPresets ? [createSupportProgram('대표 지원 프로그램')] : [], commonResources: withPresets ? [...SUPPORT_COMMON_RESOURCES_PRESETS] : [] };
+ }
+ export function normalizeSupportGuide(raw = {}, { withPresets = false } = {}) {
+   const base = createSupportGuide({ withPresets });
+   const r = asObject(raw, {});
+   return {
  
 EOF
 )

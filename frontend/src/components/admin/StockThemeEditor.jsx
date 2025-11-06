@@ -268,6 +268,16 @@ function StockThemeEditor({ guide, onChange }) {
                   placeholder="멀티플/밴드, 목표가 근거, 체크 포인트 (URL 입력 가능)"
                 />
               </label>
+
+              <label className="flex flex-col gap-2 text-sm">
+                <span className="font-medium">기술적 구간 · 지지/저항</span>
+                <textarea
+                  value={c.technicalLevels ?? ''}
+                  onChange={(e) => handleCompanyField(index, 'technicalLevels', e.target.value)}
+                  className="min-h-[80px] rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-500/40 dark:bg-slate-900 dark:text-slate-100"
+                  placeholder="주요 지지선·저항선, 이동평균, 거래량 구간 등 기술적 메모"
+                />
+              </label>
             </div>
           ))}
         </div>
@@ -303,7 +313,8 @@ StockThemeEditor.propTypes = {
         thesis: PropTypes.string,
         catalysts: PropTypes.arrayOf(PropTypes.string),
         risks: PropTypes.arrayOf(PropTypes.string),
-        valuation: PropTypes.string
+        valuation: PropTypes.string,
+        technicalLevels: PropTypes.string
       })
     ),
     watchlist: PropTypes.arrayOf(PropTypes.string)

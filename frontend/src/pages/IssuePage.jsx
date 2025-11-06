@@ -330,6 +330,7 @@ function IssuePage() {
             <ul>${company.risks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
           ` : ''}
           ${company.valuation ? `<p><em>${escapeHtml(company.valuation)}</em></p>` : ''}
+          ${company.technicalLevels ? `<p><strong>기술적 구간:</strong> ${escapeHtml(company.technicalLevels)}</p>` : ''}
         </div>
       `).join('')}
     </div>`;
