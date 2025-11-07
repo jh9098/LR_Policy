@@ -242,6 +242,24 @@ function buildSubmissionPayload(draft) {
     supportGuide: theme === 'support' ? ensured.supportGuide : null
   };
 }
+function CollapseSection({ title, defaultCollapsed = true, children }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <header className="flex items-center justify-between gap-3 px-6 py-4">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          {collapsed ? '펼치기' : '접기'}
+        </button>
+      </header>
+      {!collapsed ? <div className="px-6 pb-6">{children}</div> : null}
+    </section>
+  );
+}
 
 function AdminNewPage() {
   const [issueDraft, setIssueDraft] = useState(() => restoreDraftFromStorage());
@@ -775,70 +793,66 @@ function AdminNewPage() {
   return (
     <div className="min-h-screen bg-slate-100 py-10 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6">
-        <header className="space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-widest text-emerald-500">infoall · Admin</p>
-          <h1 className="text-3xl font-extrabold">새 게시물 등록</h1>
-        </header>
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <h2 className="text-lg font-semibold">테마 선택</h2>
-          <label className="flex flex-col gap-2 text-sm">
-            <span className="font-medium">테마</span>
-            <select
-              value={selectedTheme}
-              onChange={handleThemeChange}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-            >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* 왼쪽: 테마 버튼들 */}
+            <div className="flex flex-wrap gap-2">
               {THEME_CONFIG.map((theme) => (
-                <option key={theme.id} value={theme.id}>
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => handleThemeChange({ target: { value: theme.id } })}
+                  className={
+                    selectedTheme === theme.id
+                      ? 'inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
+                      : 'inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-200 dark:bg-slate-900/40 dark:text-slate-100 dark:hover:bg-slate-900/70'
+                  }
+                >
                   {theme.label}
-                </option>
+                </button>
               ))}
-            </select>
-            <span className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</span>
-            {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                세부 영역: {themeMeta.keyAreas.join(' · ')}
-              </span>
-            ) : null}
-          </label>
+            </div>
+
+            {/* 오른쪽: 프롬프트 복사 버튼 */}
+            <button
+              type="button"
+              onClick={handleCopyPrompt}
+              disabled={!isClipboardSupported || !themePrompt}
+              className={
+                isClipboardSupported && themePrompt
+                  ? 'inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
+                  : 'inline-flex items-center rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'
+              }
+            >
+              프롬프트 복사
+            </button>
+          </div>
+
+          {/* 테마 설명 */}
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {themeMeta?.description}
+          </p>
+          {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              세부 영역: {themeMeta.keyAreas.join(' · ')}
+            </p>
+          ) : null}
+
+          {/* 복사 결과 메시지 */}
+          {promptCopyFeedback && (
+            <p
+              className={`text-xs font-semibold ${
+                isCopyError
+                  ? 'text-rose-600 dark:text-rose-300'
+                  : 'text-emerald-700 dark:text-emerald-200'
+              }`}
+            >
+              {promptCopyFeedback}
+            </p>
+          )}
         </section>
 
-        {themePrompt && (
-          <section className="space-y-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-6 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-500/10">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">선택한 테마 프롬프트</h2>
-                <p className="text-xs text-emerald-700 dark:text-emerald-200/80">
-                  버튼을 누르면 {themeMeta?.label ?? '테마'}용 프롬프트가 복사됩니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopyPrompt}
-                disabled={!isClipboardSupported}
-                className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
-                  isClipboardSupported
-                    ? 'bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-500 dark:hover:bg-emerald-600'
-                    : 'cursor-not-allowed bg-slate-300 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-                }`}
-              >
-                프롬프트 복사
-              </button>
-            </div>
-            {promptCopyFeedback && (
-              <p
-                className={`text-xs font-semibold ${
-                  isCopyError
-                    ? 'text-rose-600 dark:text-rose-300'
-                    : 'text-emerald-700 dark:text-emerald-200'
-                }`}
-              >
-                {promptCopyFeedback}
-              </p>
-            )}
-          </section>
-        )}
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <h2 className="text-lg font-semibold">AI JSON 붙여넣기</h2>
@@ -900,6 +914,7 @@ function AdminNewPage() {
           )}
         </section>
 
+        <CollapseSection title="작성 영역 (기본 접힘)" defaultCollapsed={true}>
         <div className="grid gap-8 lg:grid-cols-2">
           <section className="space-y-6">
             <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -1526,6 +1541,7 @@ function AdminNewPage() {
             </SectionCard>
           </aside>
         </div>
+      </CollapseSection>
       </main>
     </div>
   );

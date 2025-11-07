@@ -18,7 +18,7 @@ export const THEME_CONFIG = [
     id: 'stocks',
     label: '주식정보',
     description:
-      '시장 동향, 섹터/기업 분석, 투자 전략과 리스크를 한눈에 정리합니다. 공시/뉴스 기반으로 핵심 포인트를 요약합니다.',
+      '최신 시장 동향, 섹터/기업 분석, 그리고 투자 전략까지.',
     accent: 'amber',
     showPerspectives: false,
     keyAreas: ['시장 동향', '섹터 분석', '기업 분석', '투자 전략', '공시/뉴스']
@@ -27,7 +27,7 @@ export const THEME_CONFIG = [
     id: 'parenting',
     label: '육아정보',
     description:
-      '임신·출산부터 학령기까지 연령대별 가이드와 체크리스트를 제공합니다. 신뢰 가능한 자료를 바탕으로 바로 적용 가능한 팁을 큐레이션합니다.',
+      '임신·출산부터 학령기까지 연령대별 가이드와 체크리스트를 제공합니다.',
     accent: 'sky',
     showPerspectives: false,
     // 합의된 개편 반영: 0~7세 통합, 학령 구간 정리
@@ -64,7 +64,7 @@ export const THEME_CONFIG = [
     id: 'health',
     label: '건강정보',
     description:
-      '질병관리(병명 심층)를 중심으로 정신건강·생애주기·예방/응급·증상·검사/수치 가이드를 분리 제공하여 중복 없이 탐색 동선을 단순화합니다.',
+      '질병관리(병명 심층)를 중심으로 정신건강·생애주기·예방/응급·증상·검사/수치 가이드를 제공합니다.',
     accent: 'emerald',
     showPerspectives: false,
     // 질병명 심층은 ‘질병관리’에서만, 다른 축은 상황/과정 중심
@@ -74,7 +74,7 @@ export const THEME_CONFIG = [
     id: 'support',
     label: '정부지원정보',
     description:
-      '정부·지자체 지원금/바우처/공공서비스를 한눈에. 자격·혜택·서류·신청 절차를 표준화된 포맷으로 안내합니다. (의료/건강 지원 포함)',
+      '정부·지자체 지원금/바우처/공공서비스를 한눈에. 자격·혜택·서류·신청 절차를안내합니다. (의료/건강 지원 포함)',
     accent: 'purple',
     showPerspectives: false,
     // 의료/건강 지원(재난적의료비, 산정특례, 국가암검진 등) 명시 반영

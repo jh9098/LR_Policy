@@ -168,8 +168,7 @@ function ThemePage() {
       <header className="space-y-4 rounded-3xl border border-slate-200 bg-white px-6 py-8 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500">Theme · {theme.label}</p>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">{theme.label} 전체 보기</h1>
+            <p className="text-xl font-semibold uppercase tracking-widest text-indigo-500">Theme · {theme.label}</p>
             <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{theme.description}</p>
             {isUnknownTheme && (
               <p className="text-xs text-amber-600 dark:text-amber-300">

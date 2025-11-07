@@ -7,9 +7,9 @@ import { NavLink, Outlet } from 'react-router-dom';
 import SiteHeader from './SiteHeader.jsx';
 
 const NAV_ITEMS = [
-  { type: 'route', label: '새 글 작성', to: '/admin/new', description: 'AI JSON 붙여넣기 + Firestore 등록' },
-  { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: 'Firestore에서 직접 불러온 목록 관리' },
-  { type: 'placeholder', label: '환경/설정 (준비 중)', description: 'TODO: 향후 접근 제한 및 감사 로그' }
+  { type: 'route', label: '새 글 작성', to: '/admin/new', description: '' },
+  { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: '' },
+  { type: 'placeholder', label: '환경/설정 (준비 중)', description: '' }
 ];
 
 export default function AdminLayout() {
@@ -24,10 +24,6 @@ export default function AdminLayout() {
       <header className="border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 lg:px-8">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500 dark:text-indigo-300">운영 도구</p>
-              <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">infoall 관리자</h1>
-            </div>
             <button
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-semibold shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900 lg:hidden"
@@ -85,9 +81,6 @@ export default function AdminLayout() {
       {/* 본문 */}
       <main className="bg-slate-50/40 px-4 py-6 dark:bg-slate-900/40 lg:px-8 lg:py-10">
         <div className="mx-auto w-full max-w-6xl space-y-6">
-          <header className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <h2 className="text-xl font-semibold">운영 대시보드</h2>
-          </header>
           <div className="pb-16">
             <Outlet />
           </div>

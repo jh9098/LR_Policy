@@ -585,7 +585,6 @@ function IssuePage() {
               >
                 HTML 복사
               </button>
-              <span>문서 ID: {issue.id}</span>
             </div>
           </header>
 

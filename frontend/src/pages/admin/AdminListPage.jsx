@@ -152,15 +152,13 @@ function AdminListPage() {
                       <Link
                         to={`/admin/edit/${item.id}`}
                         className="inline-flex items-center justify-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900"
-                      >
-                        보기 / 수정
+                      >수정
                       </Link>
                       <button
                         type="button"
                         onClick={() => handleDelete(item.id, item.title)}
                         className="inline-flex items-center justify-center rounded-md border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-rose-500/50 dark:text-rose-200 dark:hover:bg-rose-500/10 dark:focus-visible:ring-offset-slate-900"
-                      >
-                        삭제
+                      >삭제
                       </button>
                     </div>
                   </td>

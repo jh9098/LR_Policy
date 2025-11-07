@@ -7,13 +7,14 @@ export const THEME_PROMPTS = {
 ⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다. 
 오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
 **혹시 내용이 너무 방대하면 json을 여러개 생성해도된다.**
+“반드시 RFC 8259 표준의 유효한 JSON 한 객체만 ‘한 줄’로 출력하고, 주석·후행 쉼표·단일따옴표·키 중복·NaN/Infinity를 금지하며, 모든 큰따옴표 내부의 큰따옴표는 \" 로 이스케이프하고 줄바꿈(\n, \r)과 탭은 공백으로 대체하라. JSON 외 텍스트는 절대 출력하지 마라.”
 필드 순서는 다음과 같다.
 
 {
   "theme": "policy",
   "easySummary": string,
   "title": string,
-  "date": string,                    // "YYYY-MM-DD" 또는 "정보 부족"
+  "date": string,                    // "YYYY-MM-DD HH:MM" 현재한국시간으로 답변"
   "category": string,
   "subcategory": string,
   "summaryCard": string,
@@ -73,7 +74,7 @@ export const THEME_PROMPTS = {
   "theme": "parenting",
   "easySummary": string,
   "title": string,
-  "date": string,
+  "date": string,                    // "YYYY-MM-DD HH:MM" 현재한국시간으로 답변"
   "category": string,
   "subcategory": string,
   "summaryCard": string,
@@ -126,12 +127,13 @@ export const THEME_PROMPTS = {
 ⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다. 
 오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
 **혹시 내용이 너무 방대하면 json을 여러개 생성해도된다.**
+“반드시 RFC 8259 표준의 유효한 JSON 한 객체만 ‘한 줄’로 출력하고, 주석·후행 쉼표·단일따옴표·키 중복·NaN/Infinity를 금지하며, 모든 큰따옴표 내부의 큰따옴표는 \" 로 이스케이프하고 줄바꿈(\n, \r)과 탭은 공백으로 대체하라. JSON 외 텍스트는 절대 출력하지 마라.”
 필드 순서:
 {
   "theme": "lifestyle",
   "easySummary": string,
   "title": string,
-  "date": string,
+  "date": string,                    // "YYYY-MM-DD HH:MM" 현재한국시간으로 답변"
   "category": string,
   "subcategory": string,
   "summaryCard": string,
@@ -180,12 +182,13 @@ export const THEME_PROMPTS = {
 ⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다.
 오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
 **혹시 내용이 너무 방대하면 json을 여러개 생성해도된다.**
+“반드시 RFC 8259 표준의 유효한 JSON 한 객체만 ‘한 줄’로 출력하고, 주석·후행 쉼표·단일따옴표·키 중복·NaN/Infinity를 금지하며, 모든 큰따옴표 내부의 큰따옴표는 \" 로 이스케이프하고 줄바꿈(\n, \r)과 탭은 공백으로 대체하라. JSON 외 텍스트는 절대 출력하지 마라.”
 필드 순서는 다음과 같다. 
 {
    "theme": "health",
    "easySummary": string,
    "title": string,
-   "date": string,
+   "date": string,                    // "YYYY-MM-DD HH:MM" 현재한국시간으로 답변"
    "category": string,
    "subcategory": string,
    "summaryCard": string,
@@ -220,13 +223,14 @@ export const THEME_PROMPTS = {
 ⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다. 
 오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
 **혹시 내용이 너무 방대하면 json을 여러개 생성해도된다.**
+“반드시 RFC 8259 표준의 유효한 JSON 한 객체만 ‘한 줄’로 출력하고, 주석·후행 쉼표·단일따옴표·키 중복·NaN/Infinity를 금지하며, 모든 큰따옴표 내부의 큰따옴표는 \" 로 이스케이프하고 줄바꿈(\n, \r)과 탭은 공백으로 대체하라. JSON 외 텍스트는 절대 출력하지 마라.”
 필드 순서는 다음과 같다.
 
 {
   "theme": "stocks",
   "easySummary": string,
   "title": string,
-  "date": string,
+  "date": string,                    // "YYYY-MM-DD HH:MM" 현재한국시간으로 답변"
   "category": string,
   "subcategory": string,
   "summaryCard": string,
@@ -284,13 +288,14 @@ export const THEME_PROMPTS = {
 ⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다. 
 오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
 **혹시 내용이 너무 방대하면 json을 여러개 생성해도된다.**
+“반드시 RFC 8259 표준의 유효한 JSON 한 객체만 ‘한 줄’로 출력하고, 주석·후행 쉼표·단일따옴표·키 중복·NaN/Infinity를 금지하며, 모든 큰따옴표 내부의 큰따옴표는 \" 로 이스케이프하고 줄바꿈(\n, \r)과 탭은 공백으로 대체하라. JSON 외 텍스트는 절대 출력하지 마라.”
 필드 순서는 다음과 같다.
 
 {
   "theme": "support",
   "easySummary": string,
   "title": string,
-  "date": string,
+  "date": string,                    // "YYYY-MM-DD HH:MM" 현재한국시간으로 답변"
   "category": string,
   "subcategory": string,
   "summaryCard": string,

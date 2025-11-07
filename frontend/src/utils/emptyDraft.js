@@ -45,23 +45,28 @@ export function getCurrentKoreanDateTimeString() {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hourCycle: 'h23' // ← 24시간제로 강제
     });
+
     const parts = formatter.formatToParts(now).reduce((acc, part) => {
       if (part.type !== 'literal') {
         acc[part.type] = part.value;
       }
       return acc;
     }, {});
+
     const year = parts.year ?? '0000';
     const month = parts.month ?? '00';
     const day = parts.day ?? '00';
-    const hour = parts.hour ?? '00';
-    const minute = parts.minute ?? '00';
+    const hour = (parts.hour ?? '00').padStart(2, '0');
+    const minute = (parts.minute ?? '00').padStart(2, '0');
+
     return `${year}-${month}-${day} ${hour}:${minute}`;
   } catch (error) {
     console.warn('한국 시간 문자열 생성 실패, UTC 기준으로 대체합니다:', error);
-    const fallback = new Date().toISOString();
+    const fallback = new Date().toISOString(); // 2025-11-07T00:12:34.000Z
+    // ISO는 UTC라서 일단 자르고 공백으로 바꿔서 시:분까지만
     return fallback.replace('T', ' ').slice(0, 16);
   }
 }
