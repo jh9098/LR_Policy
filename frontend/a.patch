@@ -1,496 +1,650 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/frontend/src/components/admin/StockThemeEditor.jsx b/frontend/src/components/admin/StockThemeEditor.jsx
-index a2f5f0b2f73c329a304858e3370ff67c8b46622e..3123bfc3825494e9f5c673bc70a72f1e56eb5f05 100644
---- a/frontend/src/components/admin/StockThemeEditor.jsx
-+++ b/frontend/src/components/admin/StockThemeEditor.jsx
-@@ -246,71 +246,82 @@ function StockThemeEditor({ guide, onChange }) {
-                 items={c.catalysts || []}
-                 onChange={(list) => handleCompanyArrayField(index, 'catalysts', list)}
-                 addLabel="촉매 추가"
-                 itemPlaceholder="예: 신규 제품 출시, 원가 하락, 고객사 증설 기사 링크"
-               />
+diff --git a/frontend/src/pages/admin/AdminNewPage.jsx b/frontend/src/pages/admin/AdminNewPage.jsx
+index e583f32a5db6aca3dc369e820ab5ae80c5677b16..ed5af74a1c86c4c4a51ce7a76d4b41fd0349a887 100644
+--- a/frontend/src/pages/admin/AdminNewPage.jsx
++++ b/frontend/src/pages/admin/AdminNewPage.jsx
+@@ -3,83 +3,87 @@
+ // 현재 누구나 /admin/new 에 접근하면 issues 컬렉션에 글을 추가할 수 있다. TODO: 프로덕션 단계에서는 접근 제한과 Firestore 보안 규칙 강화를 반드시 적용해야 한다.
  
-               <SimpleListEditor
-                 tone="amber"
-                 title="리스크(Risks)"
-                 description="투자 논지를 훼손할 수 있는 리스크를 bullet로 작성"
-                 items={c.risks || []}
-                 onChange={(list) => handleCompanyArrayField(index, 'risks', list)}
-                 addLabel="리스크 추가"
-                 itemPlaceholder="예: 규제 강화, 수요 둔화, 고객 이탈, 악재 기사 링크"
-               />
+ import { useEffect, useMemo, useRef, useState } from 'react';
+ import IntensityBar from '../../components/IntensityBar.jsx';
+ import SectionCard from '../../components/SectionCard.jsx';
+ import LifestyleThemeEditor from '../../components/admin/LifestyleThemeEditor.jsx';
+ import LifestyleThemePreview from '../../components/admin/LifestyleThemePreview.jsx';
+ import ParentingThemeEditor from '../../components/admin/ParentingThemeEditor.jsx';
+ import ParentingThemePreview from '../../components/admin/ParentingThemePreview.jsx';
+ import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
+ import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
+ import StockThemeEditor from '../../components/admin/StockThemeEditor.jsx';
+ import StockThemePreview from '../../components/admin/StockThemePreview.jsx';
+ import SupportThemeEditor from '../../components/admin/SupportThemeEditor.jsx';
+ import SupportThemePreview from '../../components/admin/SupportThemePreview.jsx';
+ import {
+   getCategoryOptions,
+   getDefaultCategory,
+   getSubcategoryOptions,
+   isValidCategory,
+   isValidSubcategory
+ } from '../../constants/categoryStructure.js';
+ import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
+ import { createIssue } from '../../firebaseClient.js';
+ import { getThemePrompt } from '../../constants/themePrompts.js';
+-import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
++import {
++  createFreshDraft,
++  ensureThemeGuides,
++  getCurrentKoreanDateTimeString
++} from '../../utils/emptyDraft.js';
+ import {
+   createHealthGuide,
+   createLifestyleGuide,
+   createParentingGuide,
+   createSupportGuide
+ } from '../../utils/themeDraftDefaults.js';
+ import { loadDraftFromJson } from '../../utils/loadDraftFromJson.js';
  
+ const STORAGE_KEY = 'adminDraftV7';
+ const SOURCE_TYPE_OPTIONS = [
+   { value: 'official', label: '공식 발표' },
+   { value: 'youtube', label: '유튜브' },
+   { value: 'media', label: '언론/매체' },
+   { value: 'etc', label: '기타' }
+ ];
+ 
+ const PROGRESSIVE_NOTE =
+   '아래 내용은 일부 진보측 전망이며, 확실하지 않은 사실일 수 있습니다.';
+ const CONSERVATIVE_NOTE =
+   '아래 내용은 일부 보수측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+ const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
+ 
+ function restoreDraftFromStorage() {
+   if (typeof window === 'undefined') {
+     return createFreshDraft();
+   }
+   try {
+     const stored = window.localStorage.getItem(STORAGE_KEY);
+     if (!stored) {
+       return createFreshDraft();
+     }
+-    return ensureThemeGuides(loadDraftFromJson(stored));
++    return withDefaultDate(ensureThemeGuides(loadDraftFromJson(stored)));
+   } catch (error) {
+     console.warn('로컬 스토리지 초안 복구 실패:', error);
+     return createFreshDraft();
+   }
+ }
+ 
+ function sanitizeJsonNewlines(rawText) {
+   if (typeof rawText !== 'string' || rawText.length === 0) {
+     return rawText || '';
+   }
+ 
+   let sanitized = '';
+   let inString = false;
+   let escaped = false;
+ 
+   for (let index = 0; index < rawText.length; index += 1) {
+     const char = rawText[index];
+ 
+     if (escaped) {
+       sanitized += char;
+       escaped = false;
+       continue;
+     }
+ 
+     if (char === '\\') {
+@@ -90,50 +94,177 @@ function sanitizeJsonNewlines(rawText) {
+ 
+     if (char === '"') {
+       inString = !inString;
+       sanitized += char;
+       continue;
+     }
+ 
+     if (inString && (char === '\n' || char === '\r')) {
+       continue;
+     }
+ 
+     sanitized += char;
+   }
+ 
+   return sanitized;
+ }
+ 
+ function parseDraftFromJson(jsonText) {
+   const parsed = loadDraftFromJson(jsonText);
+   if (!isValidThemeId(parsed.theme)) {
+     parsed.theme = DEFAULT_THEME_ID;
+   }
+   return ensureThemeGuides(parsed);
+ }
+ 
++function withDefaultDate(draft) {
++  const dateValue = typeof draft?.date === 'string' ? draft.date.trim() : '';
++  if (dateValue.length > 0) {
++    return dateValue === draft.date ? draft : { ...draft, date: dateValue };
++  }
++  return { ...draft, date: getCurrentKoreanDateTimeString() };
++}
++
++function parseDraftStrict(jsonText) {
++  const trimmed = typeof jsonText === 'string' ? jsonText.trim() : '';
++  if (trimmed.length === 0) {
++    throw new Error('JSON 문자열이 비어 있습니다.');
++  }
++  try {
++    JSON.parse(trimmed);
++  } catch (error) {
++    throw new Error(error?.message ?? 'JSON 파싱에 실패했습니다.');
++  }
++  return withDefaultDate(parseDraftFromJson(trimmed));
++}
++
++function splitJsonObjects(rawText) {
++  const trimmed = typeof rawText === 'string' ? rawText.trim() : '';
++  if (trimmed.length === 0) {
++    return [];
++  }
++
++  const objects = [];
++  let depth = 0;
++  let startIndex = -1;
++  let inString = false;
++  let escaped = false;
++
++  for (let index = 0; index < trimmed.length; index += 1) {
++    const char = trimmed[index];
++
++    if (escaped) {
++      escaped = false;
++      continue;
++    }
++
++    if (char === '\\') {
++      escaped = true;
++      continue;
++    }
++
++    if (char === '"') {
++      inString = !inString;
++      continue;
++    }
++
++    if (inString) {
++      continue;
++    }
++
++    if (char === '{') {
++      if (depth === 0) {
++        startIndex = index;
++      }
++      depth += 1;
++      continue;
++    }
++
++    if (char === '}') {
++      if (depth === 0) {
++        throw new Error('중괄호의 짝이 맞지 않습니다.');
++      }
++      depth -= 1;
++      if (depth === 0 && startIndex !== -1) {
++        const slice = trimmed.slice(startIndex, index + 1).trim();
++        if (slice.length > 0) {
++          objects.push(slice);
++        }
++        startIndex = -1;
++      }
++    }
++  }
++
++  if (inString || depth !== 0) {
++    throw new Error('JSON 문자열이 올바르게 닫히지 않았습니다.');
++  }
++
++  if (objects.length === 0) {
++    throw new Error('JSON 객체를 찾을 수 없습니다. {"theme": ...} 형식인지 확인해 주세요.');
++  }
++
++  return objects;
++}
++
++function buildSubmissionPayload(draft) {
++  const ensured = withDefaultDate(ensureThemeGuides(draft));
++  const theme = isValidThemeId(ensured.theme) ? ensured.theme : DEFAULT_THEME_ID;
++  const themeMeta = THEME_CONFIG.find((item) => item.id === theme) ?? THEME_CONFIG[0];
++  const allowPerspectives = themeMeta?.showPerspectives ?? false;
++  const category = isValidCategory(theme, ensured.category) ? ensured.category : getDefaultCategory(theme);
++  const subcategory = isValidSubcategory(theme, category, ensured.subcategory) ? ensured.subcategory : '';
++  const normalizedKeyPoints = Array.isArray(ensured.keyPoints)
++    ? ensured.keyPoints.map((point) => (typeof point === 'string' ? point : String(point ?? '')))
++    : [];
++  const normalizedSources = Array.isArray(ensured.sources)
++    ? ensured.sources.map((source) => ({
++        type: typeof source?.type === 'string' ? source.type : 'official',
++        channelName: typeof source?.channelName === 'string' ? source.channelName : '',
++        sourceDate: typeof source?.sourceDate === 'string' ? source.sourceDate : '',
++        timestamp: typeof source?.timestamp === 'string' ? source.timestamp : '',
++        note: typeof source?.note === 'string' ? source.note : ''
++      }))
++    : [];
++
++  return {
++    ...ensured,
++    date: ensured.date,
++    theme,
++    category,
++    subcategory,
++    keyPoints: normalizedKeyPoints,
++    sources: normalizedSources,
++    progressiveView: allowPerspectives ? ensured.progressiveView : null,
++    conservativeView: allowPerspectives ? ensured.conservativeView : null,
++    parentingGuide: theme === 'parenting' ? ensured.parentingGuide : null,
++    healthGuide: theme === 'health' ? ensured.healthGuide : null,
++    lifestyleGuide: theme === 'lifestyle' ? ensured.lifestyleGuide : null,
++    stockGuide: theme === 'stocks' ? ensured.stockGuide : null,
++    supportGuide: theme === 'support' ? ensured.supportGuide : null
++  };
++}
++
+ function AdminNewPage() {
+   const [issueDraft, setIssueDraft] = useState(() => restoreDraftFromStorage());
+   const [jsonInput, setJsonInput] = useState('');
+   const [jsonError, setJsonError] = useState('');
+   const [submitError, setSubmitError] = useState('');
+   const [isSubmitting, setIsSubmitting] = useState(false);
+   const [promptCopyFeedback, setPromptCopyFeedback] = useState('');
+   const copyTimeoutRef = useRef(null);
+ 
+   const categoryValue = issueDraft.category;
+   const subcategoryValue = issueDraft.subcategory;
+   const selectedTheme = issueDraft.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
+   const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
+   const themePrompt = getThemePrompt(selectedTheme);
+   const isClipboardSupported = typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
+   const isCopyError = promptCopyFeedback.startsWith('복사 실패');
+   const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
+   const isJsonAdjustRecommended = jsonError.includes('Bad control character');
+ 
+   const categoryOptions = useMemo(() => getCategoryOptions(selectedTheme), [selectedTheme]);
+   const subcategoryOptions = useMemo(
+     () => getSubcategoryOptions(selectedTheme, categoryValue),
+     [categoryValue, selectedTheme]
+   );
+ 
+@@ -215,79 +346,144 @@ function AdminNewPage() {
+   }, [issueDraft.background]);
+ 
+   const previewKeyPoints = useMemo(() => {
+     if (!Array.isArray(issueDraft.keyPoints)) {
+       return [];
+     }
+     return issueDraft.keyPoints
+       .map((point) => (typeof point === 'string' ? point : String(point ?? '')))
+       .filter((point) => point.trim().length > 0);
+   }, [issueDraft.keyPoints]);
+ 
+   const previewSources = useMemo(() => {
+     if (!Array.isArray(issueDraft.sources)) {
+       return [];
+     }
+     return issueDraft.sources.map((source, index) => ({
+       id: `${index}-${source?.channelName ?? 'source'}`,
+       type: source?.type ?? 'etc',
+       channelName: source?.channelName ?? '',
+       sourceDate: source?.sourceDate ?? '',
+       timestamp: source?.timestamp ?? '',
+       note: source?.note ?? ''
+     }));
+   }, [issueDraft.sources]);
+ 
++  const isJsonInputEmpty = jsonInput.trim().length === 0;
++
+   const handleLoadJson = () => {
+     try {
+-      const draft = parseDraftFromJson(jsonInput);
++      const draft = parseDraftStrict(jsonInput);
+       setIssueDraft(draft);
+       setJsonError('');
+       setSubmitError('');
+     } catch (error) {
+       setJsonError(`❌ JSON 파싱 오류: ${error.message}`);
+     }
+   };
+ 
+   const handleAdjustJson = () => {
+     if (typeof jsonInput !== 'string' || jsonInput.trim().length === 0) {
+       return;
+     }
+ 
+     const sanitized = sanitizeJsonNewlines(jsonInput);
+     setJsonInput(sanitized);
+ 
+     try {
+-      const draft = parseDraftFromJson(sanitized);
++      const draft = parseDraftStrict(sanitized);
+       setIssueDraft(draft);
+       setJsonError('');
+       setSubmitError('');
+     } catch (error) {
+       setJsonError(`❌ JSON 파싱 오류: ${error.message}`);
+     }
+   };
+ 
++  const handleBulkCreate = async () => {
++    if (isSubmitting) {
++      return;
++    }
++
++    const trimmedInput = jsonInput.trim();
++    if (trimmedInput.length === 0) {
++      setJsonError('❌ JSON 입력이 비어 있습니다.');
++      return;
++    }
++
++    const sanitized = sanitizeJsonNewlines(trimmedInput);
++    setJsonInput(sanitized);
++    setJsonError('');
++    setSubmitError('');
++
++    let chunks = [];
++    try {
++      chunks = splitJsonObjects(sanitized);
++    } catch (error) {
++      setJsonError(`❌ ${error.message}`);
++      return;
++    }
++
++    const payloads = [];
++    for (let index = 0; index < chunks.length; index += 1) {
++      try {
++        const draft = parseDraftStrict(chunks[index]);
++        payloads.push({ index: index + 1, payload: buildSubmissionPayload(draft) });
++      } catch (error) {
++        setJsonError(`❌ ${index + 1}번째 JSON 파싱 오류: ${error.message}`);
++        return;
++      }
++    }
++
++    setIsSubmitting(true);
++    const createdItems = [];
++    try {
++      for (const { payload, index } of payloads) {
++        const newId = await createIssue(payload);
++        createdItems.push({ index, id: newId });
++      }
++      const summary = createdItems
++        .map((item) => `#${item.index}: ${item.id}`)
++        .join('\n');
++      window.alert(
++        `총 ${createdItems.length}개의 게시물을 등록했어요.${summary ? `\n${summary}` : ''}`
++      );
++      console.info('여러 게시물 등록 완료:', createdItems);
++      resetDraft();
++    } catch (error) {
++      console.error('여러 건 Firestore 등록 실패:', error);
++      if (createdItems.length > 0) {
++        console.warn('등록 완료된 게시물:', createdItems);
++      }
++      setSubmitError(
++        error?.message || '여러 건 등록 중 오류가 발생했습니다. Firestore 권한을 확인하세요.'
++      );
++    } finally {
++      setIsSubmitting(false);
++    }
++  };
++
+   const handleCopyPrompt = async () => {
+     if (!themePrompt) {
+       return;
+     }
+     if (!isClipboardSupported) {
+       setPromptCopyFeedback('복사 실패: 브라우저가 클립보드를 지원하지 않습니다.');
+       return;
+     }
+     try {
+       await navigator.clipboard.writeText(themePrompt);
+       setPromptCopyFeedback('프롬프트를 복사했어요.');
+       if (copyTimeoutRef.current) {
+         clearTimeout(copyTimeoutRef.current);
+       }
+       copyTimeoutRef.current = setTimeout(() => {
+         setPromptCopyFeedback('');
+         copyTimeoutRef.current = null;
+       }, 2500);
+     } catch (error) {
+       console.error('프롬프트 복사 실패:', error);
+       setPromptCopyFeedback('복사 실패: 브라우저 권한을 확인해 주세요.');
+     }
+   };
+ 
+   const handleFieldChange = (field) => (event) => {
+@@ -541,61 +737,51 @@ function AdminNewPage() {
+       const nextSources = Array.isArray(prev.sources) ? [...prev.sources] : [];
+       nextSources.splice(index, 1);
+       return { ...prev, sources: nextSources };
+     });
+   };
+ 
+   const resetDraft = () => {
+     const fresh = createFreshDraft();
+     setIssueDraft(fresh);
+     setJsonInput('');
+     setJsonError('');
+     setSubmitError('');
+     if (typeof window !== 'undefined') {
+       try {
+         window.localStorage.removeItem(STORAGE_KEY);
+       } catch (error) {
+         console.warn('로컬 스토리지 초기화 실패:', error);
+       }
+     }
+   };
+ 
+   const handleSubmit = async () => {
+     setSubmitError('');
+     setIsSubmitting(true);
+     try {
+-      const payload = {
+-        ...issueDraft,
+-        theme: selectedTheme,
+-        progressiveView: showPerspectiveSections ? issueDraft.progressiveView : null,
+-        conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null,
+-        parentingGuide: selectedTheme === 'parenting' ? issueDraft.parentingGuide : null,
+-        healthGuide: selectedTheme === 'health' ? issueDraft.healthGuide : null,
+-        lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null,
+-        stockGuide: selectedTheme === 'stocks' ? issueDraft.stockGuide : null,
+-        supportGuide: selectedTheme === 'support' ? issueDraft.supportGuide : null
+-      };
++      const payload = buildSubmissionPayload(issueDraft);
+       const newId = await createIssue(payload);
+       window.alert('등록 완료');
+       console.info('새 문서 ID:', newId);
+       resetDraft();
+     } catch (error) {
+       console.error('Firestore 등록 실패:', error);
+       setSubmitError(error?.message || '등록 중 오류가 발생했습니다. Firestore 권한을 확인하세요.');
+     } finally {
+       setIsSubmitting(false);
+     }
+   };
+ 
+   return (
+     <div className="min-h-screen bg-slate-100 py-10 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+       <main className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6">
+         <header className="space-y-3">
+           <p className="text-sm font-semibold uppercase tracking-widest text-emerald-500">infoall · Admin</p>
+           <h1 className="text-3xl font-extrabold">새 게시물 등록</h1>
+         </header>
+ 
+         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+           <h2 className="text-lg font-semibold">테마 선택</h2>
+           <label className="flex flex-col gap-2 text-sm">
+             <span className="font-medium">테마</span>
+             <select
+@@ -651,68 +837,80 @@ function AdminNewPage() {
+                 {promptCopyFeedback}
+               </p>
+             )}
+           </section>
+         )}
+ 
+         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+           <h2 className="text-lg font-semibold">AI JSON 붙여넣기</h2>
+           <textarea
+             value={jsonInput}
+             onChange={(event) => setJsonInput(event.target.value)}
+             placeholder='{"easySummary":"...","title":"..."}'
+             className="min-h-[160px] w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 font-mono text-xs leading-relaxed text-slate-700 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+           />
+           <div className="flex flex-wrap items-center gap-3 text-sm">
+             <button
+               type="button"
+               onClick={handleLoadJson}
+               className="inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+             >
+               불러오기
+             </button>
+             <button
+               type="button"
+               onClick={handleAdjustJson}
+-              disabled={jsonInput.trim().length === 0}
++              disabled={isJsonInputEmpty}
+               className={`inline-flex items-center rounded-lg px-4 py-2 font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+-                jsonInput.trim().length === 0
++                isJsonInputEmpty
+                   ? 'cursor-not-allowed border border-amber-200 text-amber-300 dark:border-amber-500/30 dark:text-amber-400/50'
+                   : isJsonAdjustRecommended
+                     ? 'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-600'
+                     : 'border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-500/60 dark:text-amber-300 dark:hover:bg-amber-500/10'
+               }`}
+             >
+               조정하기
+             </button>
+             <button
+               type="button"
+               onClick={resetDraft}
+               className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+             >
+               초기화
+             </button>
++            <button
++              type="button"
++              onClick={handleBulkCreate}
++              disabled={isJsonInputEmpty || isSubmitting}
++              className={`inline-flex items-center rounded-lg px-4 py-2 font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
++                isJsonInputEmpty || isSubmitting
++                  ? 'cursor-not-allowed bg-indigo-200 text-indigo-100 dark:bg-indigo-900/40 dark:text-indigo-300/50'
++                  : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-600'
++              }`}
++            >
++              모두작성
++            </button>
+             <p className="text-xs text-slate-500 dark:text-slate-400">
+               JSON은 한 줄 문자열이어야 합니다. 오류가 난다면 조정하기 버튼으로 줄바꿈을 제거해 보세요.
+             </p>
+           </div>
+           {jsonError && (
+             <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+               {jsonError}
+             </p>
+           )}
+         </section>
+ 
+         <div className="grid gap-8 lg:grid-cols-2">
+           <section className="space-y-6">
+             <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+               <h2 className="text-lg font-semibold">기본 정보</h2>
                <label className="flex flex-col gap-2 text-sm">
-                 <span className="font-medium">밸류에이션/메모</span>
+                 <span className="font-medium">쉬운 요약 (일반인 설명용)</span>
                  <textarea
-                   value={c.valuation}
-                   onChange={(e) => handleCompanyField(index, 'valuation', e.target.value)}
-                   className="min-h-[80px] rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-500/40 dark:bg-slate-900 dark:text-slate-100"
-                   placeholder="멀티플/밴드, 목표가 근거, 체크 포인트 (URL 입력 가능)"
+                   value={issueDraft.easySummary}
+                   onChange={handleEasySummaryChange}
+                   className="min-h-[80px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                   placeholder="한 줄로 핵심을 설명해 주세요."
                  />
                </label>
-+
-+              <label className="flex flex-col gap-2 text-sm">
-+                <span className="font-medium">기술적 구간 · 지지/저항</span>
-+                <textarea
-+                  value={c.technicalLevels ?? ''}
-+                  onChange={(e) => handleCompanyField(index, 'technicalLevels', e.target.value)}
-+                  className="min-h-[80px] rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-500/40 dark:bg-slate-900 dark:text-slate-100"
-+                  placeholder="주요 지지선·저항선, 이동평균, 거래량 구간 등 기술적 메모"
-+                />
-+              </label>
-             </div>
-           ))}
-         </div>
-       </div>
- 
-       <SimpleListEditor
-         tone="amber"
-         title="워치리스트"
-         description="관찰이 필요한 종목/지표를 한 줄씩"
-         items={safeGuide.watchlist}
-         onChange={handleWatchlistChange}
-         addLabel="항목 추가"
-         itemPlaceholder="예: 달러인덱스, 유가, 특정 종목 티커/뉴스 링크"
-       />
-     </section>
-   );
- }
- 
- StockThemeEditor.propTypes = {
-   guide: PropTypes.shape({
-     overview: PropTypes.string,
-     marketSummary: PropTypes.string,
-     sectorHighlights: PropTypes.arrayOf(
-       PropTypes.shape({
-         name: PropTypes.string,
-         outlook: PropTypes.string,
-         leaders: PropTypes.arrayOf(PropTypes.string)
-       })
-     ),
-     companyAnalyses: PropTypes.arrayOf(
-       PropTypes.shape({
-         name: PropTypes.string,
-         thesis: PropTypes.string,
-         catalysts: PropTypes.arrayOf(PropTypes.string),
-         risks: PropTypes.arrayOf(PropTypes.string),
--        valuation: PropTypes.string
-+        valuation: PropTypes.string,
-+        technicalLevels: PropTypes.string
-       })
-     ),
-     watchlist: PropTypes.arrayOf(PropTypes.string)
-   }),
-   onChange: PropTypes.func.isRequired
- };
- 
- StockThemeEditor.defaultProps = { guide: null };
- 
- export default StockThemeEditor;
-diff --git a/frontend/src/components/admin/StockThemePreview.jsx b/frontend/src/components/admin/StockThemePreview.jsx
-index e2337736d2e586de0489ac7ad89338c25b559984..06763801645c57f5b0319e46225f6c488f92b2c3 100644
---- a/frontend/src/components/admin/StockThemePreview.jsx
-+++ b/frontend/src/components/admin/StockThemePreview.jsx
-@@ -90,112 +90,122 @@ function StockThemePreview({ guide }) {
-                   ) : null}
-                   {Array.isArray(s.leaders) && s.leaders.length > 0 ? (
-                     <ul className="list-disc pl-5 text-xs">
-                       {s.leaders.map((name, i) => (
-                         <li key={`leader-${index}-${i}`}>{name}</li>
-                       ))}
-                     </ul>
-                   ) : null}
-                 </li>
-               ))}
-           </ul>
-         </SectionCard>
-       ) : null}
- 
-       {Array.isArray(guide.companyAnalyses) && guide.companyAnalyses.length > 0 ? (
-         <SectionCard title="기업 분석" tone="impact" badgeText="기업">
-           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-             {guide.companyAnalyses
-               .filter(
-                 (c) =>
-                   c &&
-                   (c.name ||
-                     c.thesis ||
-                     (c.catalysts && c.catalysts.length) ||
-                     (c.risks && c.risks.length) ||
--                    c.valuation)
-+                    c.valuation ||
-+                    c.technicalLevels)
-               )
-               .map((c, index) => (
-                 <li key={`company-${index}`} className="space-y-1">
-                   {c.name ? <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p> : null}
-                   {c.thesis ? (
-                     <p className="text-xs text-slate-600 dark:text-slate-300">
-                       <TextWithLinks text={c.thesis} />
-                     </p>
-                   ) : null}
-                   {Array.isArray(c.catalysts) && c.catalysts.length > 0 ? (
-                     <div className="space-y-1">
-                       <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">촉매</p>
-                       <ul className="list-disc pl-5 text-xs">
-                         {c.catalysts.map((item, i) => (
-                           <li key={`cat-${index}-${i}`}>
-                             <TextWithLinks text={item} />
-                           </li>
-                         ))}
-                       </ul>
-                     </div>
-                   ) : null}
-                   {Array.isArray(c.risks) && c.risks.length > 0 ? (
-                     <div className="space-y-1">
-                       <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">리스크</p>
-                       <ul className="list-disc pl-5 text-xs">
-                         {c.risks.map((item, i) => (
-                           <li key={`risk-${index}-${i}`}>
-                             <TextWithLinks text={item} />
-                           </li>
-                         ))}
-                       </ul>
-                     </div>
-                   ) : null}
-                   {c.valuation ? (
-                     <p className="text-xs text-slate-600 dark:text-slate-300">
-                       <TextWithLinks text={c.valuation} />
-                     </p>
-                   ) : null}
-+                  {c.technicalLevels ? (
-+                    <div className="space-y-1">
-+                      <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">기술적 구간</p>
-+                      <p className="text-xs text-slate-600 dark:text-slate-300">
-+                        <TextWithLinks text={c.technicalLevels} />
-+                      </p>
-+                    </div>
-+                  ) : null}
-                 </li>
-               ))}
-           </ul>
-         </SectionCard>
-       ) : null}
- 
-       {watchlist.length > 0 ? (
-         <SectionCard title="워치리스트" tone="neutral" badgeText="관찰">
-           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-             {watchlist.map((w, index) => (
-               <li key={`watch-${index}`}>
-                 <TextWithLinks text={w} />
-               </li>
-             ))}
-           </ul>
-         </SectionCard>
-       ) : null}
-     </div>
-   );
- }
- 
- StockThemePreview.propTypes = {
-   guide: PropTypes.shape({
-     overview: PropTypes.string,
-     marketSummary: PropTypes.string,
-     sectorHighlights: PropTypes.arrayOf(
-       PropTypes.shape({
-         name: PropTypes.string,
-         outlook: PropTypes.string,
-         leaders: PropTypes.arrayOf(PropTypes.string)
-       })
-     ),
-     companyAnalyses: PropTypes.arrayOf(
-       PropTypes.shape({
-         name: PropTypes.string,
-         thesis: PropTypes.string,
-         catalysts: PropTypes.arrayOf(PropTypes.string),
-         risks: PropTypes.arrayOf(PropTypes.string),
--        valuation: PropTypes.string
-+        valuation: PropTypes.string,
-+        technicalLevels: PropTypes.string
-       })
-     ),
-     watchlist: PropTypes.arrayOf(PropTypes.string)
-   })
- };
- 
- StockThemePreview.defaultProps = { guide: null };
- 
- export default StockThemePreview;
-diff --git a/frontend/src/components/issue/StockGuideView.jsx b/frontend/src/components/issue/StockGuideView.jsx
-index 18af0777b7d6e97e667dcfec9063107a7de18377..c24fffe6963f47da0fd6b7fa1b91012ed252a901 100644
---- a/frontend/src/components/issue/StockGuideView.jsx
-+++ b/frontend/src/components/issue/StockGuideView.jsx
-@@ -90,112 +90,122 @@ function StockGuideView({ guide }) {
-                     <ul className="list-disc pl-5 text-xs">
-                       {s.leaders.map((name, i) => (
-                         <li key={`leader-${index}-${i}`}>
-                           <TextWithLinks text={name} />
-                         </li>
-                       ))}
-                     </ul>
-                   ) : null}
-                 </li>
-               ))}
-           </ul>
-         </SectionCard>
-       ) : null}
- 
-       {Array.isArray(guide.companyAnalyses) && guide.companyAnalyses.length > 0 ? (
-         <SectionCard title="기업 분석" tone="impact" badgeText="기업">
-           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-             {guide.companyAnalyses
-               .filter(
-                 (c) =>
-                   c &&
-                   (c.name ||
-                     c.thesis ||
-                     (c.catalysts && c.catalysts.length) ||
-                     (c.risks && c.risks.length) ||
--                    c.valuation)
-+                    c.valuation ||
-+                    c.technicalLevels)
-               )
-               .map((c, index) => (
-                 <li key={`company-${index}`} className="space-y-1">
-                   {c.name ? <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p> : null}
-                   {c.thesis ? (
-                     <p className="text-xs text-slate-600 dark:text-slate-300">
-                       <TextWithLinks text={c.thesis} />
-                     </p>
-                   ) : null}
-                   {Array.isArray(c.catalysts) && c.catalysts.length > 0 ? (
-                     <div className="space-y-1">
-                       <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">촉매</p>
-                       <ul className="list-disc pl-5 text-xs">
-                         {c.catalysts.map((item, i) => (
-                           <li key={`cat-${index}-${i}`}>
-                             <TextWithLinks text={item} />
-                           </li>
-                         ))}
-                       </ul>
-                     </div>
-                   ) : null}
-                   {Array.isArray(c.risks) && c.risks.length > 0 ? (
-                     <div className="space-y-1">
-                       <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">리스크</p>
-                       <ul className="list-disc pl-5 text-xs">
-                         {c.risks.map((item, i) => (
-                           <li key={`risk-${index}-${i}`}>
-                             <TextWithLinks text={item} />
-                           </li>
-                         ))}
-                       </ul>
-                     </div>
-                   ) : null}
-                   {c.valuation ? (
-                     <p className="text-xs text-slate-600 dark:text-slate-300">
-                       <TextWithLinks text={c.valuation} />
-                     </p>
-                   ) : null}
-+                  {c.technicalLevels ? (
-+                    <div className="space-y-1">
-+                      <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">기술적 구간</p>
-+                      <p className="text-xs text-slate-600 dark:text-slate-300">
-+                        <TextWithLinks text={c.technicalLevels} />
-+                      </p>
-+                    </div>
-+                  ) : null}
-                 </li>
-               ))}
-           </ul>
-         </SectionCard>
-       ) : null}
- 
-       {watchlist.length > 0 ? (
-         <SectionCard title="워치리스트" tone="neutral" badgeText="관찰">
-           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-             {watchlist.map((w, index) => (
-               <li key={`watch-${index}`}>
-                 <TextWithLinks text={w} />
-               </li>
-             ))}
-           </ul>
-         </SectionCard>
-       ) : null}
-     </div>
-   );
- }
- 
- StockGuideView.propTypes = {
-   guide: PropTypes.shape({
-     overview: PropTypes.string,
-     marketSummary: PropTypes.string,
-     sectorHighlights: PropTypes.arrayOf(
-       PropTypes.shape({
-         name: PropTypes.string,
-         outlook: PropTypes.string,
-         leaders: PropTypes.arrayOf(PropTypes.string)
-       })
-     ),
-     companyAnalyses: PropTypes.arrayOf(
-       PropTypes.shape({
-         name: PropTypes.string,
-         thesis: PropTypes.string,
-         catalysts: PropTypes.arrayOf(PropTypes.string),
-         risks: PropTypes.arrayOf(PropTypes.string),
--        valuation: PropTypes.string
-+        valuation: PropTypes.string,
-+        technicalLevels: PropTypes.string
-       })
-     ),
-     watchlist: PropTypes.arrayOf(PropTypes.string)
-   })
- };
- 
- StockGuideView.defaultProps = { guide: null };
- 
- export default StockGuideView;
-diff --git a/frontend/src/pages/IssuePage.jsx b/frontend/src/pages/IssuePage.jsx
-index 0e547990bd989ef73ba855afc71d8537052d27b6..8833a621db38935587df8e08fda8beae435d814e 100644
---- a/frontend/src/pages/IssuePage.jsx
-+++ b/frontend/src/pages/IssuePage.jsx
-@@ -308,50 +308,51 @@ function IssuePage() {
-           ${Array.isArray(sector.leaders) && sector.leaders.length > 0 ? `
-             <p><strong>대표 종목:</strong> ${sector.leaders.map(l => escapeHtml(l)).join(', ')}</p>
-           ` : ''}
-         </div>
-       `).join('')}
-     </div>`;
-       }
- 
-       if (Array.isArray(stockGuide.companyAnalyses) && stockGuide.companyAnalyses.length > 0) {
-         themeSpecificContent += `
-     <div class="section stock">
-       <h2 class="section-title">기업 분석</h2>
-       ${stockGuide.companyAnalyses.map(company => `
-         <div class="item-card">
-           ${company.name ? `<h3>${escapeHtml(company.name)}</h3>` : ''}
-           ${company.thesis ? `<p>${escapeHtml(company.thesis)}</p>` : ''}
-           ${Array.isArray(company.catalysts) && company.catalysts.length > 0 ? `
-             <p><strong style="color: #059669;">촉매:</strong></p>
-             <ul>${company.catalysts.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
-           ` : ''}
-           ${Array.isArray(company.risks) && company.risks.length > 0 ? `
-             <p><strong style="color: #dc2626;">리스크:</strong></p>
-             <ul>${company.risks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
-           ` : ''}
-           ${company.valuation ? `<p><em>${escapeHtml(company.valuation)}</em></p>` : ''}
-+          ${company.technicalLevels ? `<p><strong>기술적 구간:</strong> ${escapeHtml(company.technicalLevels)}</p>` : ''}
-         </div>
-       `).join('')}
-     </div>`;
-       }
- 
-       if (Array.isArray(stockGuide.watchlist) && stockGuide.watchlist.length > 0) {
-         themeSpecificContent += `
-     <div class="section">
-       <h2 class="section-title">워치리스트</h2>
-       <ul>${stockGuide.watchlist.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>
-     </div>`;
-       }
-     }
- 
-     // 정부지원정보 테마
-     if (issue.theme === 'support' && supportGuide) {
-       if (supportGuide.overview) {
-         themeSpecificContent += `
-     <div class="section">
-       <h2 class="section-title">정부지원정보 개요</h2>
-       <p>${escapeHtml(supportGuide.overview)}</p>
-     </div>`;
-       }
- 
-       if (Array.isArray(supportGuide.programs)) {
-diff --git a/frontend/src/utils/themeDraftDefaults.js b/frontend/src/utils/themeDraftDefaults.js
-index cca8a96797da7379a062a8b5efc746ff29ed23f5..81c2575285b7bc834ceff9a47dd639965d212815 100644
---- a/frontend/src/utils/themeDraftDefaults.js
-+++ b/frontend/src/utils/themeDraftDefaults.js
-@@ -124,75 +124,82 @@ export function normalizeHealthGuide(raw = {}, { withPresets = false } = {}) {
-   const base = createHealthGuide({ withPresets });
-   const r = asObject(raw, {});
+               <label className="flex flex-col gap-2 text-sm">
+diff --git a/frontend/src/utils/emptyDraft.js b/frontend/src/utils/emptyDraft.js
+index 8276f37ffa5fc44ae4f526d2fa5f046bd6ca37d2..d2c4d81fa3414d78f3ec41b5b8fdde1a88c7c4ce 100644
+--- a/frontend/src/utils/emptyDraft.js
++++ b/frontend/src/utils/emptyDraft.js
+@@ -14,40 +14,75 @@ export function createEmptyDraft() {
+   const { parentingGuide, healthGuide, lifestyleGuide, stockGuide, supportGuide } = createEmptyThemeSections();
    return {
-     overview: String(r.overview ?? ''),
-     lifestyleTips: toStringArray(r.lifestyleTips ?? base.lifestyleTips),
-     conditions: Array.isArray(r.conditions) ? r.conditions.map((c) => createHealthCondition({
-       name: c?.name, summary: c?.summary, warningSigns: c?.warningSigns, careTips: c?.careTips, resources: c?.resources
-     })) : base.conditions,
-     emergencyGuide: toStringArray(r.emergencyGuide ?? base.emergencyGuide)
+     theme: DEFAULT_THEME_ID,
+     easySummary: '',
+     title: '',
+     date: '',
+     category: getDefaultCategory(DEFAULT_THEME_ID),
+     subcategory: '',
+     summaryCard: '',
+     background: '',
+     keyPoints: [],
+     progressiveView: null,
+     conservativeView: null,
+     impactToLife: null,
+     sources: [],
+     parentingGuide,
+     healthGuide,
+     lifestyleGuide,
+     stockGuide,
+     supportGuide // ✅ 추가
    };
  }
- export function cloneHealthGuide(raw = {}, opts) { return normalizeHealthGuide(raw, opts); }
  
- //////////////////////////////
- // Stocks (주식정보)
- //////////////////////////////
+ export const emptyDraft = createEmptyDraft();
  
- export const STOCK_SECTOR_PRESETS = [
-   { name: '반도체', outlook: '메모리 가격 회복·AI 서버 수요 확대', leaders: ['삼성전자','SK하이닉스'] },
-   { name: '2차전지', outlook: '중국 공급과잉 변수, 선별적 접근', leaders: ['LG에너지솔루션','에코프로'] },
-   { name: '로봇', outlook: '산업/서비스 로봇 수요 확대, 정책 모멘텀', leaders: ['두산로보틱스','포스코DX'] }
- ];
- export function createSectorHighlight(name = '', outlook = '', leaders = []) {
-   return { name: String(name ?? ''), outlook: String(outlook ?? ''), leaders: toStringArray(leaders) };
- }
--export function createCompanyAnalysis(name = '', thesis = '', catalysts = [], risks = [], valuation = '') {
--  return { name: String(name ?? ''), thesis: String(thesis ?? ''), catalysts: toStringArray(catalysts), risks: toStringArray(risks), valuation: String(valuation ?? '') };
-+export function createCompanyAnalysis(name = '', thesis = '', catalysts = [], risks = [], valuation = '', technicalLevels = '') {
++export function getCurrentKoreanDateTimeString() {
++  try {
++    const now = new Date();
++    const formatter = new Intl.DateTimeFormat('ko-KR', {
++      timeZone: 'Asia/Seoul',
++      year: 'numeric',
++      month: '2-digit',
++      day: '2-digit',
++      hour: '2-digit',
++      minute: '2-digit'
++    });
++    const parts = formatter.formatToParts(now).reduce((acc, part) => {
++      if (part.type !== 'literal') {
++        acc[part.type] = part.value;
++      }
++      return acc;
++    }, {});
++    const year = parts.year ?? '0000';
++    const month = parts.month ?? '00';
++    const day = parts.day ?? '00';
++    const hour = parts.hour ?? '00';
++    const minute = parts.minute ?? '00';
++    return `${year}-${month}-${day} ${hour}:${minute}`;
++  } catch (error) {
++    console.warn('한국 시간 문자열 생성 실패, UTC 기준으로 대체합니다:', error);
++    const fallback = new Date().toISOString();
++    return fallback.replace('T', ' ').slice(0, 16);
++  }
++}
++
+ export function createFreshDraft() {
+   const draft = createEmptyDraft();
+-  return { ...draft, keyPoints: [...draft.keyPoints], sources: [...draft.sources] };
 +  return {
-+    name: String(name ?? ''),
-+    thesis: String(thesis ?? ''),
-+    catalysts: toStringArray(catalysts),
-+    risks: toStringArray(risks),
-+    valuation: String(valuation ?? ''),
-+    technicalLevels: String(technicalLevels ?? '')
++    ...draft,
++    date: getCurrentKoreanDateTimeString(),
++    keyPoints: [...draft.keyPoints],
++    sources: [...draft.sources]
 +  };
  }
- export function createWatchItem(symbol = '', note = '') { return { symbol: String(symbol ?? ''), note: String(note ?? '') }; }
- export function createStockGuide() {
-   return { overview: '', marketSummary: '', sectorHighlights: [], companyAnalyses: [], watchlist: [] };
- }
- export function normalizeStockGuide(raw = {}) {
-   const r = asObject(raw, {});
-   const normalizeWatch = (arr) => {
-     if (!Array.isArray(arr)) return [];
-     const hasObject = arr.some((x) => x && typeof x === 'object');
-     if (hasObject) {
-       return arr.map((w) => ({ symbol: String(w?.symbol ?? ''), note: String(w?.note ?? '') })).filter((w) => w.symbol);
-     }
-     return toStringArray(arr);
-   };
+ 
+ export function ensureThemeGuides(draft) {
    return {
-     overview: String(r.overview ?? ''),
-     marketSummary: String(r.marketSummary ?? ''),
-     sectorHighlights: Array.isArray(r.sectorHighlights) ? r.sectorHighlights.map((s) =>
-       createSectorHighlight(s?.name, s?.outlook, s?.leaders ?? s?.stocks ?? [])
-     ) : [],
-     companyAnalyses: Array.isArray(r.companyAnalyses) ? r.companyAnalyses.map((c) =>
--      createCompanyAnalysis(c?.name, c?.thesis, c?.catalysts, c?.risks, c?.valuation)
-+      createCompanyAnalysis(c?.name, c?.thesis, c?.catalysts, c?.risks, c?.valuation, c?.technicalLevels)
-     ) : [],
-     watchlist: normalizeWatch(r.watchlist)
+     ...draft,
+     parentingGuide: draft?.parentingGuide ?? createParentingGuide(),
+     healthGuide: draft?.healthGuide ?? createHealthGuide(),
+     lifestyleGuide: draft?.lifestyleGuide ?? createLifestyleGuide(),
+     stockGuide: draft?.stockGuide ?? createStockGuide(),
+     supportGuide: draft?.supportGuide ?? createSupportGuide() // ✅ 추가
    };
  }
- export function cloneStockGuide(raw = {}) { return normalizeStockGuide(raw); }
- 
- //////////////////////////////
- // Support (정부지원)
- //////////////////////////////
- 
- export const SUPPORT_COMMON_RESOURCES_PRESETS = [
-   '정부24 https://www.gov.kr',
-   '복지로 https://www.bokjiro.go.kr',
-   '보건복지 상담 129'
- ];
- export function createSupportProgram(name = '') {
-   return { name, summary: '', eligibility: [], benefits: [], requiredDocs: [], applicationProcess: [] };
- }
- export function createSupportGuide({ withPresets = true } = {}) {
-   return { overview: '', programs: withPresets ? [createSupportProgram('대표 지원 프로그램')] : [], commonResources: withPresets ? [...SUPPORT_COMMON_RESOURCES_PRESETS] : [] };
- }
- export function normalizeSupportGuide(raw = {}, { withPresets = false } = {}) {
-   const base = createSupportGuide({ withPresets });
-   const r = asObject(raw, {});
-   return {
  
 EOF
 )

@@ -36,9 +36,44 @@ export function createEmptyDraft() {
 
 export const emptyDraft = createEmptyDraft();
 
+export function getCurrentKoreanDateTimeString() {
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const parts = formatter.formatToParts(now).reduce((acc, part) => {
+      if (part.type !== 'literal') {
+        acc[part.type] = part.value;
+      }
+      return acc;
+    }, {});
+    const year = parts.year ?? '0000';
+    const month = parts.month ?? '00';
+    const day = parts.day ?? '00';
+    const hour = parts.hour ?? '00';
+    const minute = parts.minute ?? '00';
+    return `${year}-${month}-${day} ${hour}:${minute}`;
+  } catch (error) {
+    console.warn('한국 시간 문자열 생성 실패, UTC 기준으로 대체합니다:', error);
+    const fallback = new Date().toISOString();
+    return fallback.replace('T', ' ').slice(0, 16);
+  }
+}
+
 export function createFreshDraft() {
   const draft = createEmptyDraft();
-  return { ...draft, keyPoints: [...draft.keyPoints], sources: [...draft.sources] };
+  return {
+    ...draft,
+    date: getCurrentKoreanDateTimeString(),
+    keyPoints: [...draft.keyPoints],
+    sources: [...draft.sources]
+  };
 }
 
 export function ensureThemeGuides(draft) {
