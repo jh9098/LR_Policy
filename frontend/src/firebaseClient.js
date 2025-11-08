@@ -51,6 +51,7 @@ import {
 } from 'firebase/firestore';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from './constants/themeConfig.js';
 import { getDefaultCategory, isValidCategory, isValidSubcategory } from './constants/categoryStructure.js';
+import { normalizeCoreKeywords } from './utils/draftSerialization.js';
 import {
   normalizeHealthGuide,
   normalizeLifestyleGuide,
@@ -182,6 +183,7 @@ function normalizeIssueData(issueId, data) {
     keyPoints: Array.isArray(data?.keyPoints)
       ? data.keyPoints.map((item) => (typeof item === 'string' ? item : String(item ?? '')))
       : [],
+    coreKeywords: normalizeCoreKeywords(data?.coreKeywords),
     progressiveView: data?.progressiveView ?? null,
     conservativeView: data?.conservativeView ?? null,
     impactToLife: data?.impactToLife ?? null,

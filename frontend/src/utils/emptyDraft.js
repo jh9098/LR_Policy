@@ -22,6 +22,7 @@ export function createEmptyDraft() {
     summaryCard: '',
     background: '',
     keyPoints: [],
+    coreKeywords: [],
     progressiveView: null,
     conservativeView: null,
     impactToLife: null,
@@ -77,7 +78,8 @@ export function createFreshDraft() {
     ...draft,
     date: getCurrentKoreanDateTimeString(),
     keyPoints: [...draft.keyPoints],
-    sources: [...draft.sources]
+    sources: [...draft.sources],
+    coreKeywords: [...draft.coreKeywords]
   };
 }
 

@@ -25,18 +25,22 @@ import {
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
 import { createIssue } from '../../firebaseClient.js';
 import { getThemePrompt } from '../../constants/themePrompts.js';
-import {
-  createFreshDraft,
-  ensureThemeGuides,
-  getCurrentKoreanDateTimeString
-} from '../../utils/emptyDraft.js';
+import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
 import {
   createHealthGuide,
   createLifestyleGuide,
   createParentingGuide,
   createSupportGuide
 } from '../../utils/themeDraftDefaults.js';
-import { loadDraftFromJson } from '../../utils/loadDraftFromJson.js';
+import {
+  buildSubmissionPayload,
+  normalizeCoreKeywords,
+  parseDraftFromJson,
+  parseDraftStrict,
+  sanitizeJsonNewlines,
+  splitJsonObjects,
+  withDefaultDate
+} from '../../utils/draftSerialization.js';
 
 const STORAGE_KEY = 'adminDraftV7';
 const SOURCE_TYPE_OPTIONS = [
@@ -61,186 +65,11 @@ function restoreDraftFromStorage() {
     if (!stored) {
       return createFreshDraft();
     }
-    return withDefaultDate(ensureThemeGuides(loadDraftFromJson(stored)));
+    return withDefaultDate(parseDraftFromJson(stored));
   } catch (error) {
     console.warn('로컬 스토리지 초안 복구 실패:', error);
     return createFreshDraft();
   }
-}
-
-function sanitizeJsonNewlines(rawText) {
-  if (typeof rawText !== 'string' || rawText.length === 0) {
-    return rawText || '';
-  }
-
-  let sanitized = '';
-  let inString = false;
-  let escaped = false;
-
-  for (let index = 0; index < rawText.length; index += 1) {
-    const char = rawText[index];
-
-    if (escaped) {
-      sanitized += char;
-      escaped = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      sanitized += char;
-      escaped = true;
-      continue;
-    }
-
-    if (char === '"') {
-      inString = !inString;
-      sanitized += char;
-      continue;
-    }
-
-    if (inString && (char === '\n' || char === '\r')) {
-      continue;
-    }
-
-    sanitized += char;
-  }
-
-  return sanitized;
-}
-
-function parseDraftFromJson(jsonText) {
-  const parsed = loadDraftFromJson(jsonText);
-  if (!isValidThemeId(parsed.theme)) {
-    parsed.theme = DEFAULT_THEME_ID;
-  }
-  return ensureThemeGuides(parsed);
-}
-
-function withDefaultDate(draft) {
-  const dateValue = typeof draft?.date === 'string' ? draft.date.trim() : '';
-  if (dateValue.length > 0) {
-    return dateValue === draft.date ? draft : { ...draft, date: dateValue };
-  }
-  return { ...draft, date: getCurrentKoreanDateTimeString() };
-}
-
-function parseDraftStrict(jsonText) {
-  const trimmed = typeof jsonText === 'string' ? jsonText.trim() : '';
-  if (trimmed.length === 0) {
-    throw new Error('JSON 문자열이 비어 있습니다.');
-  }
-  try {
-    JSON.parse(trimmed);
-  } catch (error) {
-    throw new Error(error?.message ?? 'JSON 파싱에 실패했습니다.');
-  }
-  return withDefaultDate(parseDraftFromJson(trimmed));
-}
-
-function splitJsonObjects(rawText) {
-  const trimmed = typeof rawText === 'string' ? rawText.trim() : '';
-  if (trimmed.length === 0) {
-    return [];
-  }
-
-  const objects = [];
-  let depth = 0;
-  let startIndex = -1;
-  let inString = false;
-  let escaped = false;
-
-  for (let index = 0; index < trimmed.length; index += 1) {
-    const char = trimmed[index];
-
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      escaped = true;
-      continue;
-    }
-
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-
-    if (inString) {
-      continue;
-    }
-
-    if (char === '{') {
-      if (depth === 0) {
-        startIndex = index;
-      }
-      depth += 1;
-      continue;
-    }
-
-    if (char === '}') {
-      if (depth === 0) {
-        throw new Error('중괄호의 짝이 맞지 않습니다.');
-      }
-      depth -= 1;
-      if (depth === 0 && startIndex !== -1) {
-        const slice = trimmed.slice(startIndex, index + 1).trim();
-        if (slice.length > 0) {
-          objects.push(slice);
-        }
-        startIndex = -1;
-      }
-    }
-  }
-
-  if (inString || depth !== 0) {
-    throw new Error('JSON 문자열이 올바르게 닫히지 않았습니다.');
-  }
-
-  if (objects.length === 0) {
-    throw new Error('JSON 객체를 찾을 수 없습니다. {"theme": ...} 형식인지 확인해 주세요.');
-  }
-
-  return objects;
-}
-
-function buildSubmissionPayload(draft) {
-  const ensured = withDefaultDate(ensureThemeGuides(draft));
-  const theme = isValidThemeId(ensured.theme) ? ensured.theme : DEFAULT_THEME_ID;
-  const themeMeta = THEME_CONFIG.find((item) => item.id === theme) ?? THEME_CONFIG[0];
-  const allowPerspectives = themeMeta?.showPerspectives ?? false;
-  const category = isValidCategory(theme, ensured.category) ? ensured.category : getDefaultCategory(theme);
-  const subcategory = isValidSubcategory(theme, category, ensured.subcategory) ? ensured.subcategory : '';
-  const normalizedKeyPoints = Array.isArray(ensured.keyPoints)
-    ? ensured.keyPoints.map((point) => (typeof point === 'string' ? point : String(point ?? '')))
-    : [];
-  const normalizedSources = Array.isArray(ensured.sources)
-    ? ensured.sources.map((source) => ({
-        type: typeof source?.type === 'string' ? source.type : 'official',
-        channelName: typeof source?.channelName === 'string' ? source.channelName : '',
-        sourceDate: typeof source?.sourceDate === 'string' ? source.sourceDate : '',
-        timestamp: typeof source?.timestamp === 'string' ? source.timestamp : '',
-        note: typeof source?.note === 'string' ? source.note : ''
-      }))
-    : [];
-
-  return {
-    ...ensured,
-    date: ensured.date,
-    theme,
-    category,
-    subcategory,
-    keyPoints: normalizedKeyPoints,
-    sources: normalizedSources,
-    progressiveView: allowPerspectives ? ensured.progressiveView : null,
-    conservativeView: allowPerspectives ? ensured.conservativeView : null,
-    parentingGuide: theme === 'parenting' ? ensured.parentingGuide : null,
-    healthGuide: theme === 'health' ? ensured.healthGuide : null,
-    lifestyleGuide: theme === 'lifestyle' ? ensured.lifestyleGuide : null,
-    stockGuide: theme === 'stocks' ? ensured.stockGuide : null,
-    supportGuide: theme === 'support' ? ensured.supportGuide : null
-  };
 }
 function CollapseSection({ title, defaultCollapsed = true, children }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -268,6 +97,8 @@ function AdminNewPage() {
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [promptCopyFeedback, setPromptCopyFeedback] = useState('');
+  const [promptKeywordInput, setPromptKeywordInput] = useState('');
+  const [contentKeywordInput, setContentKeywordInput] = useState('');
   const copyTimeoutRef = useRef(null);
 
   const categoryValue = issueDraft.category;
@@ -276,7 +107,14 @@ function AdminNewPage() {
   const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
   const themePrompt = getThemePrompt(selectedTheme);
   const isClipboardSupported = typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
-  const isCopyError = promptCopyFeedback.startsWith('복사 실패');
+  const coreKeywords = Array.isArray(issueDraft.coreKeywords) ? issueDraft.coreKeywords : [];
+  const keywordCount = coreKeywords.length;
+  const hasEnoughKeywords = keywordCount >= 5;
+  const keywordStatusText = hasEnoughKeywords
+    ? `최소 조건 충족 (${keywordCount}개 입력됨)`
+    : `최소 5개 이상 필요 (현재 ${keywordCount}개)`;
+  const isCopyError =
+    promptCopyFeedback.startsWith('복사 실패') || promptCopyFeedback.startsWith('핵심 키워드를 최소 5개 이상 입력해주세요');
   const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
   const isJsonAdjustRecommended = jsonError.includes('Bad control character');
 
@@ -353,6 +191,12 @@ function AdminNewPage() {
     setPromptCopyFeedback('');
   }, [selectedTheme]);
 
+  useEffect(() => {
+    if (hasEnoughKeywords && promptCopyFeedback.startsWith('핵심 키워드를 최소 5개 이상 입력해주세요')) {
+      setPromptCopyFeedback('');
+    }
+  }, [hasEnoughKeywords, promptCopyFeedback]);
+
   const previewBackground = useMemo(() => {
     if (!issueDraft.background) {
       return [];
@@ -392,6 +236,8 @@ function AdminNewPage() {
     try {
       const draft = parseDraftStrict(jsonInput);
       setIssueDraft(draft);
+      setPromptKeywordInput('');
+      setContentKeywordInput('');
       setJsonError('');
       setSubmitError('');
     } catch (error) {
@@ -410,6 +256,8 @@ function AdminNewPage() {
     try {
       const draft = parseDraftStrict(sanitized);
       setIssueDraft(draft);
+      setPromptKeywordInput('');
+      setContentKeywordInput('');
       setJsonError('');
       setSubmitError('');
     } catch (error) {
@@ -480,8 +328,112 @@ function AdminNewPage() {
     }
   };
 
+  const parseKeywordInput = (rawText) => {
+    if (typeof rawText !== 'string') {
+      return [];
+    }
+    const tokens = rawText
+      .split(/[\n,]+/)
+      .map((token) => token.trim())
+      .filter(Boolean);
+    return normalizeCoreKeywords(tokens);
+  };
+
+  const handleAddKeywords = (rawText) => {
+    const parsed = parseKeywordInput(rawText);
+    if (parsed.length === 0) {
+      return false;
+    }
+    let added = false;
+    setIssueDraft((prev) => {
+      const current = Array.isArray(prev.coreKeywords) ? [...prev.coreKeywords] : [];
+      const seen = new Set(current);
+      const next = [...current];
+      parsed.forEach((keyword) => {
+        if (!seen.has(keyword)) {
+          seen.add(keyword);
+          next.push(keyword);
+          added = true;
+        }
+      });
+      if (!added) {
+        return prev;
+      }
+      return { ...prev, coreKeywords: next };
+    });
+    return added;
+  };
+
+  const handleRemoveKeyword = (index) => {
+    setIssueDraft((prev) => {
+      const current = Array.isArray(prev.coreKeywords) ? [...prev.coreKeywords] : [];
+      if (index < 0 || index >= current.length) {
+        return prev;
+      }
+      current.splice(index, 1);
+      return { ...prev, coreKeywords: current };
+    });
+  };
+
+  const handleClearKeywords = () => {
+    setIssueDraft((prev) => ({ ...prev, coreKeywords: [] }));
+  };
+
+  const handlePromptKeywordSubmit = () => {
+    if (handleAddKeywords(promptKeywordInput)) {
+      setPromptKeywordInput('');
+    }
+  };
+
+  const handleContentKeywordSubmit = () => {
+    if (handleAddKeywords(contentKeywordInput)) {
+      setContentKeywordInput('');
+    }
+  };
+
+  const handleKeywordInputKeyDown = (event, submitHandler) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      submitHandler();
+    }
+  };
+
+  const renderKeywordChips = () => {
+    if (coreKeywords.length === 0) {
+      return (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          아직 입력된 핵심 키워드가 없습니다. 최소 5개 이상 추가해주세요.
+        </p>
+      );
+    }
+    return (
+      <div className="flex flex-wrap gap-2">
+        {coreKeywords.map((keyword, index) => (
+          <span
+            key={`${keyword}-${index}`}
+            className="inline-flex items-center gap-2 rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200"
+          >
+            <span>{keyword}</span>
+            <button
+              type="button"
+              onClick={() => handleRemoveKeyword(index)}
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-200 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-300 dark:bg-emerald-500/30 dark:text-emerald-100 dark:hover:bg-emerald-500/50"
+              aria-label={`${keyword} 키워드 삭제`}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const handleCopyPrompt = async () => {
     if (!themePrompt) {
+      return;
+    }
+    if (!hasEnoughKeywords) {
+      setPromptCopyFeedback('핵심 키워드를 최소 5개 이상 입력해주세요.');
       return;
     }
     if (!isClipboardSupported) {
@@ -489,7 +441,8 @@ function AdminNewPage() {
       return;
     }
     try {
-      await navigator.clipboard.writeText(themePrompt);
+      const keywordInstruction = `\n\n추가 지시사항: 아래 핵심키워드를 반드시 참고해 JSON을 작성하세요. 최소 5개 이상을 모두 반영해야 합니다.\n핵심키워드: ${coreKeywords.join(', ')}`;
+      await navigator.clipboard.writeText(`${themePrompt}${keywordInstruction}`);
       setPromptCopyFeedback('프롬프트를 복사했어요.');
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
@@ -764,6 +717,8 @@ function AdminNewPage() {
     setJsonInput('');
     setJsonError('');
     setSubmitError('');
+    setPromptKeywordInput('');
+    setContentKeywordInput('');
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.removeItem(STORAGE_KEY);
@@ -818,9 +773,9 @@ function AdminNewPage() {
             <button
               type="button"
               onClick={handleCopyPrompt}
-              disabled={!isClipboardSupported || !themePrompt}
+              disabled={!isClipboardSupported || !themePrompt || !hasEnoughKeywords}
               className={
-                isClipboardSupported && themePrompt
+                isClipboardSupported && themePrompt && hasEnoughKeywords
                   ? 'inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
                   : 'inline-flex items-center rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'
               }
@@ -838,6 +793,60 @@ function AdminNewPage() {
               세부 영역: {themeMeta.keyAreas.join(' · ')}
             </p>
           ) : null}
+
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/40">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">핵심 키워드 (프롬프트 & 저장용)</h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  최소 5개 이상 입력해야 프롬프트를 복사할 수 있습니다. 쉼표 또는 줄바꿈으로 여러 개를 한 번에 추가하세요.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  className={
+                    hasEnoughKeywords
+                      ? 'text-xs font-semibold text-emerald-600 dark:text-emerald-300'
+                      : 'text-xs font-semibold text-rose-600 dark:text-rose-300'
+                  }
+                >
+                  {keywordStatusText}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearKeywords}
+                  disabled={coreKeywords.length === 0}
+                  className={`inline-flex items-center rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:border-slate-500 ${
+                    coreKeywords.length === 0
+                      ? 'cursor-not-allowed text-slate-400 dark:text-slate-500'
+                      : 'text-slate-600 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  모두 지우기
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={promptKeywordInput}
+                onChange={(event) => setPromptKeywordInput(event.target.value)}
+                onKeyDown={(event) => handleKeywordInputKeyDown(event, handlePromptKeywordSubmit)}
+                placeholder="예: 금리 인하, 전세시장, 정책 발표"
+                className="min-w-[200px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
+              />
+              <button
+                type="button"
+                onClick={handlePromptKeywordSubmit}
+                className="inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+              >
+                추가
+              </button>
+            </div>
+            <div className="space-y-2">
+              {renderKeywordChips()}
+            </div>
+          </div>
 
           {/* 복사 결과 메시지 */}
           {promptCopyFeedback && (
@@ -981,6 +990,43 @@ function AdminNewPage() {
                     ))}
                   </select>
                 </label>
+              </div>
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/30">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">핵심 키워드 관리</span>
+                  <span
+                    className={
+                      hasEnoughKeywords
+                        ? 'text-xs font-semibold text-emerald-600 dark:text-emerald-300'
+                        : 'text-xs font-semibold text-rose-600 dark:text-rose-300'
+                    }
+                  >
+                    {keywordStatusText}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  이 목록은 글과 함께 Firestore에 저장됩니다. 필요하면 계속 추가하거나 삭제하세요.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={contentKeywordInput}
+                    onChange={(event) => setContentKeywordInput(event.target.value)}
+                    onKeyDown={(event) => handleKeywordInputKeyDown(event, handleContentKeywordSubmit)}
+                    placeholder="예: 기준금리, 주거 안정, 지원 제도"
+                    className="min-w-[200px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleContentKeywordSubmit}
+                    className="inline-flex items-center rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  >
+                    추가
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {renderKeywordChips()}
+                </div>
               </div>
               <label className="flex flex-col gap-2 text-sm">
                 <span className="font-medium">요약 카드 문장</span>
@@ -1433,6 +1479,23 @@ function AdminNewPage() {
                 </div>
               </dl>
             </div>
+
+            <SectionCard title="핵심 키워드" tone="neutral">
+              {coreKeywords.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {coreKeywords.map((keyword, index) => (
+                    <span
+                      key={`preview-core-${index}`}
+                      className="inline-flex items-center rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200"
+                    >
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">핵심 키워드를 입력하면 여기에서 한눈에 확인할 수 있습니다.</p>
+              )}
+            </SectionCard>
 
             {issueDraft.easySummary && (
               <SectionCard title="쉬운 요약" tone="neutral">

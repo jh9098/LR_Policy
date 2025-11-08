@@ -39,13 +39,16 @@ InputLabel.propTypes = {
 };
 
 export default function EmailPasswordAuthPanel({ className = '', heading = '이메일 로그인', description = '' }) {
-  const { login, register, requestPasswordReset, processing, authError, authMessage, clearFeedback } = useAuth();
+  const { user, login, register, requestPasswordReset, processing, authError, authMessage, clearFeedback } = useAuth();
   const [mode, setMode] = useState(MODE.LOGIN);
   const [form, setForm] = useState(INITIAL_FORM);
 
   useEffect(() => {
+    if (user) {
+      return;
+    }
     clearFeedback();
-  }, [mode, clearFeedback]);
+  }, [mode, clearFeedback, user]);
 
   const headingText = useMemo(() => {
     if (heading) return heading;
@@ -97,6 +100,10 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
       ? '등록된 이메일과 비밀번호를 입력해주세요.'
       : '이메일과 비밀번호를 다시 한 번 입력해 일치 여부를 확인해주세요.';
   }, [description, mode]);
+
+  if (user) {
+    return null;
+  }
 
   return (
     <div
