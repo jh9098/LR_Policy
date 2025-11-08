@@ -7,9 +7,9 @@ import { NavLink, Outlet } from 'react-router-dom';
 import SiteHeader from './SiteHeader.jsx';
 
 const NAV_ITEMS = [
-  { type: 'route', label: '새 글 작성', to: '/admin/new', description: '' },
-  { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: '' },
-  { type: 'placeholder', label: '환경/설정 (준비 중)', description: '' }
+  { type: 'route', label: '새 글 작성', to: '/admin/new', description: 'Firestore에 새 글을 추가합니다.' },
+  { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: '기존 글을 검색하고 수정/삭제합니다.' },
+  { type: 'route', label: '환경/설정', to: '/admin/settings', description: '회사소개·정책 페이지 내용을 관리합니다.' }
 ];
 
 export default function AdminLayout() {

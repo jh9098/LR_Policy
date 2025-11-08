@@ -23,10 +23,12 @@
 
 import { initializeApp } from 'firebase/app';
 import {
+  browserLocalPersistence,
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  setPersistence,
   signInWithEmailAndPassword,
   signOut,
   updateProfile
@@ -72,6 +74,10 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.warn('Firebase 인증 지속성 설정 실패:', error);
+});
+
 export function subscribeAuthState(callback) {
   return onAuthStateChanged(auth, callback);
 }
@@ -107,6 +113,48 @@ export async function getAdminRole(uid) {
   const snap = await getDoc(adminRef);
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
+}
+
+export async function getStaticPageContent(slug) {
+  if (!slug) return null;
+  const pageRef = doc(db, 'staticPages', slug);
+  const snap = await getDoc(pageRef);
+  if (!snap.exists()) {
+    return { id: slug, title: '', content: '', updatedAt: null, updatedBy: '' };
+  }
+  return { id: slug, ...snap.data() };
+}
+
+export async function saveStaticPageContent(slug, { title = '', content = '', updatedBy = '' } = {}) {
+  if (!slug) throw new Error('slug is required to save static page content.');
+  const pageRef = doc(db, 'staticPages', slug);
+  const payload = {
+    title: typeof title === 'string' ? title : '',
+    content: typeof content === 'string' ? content : '',
+    updatedBy: typeof updatedBy === 'string' ? updatedBy : '',
+    updatedAt: serverTimestamp()
+  };
+
+  await setDoc(pageRef, payload, { merge: true });
+
+  try {
+    await addDoc(collection(pageRef, 'history'), {
+      title: payload.title,
+      content: payload.content,
+      updatedBy: payload.updatedBy,
+      savedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.warn('정적 페이지 변경 이력 저장에 실패했습니다:', error);
+  }
+}
+
+export async function getStaticPageHistory(slug, limitCount = 10) {
+  if (!slug) return [];
+  const pageRef = doc(db, 'staticPages', slug);
+  const historyQuery = query(collection(pageRef, 'history'), orderBy('savedAt', 'desc'), limit(limitCount));
+  const snap = await getDocs(historyQuery);
+  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 }
 
 // 내부에서 사용하는 헬퍼: Firestore 문서를 issueDraft 스키마에 맞는 평범한 객체로 정규화한다.

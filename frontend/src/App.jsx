@@ -12,6 +12,7 @@ import ThemePage from './pages/ThemePage.jsx';
 import AdminNewPage from './pages/admin/AdminNewPage.jsx';
 import AdminListPage from './pages/admin/AdminListPage.jsx';
 import AdminEditPage from './pages/admin/AdminEditPage.jsx';
+import AdminStaticPagesPage from './pages/admin/AdminStaticPagesPage.jsx';
 import CompanyInfoPage from './pages/static/CompanyInfoPage.jsx';
 import PartnershipInfoPage from './pages/static/PartnershipInfoPage.jsx';
 import AdvertisingInfoPage from './pages/static/AdvertisingInfoPage.jsx';
@@ -60,6 +61,7 @@ function App() {
         <Route path="new" element={<AdminNewPage />} />
         <Route path="list" element={<AdminListPage />} />
         <Route path="edit/:id" element={<AdminEditPage />} />
+        <Route path="settings" element={<AdminStaticPagesPage />} />
       </Route>
     </Routes>
   );
