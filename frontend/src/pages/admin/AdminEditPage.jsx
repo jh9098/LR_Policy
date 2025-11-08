@@ -2,7 +2,7 @@
 // Firestore Web SDK로 직접 문서를 읽어와 수정/삭제한다. Render 백엔드를 전혀 호출하지 않는다.
 // 현재 누구나 /admin/edit/:id 에 접근하면 문서를 수정하거나 삭제할 수 있다. TODO: 프로덕션에서는 접근 제한과 보안 규칙 강화를 반드시 수행해야 한다.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
@@ -36,8 +36,17 @@ import {
   isValidSubcategory
 } from '../../constants/categoryStructure.js';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
+import { getThemePrompt } from '../../constants/themePrompts.js';
 import { deleteIssue, getIssueById, updateIssue } from '../../firebaseClient.js';
 import { emptyDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
+import {
+  buildSubmissionPayload,
+  normalizeCoreKeywords,
+  parseDraftStrict,
+  sanitizeJsonNewlines,
+  stringifyDraftForClipboard,
+  withDefaultDate
+} from '../../utils/draftSerialization.js';
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const CONSERVATIVE_NOTE =
@@ -56,12 +65,15 @@ function normalizeDraft(raw) {
     ? raw.subcategory
     : '';
   const base = ensureThemeGuides({ ...emptyDraft, ...raw });
+  const withDate = withDefaultDate(base);
   return {
-    ...base,
+    ...withDate,
     theme: safeTheme,
     category: safeCategory,
     subcategory: safeSubcategory,
     keyPoints: Array.isArray(raw.keyPoints) ? raw.keyPoints.map((item) => String(item ?? '')) : [],
+    coreKeywords: normalizeCoreKeywords(raw?.coreKeywords ?? base.coreKeywords),
+    date: withDate.date,
     progressiveView: raw.progressiveView
       ? {
           headline: raw.progressiveView.headline ?? '',
@@ -115,6 +127,12 @@ function AdminEditPage() {
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [jsonInput, setJsonInput] = useState('');
+  const [jsonError, setJsonError] = useState('');
+  const [promptCopyFeedback, setPromptCopyFeedback] = useState('');
+  const [promptKeywordInput, setPromptKeywordInput] = useState('');
+  const [contentKeywordInput, setContentKeywordInput] = useState('');
+  const copyTimeoutRef = useRef(null);
 
   const selectedTheme = issueDraft?.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
   const fallbackCategory = getDefaultCategory(selectedTheme);
@@ -122,6 +140,18 @@ function AdminEditPage() {
   const subcategoryValue = issueDraft?.subcategory ?? '';
   const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
   const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
+  const themePrompt = getThemePrompt(selectedTheme);
+  const isClipboardSupported = typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
+  const coreKeywords = Array.isArray(issueDraft?.coreKeywords) ? issueDraft.coreKeywords : [];
+  const keywordCount = coreKeywords.length;
+  const hasEnoughKeywords = keywordCount >= 5;
+  const keywordStatusText = hasEnoughKeywords
+    ? `최소 조건 충족 (${keywordCount}개 입력됨)`
+    : `최소 5개 이상 필요 (현재 ${keywordCount}개)`;
+  const isCopyError =
+    promptCopyFeedback.startsWith('복사 실패') || promptCopyFeedback.startsWith('핵심 키워드를 최소 5개 이상 입력해주세요');
+  const isJsonInputEmpty = jsonInput.trim().length === 0;
+  const isJsonAdjustRecommended = jsonError.includes('Bad control character');
 
   const categoryOptions = useMemo(() => getCategoryOptions(selectedTheme), [selectedTheme]);
   const subcategoryOptions = useMemo(
@@ -179,7 +209,10 @@ function AdminEditPage() {
         if (!data) {
           throw new Error('해당 문서를 찾을 수 없습니다.');
         }
-        setIssueDraft(normalizeDraft(data));
+        const normalized = normalizeDraft(data);
+        setIssueDraft(normalized);
+        setPromptKeywordInput('');
+        setContentKeywordInput('');
       } catch (error) {
         console.error('Firestore 문서 불러오기 실패:', error);
         if (isMounted) {
@@ -205,6 +238,219 @@ function AdminEditPage() {
     const timer = window.setTimeout(() => setSubmitSuccess(''), 2000);
     return () => window.clearTimeout(timer);
   }, [submitSuccess]);
+
+  useEffect(() => {
+    if (!issueDraft) {
+      return;
+    }
+    const serialized = stringifyDraftForClipboard(issueDraft);
+    setJsonInput(serialized);
+  }, [issueDraft]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = null;
+    }
+    setPromptCopyFeedback('');
+  }, [selectedTheme]);
+
+  useEffect(() => {
+    if (hasEnoughKeywords && promptCopyFeedback.startsWith('핵심 키워드를 최소 5개 이상 입력해주세요')) {
+      setPromptCopyFeedback('');
+    }
+  }, [hasEnoughKeywords, promptCopyFeedback]);
+
+  const parseKeywordInput = (rawText) => {
+    if (typeof rawText !== 'string') {
+      return [];
+    }
+    const tokens = rawText
+      .split(/[\n,]+/)
+      .map((token) => token.trim())
+      .filter(Boolean);
+    return normalizeCoreKeywords(tokens);
+  };
+
+  const handleAddKeywords = (rawText) => {
+    const parsed = parseKeywordInput(rawText);
+    if (parsed.length === 0) {
+      return false;
+    }
+    let added = false;
+    setIssueDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const current = Array.isArray(prev.coreKeywords) ? [...prev.coreKeywords] : [];
+      const seen = new Set(current);
+      const next = [...current];
+      parsed.forEach((keyword) => {
+        if (!seen.has(keyword)) {
+          seen.add(keyword);
+          next.push(keyword);
+          added = true;
+        }
+      });
+      if (!added) {
+        return prev;
+      }
+      return { ...prev, coreKeywords: next };
+    });
+    return added;
+  };
+
+  const handleRemoveKeyword = (index) => {
+    setIssueDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const current = Array.isArray(prev.coreKeywords) ? [...prev.coreKeywords] : [];
+      if (index < 0 || index >= current.length) {
+        return prev;
+      }
+      current.splice(index, 1);
+      return { ...prev, coreKeywords: current };
+    });
+  };
+
+  const handleClearKeywords = () => {
+    setIssueDraft((prev) => (prev ? { ...prev, coreKeywords: [] } : prev));
+  };
+
+  const handlePromptKeywordSubmit = () => {
+    if (handleAddKeywords(promptKeywordInput)) {
+      setPromptKeywordInput('');
+    }
+  };
+
+  const handleContentKeywordSubmit = () => {
+    if (handleAddKeywords(contentKeywordInput)) {
+      setContentKeywordInput('');
+    }
+  };
+
+  const handleKeywordInputKeyDown = (event, submitHandler) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      submitHandler();
+    }
+  };
+
+  const renderKeywordChips = () => {
+    if (coreKeywords.length === 0) {
+      return (
+        <p className="text-xs text-slate-500 dark:text-slate-400">아직 입력된 핵심 키워드가 없습니다. 최소 5개 이상 추가해주세요.</p>
+      );
+    }
+    return (
+      <div className="flex flex-wrap gap-2">
+        {coreKeywords.map((keyword, index) => (
+          <span
+            key={`edit-core-${index}`}
+            className="inline-flex items-center gap-2 rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200"
+          >
+            <span>{keyword}</span>
+            <button
+              type="button"
+              onClick={() => handleRemoveKeyword(index)}
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-200 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-300 dark:bg-emerald-500/30 dark:text-emerald-100 dark:hover:bg-emerald-500/50"
+              aria-label={`${keyword} 키워드 삭제`}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  const handleCopyPrompt = async () => {
+    if (!themePrompt) {
+      return;
+    }
+    if (!hasEnoughKeywords) {
+      setPromptCopyFeedback('핵심 키워드를 최소 5개 이상 입력해주세요.');
+      return;
+    }
+    if (!isClipboardSupported) {
+      setPromptCopyFeedback('복사 실패: 브라우저가 클립보드를 지원하지 않습니다.');
+      return;
+    }
+    try {
+      const keywordInstruction = `\n\n추가 지시사항: 아래 핵심키워드를 반드시 참고해 JSON을 작성하세요. 최소 5개 이상을 모두 반영해야 합니다.\n핵심키워드: ${coreKeywords.join(', ')}`;
+      await navigator.clipboard.writeText(`${themePrompt}${keywordInstruction}`);
+      setPromptCopyFeedback('프롬프트를 복사했어요.');
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
+        setPromptCopyFeedback('');
+        copyTimeoutRef.current = null;
+      }, 2500);
+    } catch (error) {
+      console.error('프롬프트 복사 실패:', error);
+      setPromptCopyFeedback('복사 실패: 브라우저 권한을 확인해 주세요.');
+    }
+  };
+
+  const handleLoadJson = () => {
+    try {
+      const draft = parseDraftStrict(jsonInput);
+      setIssueDraft(draft);
+      setPromptKeywordInput('');
+      setContentKeywordInput('');
+      setJsonError('');
+      setSubmitError('');
+      setSubmitSuccess('');
+    } catch (error) {
+      setJsonError(`❌ JSON 파싱 오류: ${error.message}`);
+    }
+  };
+
+  const handleAdjustJson = () => {
+    if (typeof jsonInput !== 'string' || jsonInput.trim().length === 0) {
+      return;
+    }
+
+    const sanitized = sanitizeJsonNewlines(jsonInput);
+    setJsonInput(sanitized);
+
+    try {
+      const draft = parseDraftStrict(sanitized);
+      setIssueDraft(draft);
+      setPromptKeywordInput('');
+      setContentKeywordInput('');
+      setJsonError('');
+      setSubmitError('');
+      setSubmitSuccess('');
+    } catch (error) {
+      setJsonError(`❌ JSON 파싱 오류: ${error.message}`);
+    }
+  };
+
+  const handleCopyJson = async () => {
+    if (!isClipboardSupported || !issueDraft) {
+      window.alert('브라우저가 클립보드 복사를 지원하지 않거나 문서가 로드되지 않았습니다.');
+      return;
+    }
+    try {
+      const serialized = stringifyDraftForClipboard({ ...issueDraft, theme: selectedTheme });
+      await navigator.clipboard.writeText(serialized);
+      window.alert('현재 글의 JSON을 복사했어요.');
+    } catch (error) {
+      console.error('JSON 복사 실패:', error);
+      window.alert('JSON 복사에 실패했습니다. 브라우저 권한을 확인해주세요.');
+    }
+  };
 
   const previewBackground = useMemo(() => {
     if (!issueDraft?.background) {
@@ -242,39 +488,40 @@ function AdminEditPage() {
     setIssueDraft((prev) => ({ ...prev, [field]: value }));
   };
 
-// REPLACE handleThemeChange
-const handleThemeChange = (event) => {
-  const { value } = event.target;
-  const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
-  setIssueDraft((prev) => {
-    if (!prev) return prev;
+  const handleThemeChange = (event) => {
+    const { value } = event.target;
+    const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
+    setIssueDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
 
-    const base = ensureThemeGuides(prev);
-    const nextThemeMeta = THEME_CONFIG.find((t) => t.id === nextTheme);
+      const base = ensureThemeGuides(prev);
+      const nextThemeMeta = THEME_CONFIG.find((theme) => theme.id === nextTheme);
 
-    const draft = {
-      ...base,
-      theme: nextTheme,
-      parentingGuide: base.parentingGuide ?? createParentingGuide(),
-      healthGuide: base.healthGuide ?? createHealthGuide(),
-      lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide(),
-      stockGuide: base.stockGuide ?? createStockGuide(),
-      supportGuide: base.supportGuide ?? createSupportGuide({ withPresets: true })
-    };
+      const draft = {
+        ...base,
+        theme: nextTheme,
+        parentingGuide: base.parentingGuide ?? createParentingGuide(),
+        healthGuide: base.healthGuide ?? createHealthGuide(),
+        lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide(),
+        stockGuide: base.stockGuide ?? createStockGuide(),
+        supportGuide: base.supportGuide ?? createSupportGuide()
+      };
 
-    const defaultCategory = getDefaultCategory(nextTheme);
-    draft.category = isValidCategory(nextTheme, base.category) ? base.category : defaultCategory;
-    const allowedSubcategories = getSubcategoryOptions(nextTheme, draft.category);
-    draft.subcategory = allowedSubcategories.includes(base.subcategory) ? base.subcategory : '';
+      const defaultCategory = getDefaultCategory(nextTheme);
+      draft.category = isValidCategory(nextTheme, base.category) ? base.category : defaultCategory;
+      const allowedSubcategories = getSubcategoryOptions(nextTheme, draft.category);
+      draft.subcategory = allowedSubcategories.includes(base.subcategory) ? base.subcategory : '';
 
-    if (!nextThemeMeta?.showPerspectives) {
-      draft.progressiveView = null;
-      draft.conservativeView = null;
-    }
+      if (!nextThemeMeta?.showPerspectives) {
+        draft.progressiveView = null;
+        draft.conservativeView = null;
+      }
 
-    return draft;
-  });
-};
+      return draft;
+    });
+  };
   
   const handleParentingGuideChange = (nextGuide) => {
     setIssueDraft((prev) => (prev ? { ...prev, parentingGuide: nextGuide } : prev));
@@ -506,20 +753,11 @@ const handleThemeChange = (event) => {
     setSubmitError('');
     setIsSubmitting(true);
     try {
-      const payload = {
-        ...issueDraft,
-        theme: selectedTheme,
-        progressiveView: showPerspectiveSections ? issueDraft.progressiveView : null,
-        conservativeView: showPerspectiveSections ? issueDraft.conservativeView : null,
-        parentingGuide: selectedTheme === 'parenting' ? issueDraft.parentingGuide : null,
-        healthGuide: selectedTheme === 'health' ? issueDraft.healthGuide : null,
-        lifestyleGuide: selectedTheme === 'lifestyle' ? issueDraft.lifestyleGuide : null,
-        stockGuide: selectedTheme === 'stocks' ? issueDraft.stockGuide : null,
-        supportGuide: selectedTheme === 'support' ? issueDraft.supportGuide : null
-      };
-            
+      const payload = buildSubmissionPayload({ ...issueDraft, theme: selectedTheme });
       await updateIssue(id, payload);
       setIssueDraft(payload);
+      setJsonInput(stringifyDraftForClipboard(payload));
+      setJsonError('');
       setSubmitSuccess('수정이 완료되어 Firestore에 반영되었습니다.');
     } catch (error) {
       console.error('Firestore 수정 실패:', error);
@@ -587,6 +825,147 @@ const handleThemeChange = (event) => {
           {submitError}
         </p>
       )}
+
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {THEME_CONFIG.map((theme) => (
+              <button
+                key={theme.id}
+                type="button"
+                onClick={() => handleThemeChange({ target: { value: theme.id } })}
+                className={
+                  selectedTheme === theme.id
+                    ? 'inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
+                    : 'inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-200 dark:bg-slate-900/40 dark:text-slate-100 dark:hover:bg-slate-900/70'
+                }
+              >
+                {theme.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleCopyPrompt}
+            disabled={!isClipboardSupported || !themePrompt || !hasEnoughKeywords}
+            className={
+              isClipboardSupported && themePrompt && hasEnoughKeywords
+                ? 'inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
+                : 'inline-flex items-center rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'
+            }
+          >
+            프롬프트 복사
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{themeMeta?.description}</p>
+        {Array.isArray(themeMeta?.keyAreas) && themeMeta.keyAreas.length > 0 ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400">세부 영역: {themeMeta.keyAreas.join(' · ')}</p>
+        ) : null}
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/40">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">핵심 키워드 (프롬프트 & 저장용)</h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">최소 5개 이상 입력해야 프롬프트를 복사할 수 있습니다.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span
+                className={
+                  hasEnoughKeywords
+                    ? 'text-xs font-semibold text-emerald-600 dark:text-emerald-300'
+                    : 'text-xs font-semibold text-rose-600 dark:text-rose-300'
+                }
+              >
+                {keywordStatusText}
+              </span>
+              <button
+                type="button"
+                onClick={handleClearKeywords}
+                disabled={coreKeywords.length === 0}
+                className={`inline-flex items-center rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:border-slate-500 ${
+                  coreKeywords.length === 0
+                    ? 'cursor-not-allowed text-slate-400 dark:text-slate-500'
+                    : 'text-slate-600 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                }`}
+              >
+                모두 지우기
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={promptKeywordInput}
+              onChange={(event) => setPromptKeywordInput(event.target.value)}
+              onKeyDown={(event) => handleKeywordInputKeyDown(event, handlePromptKeywordSubmit)}
+              placeholder="예: 금리 인하, 전세시장, 정책 발표"
+              className="min-w-[200px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
+            />
+            <button
+              type="button"
+              onClick={handlePromptKeywordSubmit}
+              className="inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            >
+              추가
+            </button>
+          </div>
+          <div className="space-y-2">{renderKeywordChips()}</div>
+        </div>
+        {promptCopyFeedback && (
+          <p
+            className={`text-xs font-semibold ${
+              isCopyError ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-200'
+            }`}
+          >
+            {promptCopyFeedback}
+          </p>
+        )}
+      </section>
+
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="text-lg font-semibold">AI JSON 붙여넣기</h2>
+        <textarea
+          value={jsonInput}
+          onChange={(event) => setJsonInput(event.target.value)}
+          placeholder='{"easySummary":"...","title":"..."}'
+          className="min-h-[160px] w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 font-mono text-xs leading-relaxed text-slate-700 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+        />
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={handleLoadJson}
+            className="inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+          >
+            불러오기
+          </button>
+          <button
+            type="button"
+            onClick={handleAdjustJson}
+            disabled={isJsonInputEmpty}
+            className={`inline-flex items-center rounded-lg px-4 py-2 font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+              isJsonInputEmpty
+                ? 'cursor-not-allowed border border-amber-200 text-amber-300 dark:border-amber-500/30 dark:text-amber-400/50'
+                : isJsonAdjustRecommended
+                  ? 'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-600'
+                  : 'border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-500/60 dark:text-amber-300 dark:hover:bg-amber-500/10'
+            }`}
+          >
+            조정하기
+          </button>
+          <button
+            type="button"
+            onClick={() => setJsonInput(stringifyDraftForClipboard({ ...issueDraft, theme: selectedTheme }))}
+            className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            현재 내용으로 새로고침
+          </button>
+          <p className="text-xs text-slate-500 dark:text-slate-400">JSON은 한 줄 문자열이어야 합니다. 필요한 경우 조정하기 버튼으로 줄바꿈을 제거하세요.</p>
+        </div>
+        {jsonError && (
+          <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+            {jsonError}
+          </p>
+        )}
+      </section>
 
       <div className="grid gap-8 lg:grid-cols-2">
         <section className="space-y-6">
@@ -681,6 +1060,39 @@ const handleThemeChange = (event) => {
                   ))}
                 </select>
               </label>
+            </div>
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/30">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">핵심 키워드 관리</span>
+                <span
+                  className={
+                    hasEnoughKeywords
+                      ? 'text-xs font-semibold text-emerald-600 dark:text-emerald-300'
+                      : 'text-xs font-semibold text-rose-600 dark:text-rose-300'
+                  }
+                >
+                  {keywordStatusText}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">이 목록은 글과 함께 Firestore에 저장됩니다. 필요하면 계속 추가하거나 삭제하세요.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={contentKeywordInput}
+                  onChange={(event) => setContentKeywordInput(event.target.value)}
+                  onKeyDown={(event) => handleKeywordInputKeyDown(event, handleContentKeywordSubmit)}
+                  placeholder="예: 기준금리, 주거 안정, 지원 제도"
+                  className="min-w-[200px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <button
+                  type="button"
+                  onClick={handleContentKeywordSubmit}
+                  className="inline-flex items-center rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                >
+                  추가
+                </button>
+              </div>
+              <div className="space-y-2">{renderKeywordChips()}</div>
             </div>
             <label className="flex flex-col gap-2 text-sm">
               <span className="font-medium">요약 카드 문장</span>
@@ -1080,14 +1492,28 @@ const handleThemeChange = (event) => {
             </div>
           </section>
 
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-lg transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-900"
-          >
-            {isSubmitting ? 'Firestore에 저장 중...' : '수정 저장'}
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-lg transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-900"
+            >
+              {isSubmitting ? 'Firestore에 저장 중...' : '수정 저장'}
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyJson}
+              disabled={!isClipboardSupported}
+              className={`inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-base font-semibold shadow-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                isClipboardSupported
+                  ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800'
+                  : 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500'
+              }`}
+            >
+              JSON 복사
+            </button>
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             TODO: 현재는 인증이 없어 누구나 수정/삭제가 가능하다. 실제 서비스에서는 접근 제한과 Firestore Security Rules 강화를 진행해야 한다.
           </p>
