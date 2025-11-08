@@ -23,6 +23,15 @@
 
 import { initializeApp } from 'firebase/app';
 import {
+  createUserWithEmailAndPassword,
+  getAuth,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile
+} from 'firebase/auth';
+import {
   addDoc,
   collection,
   deleteDoc,
@@ -34,6 +43,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where
 } from 'firebase/firestore';
@@ -60,6 +70,44 @@ const firebaseConfig = {
 // Firebase 앱을 초기화하고 Firestore 인스턴스를 공유한다.
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+export function subscribeAuthState(callback) {
+  return onAuthStateChanged(auth, callback);
+}
+
+export async function signInUserWithEmail(email, password) {
+  return signInWithEmailAndPassword(auth, email, password);
+}
+
+export async function registerUserWithEmail(email, password) {
+  return createUserWithEmailAndPassword(auth, email, password);
+}
+
+export async function signOutUser() {
+  return signOut(auth);
+}
+
+export async function sendPasswordReset(email) {
+  return sendPasswordResetEmail(auth, email);
+}
+
+export async function updateAuthProfile(user, profile) {
+  return updateProfile(user, profile);
+}
+
+export async function saveUserProfile(uid, profile) {
+  if (!uid) return;
+  await setDoc(doc(db, 'userProfiles', uid), profile, { merge: true });
+}
+
+export async function getAdminRole(uid) {
+  if (!uid) return null;
+  const adminRef = doc(db, 'admins', uid);
+  const snap = await getDoc(adminRef);
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
 
 // 내부에서 사용하는 헬퍼: Firestore 문서를 issueDraft 스키마에 맞는 평범한 객체로 정규화한다.
 function normalizeIssueData(issueId, data) {

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import MetaTags from '../components/MetaTags.jsx';
+import EmailPasswordAuthPanel from '../components/EmailPasswordAuthPanel.jsx';
 import { THEME_CONFIG } from '../constants/themeConfig.js';
 import { getRecentIssues, getTopIssuesByTheme, searchIssuesAcrossThemes } from '../firebaseClient.js';
 
@@ -170,6 +171,14 @@ function HomePage() {
         description="최근 등록된 글과 테마별 최신 5개를 제목 한 줄로 빠르게 확인하세요."
         url={siteUrl}
       />
+
+      <div className="flex justify-end">
+        <EmailPasswordAuthPanel
+          className="w-full max-w-xs"
+          heading="이메일/비밀번호 로그인"
+          description="infoall 계정을 사용해 로그인하거나 회원가입할 수 있습니다."
+        />
+      </div>
 
       <TitleSection
         heading={q ? `검색 상위 10개 (${q})` : '최근 등록 10개'}
