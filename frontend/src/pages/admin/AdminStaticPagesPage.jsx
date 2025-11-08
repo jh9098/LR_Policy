@@ -1,0 +1,317 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  getStaticPageContent,
+  getStaticPageHistory,
+  saveStaticPageContent
+} from '../../firebaseClient.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
+
+const STATIC_PAGE_ITEMS = [
+  {
+    slug: 'company-overview',
+    label: '회사소개',
+    description: '회사 연혁, 핵심 가치, 비전을 안내하는 페이지입니다.',
+    defaultTitle: '회사소개',
+    placeholder: '회사 연혁, 비전, 핵심 가치 등을 자유롭게 작성해주세요.',
+    publicPath: '/company'
+  },
+  {
+    slug: 'partnership-guide',
+    label: '제휴안내',
+    description: '제휴 문의 채널과 진행 절차를 정리합니다.',
+    defaultTitle: '제휴안내',
+    placeholder: '제휴 문의 담당자, 연락처, 진행 절차 등을 작성해주세요.',
+    publicPath: '/partnership'
+  },
+  {
+    slug: 'advertising-guide',
+    label: '광고안내',
+    description: '광고 상품과 집행 절차를 소개합니다.',
+    defaultTitle: '광고안내',
+    placeholder: '광고 상품 종류, 집행 절차, 제안서 링크 등을 입력해주세요.',
+    publicPath: '/advertising'
+  },
+  {
+    slug: 'terms-of-use',
+    label: '이용약관',
+    description: '서비스 이용약관 전문을 관리합니다.',
+    defaultTitle: '이용약관',
+    placeholder: '약관 본문을 그대로 붙여넣거나 정리해주세요.',
+    publicPath: '/terms'
+  },
+  {
+    slug: 'privacy-policy',
+    label: '개인정보처리방침',
+    description: '개인정보 처리 및 보호 정책을 게시합니다.',
+    defaultTitle: '개인정보처리방침',
+    placeholder: '수집 항목, 이용 목적, 보관 기간 등을 작성해주세요.',
+    publicPath: '/privacy'
+  },
+  {
+    slug: 'youth-protection',
+    label: '청소년보호정책',
+    description: '청소년 보호 책임자와 대응 절차를 안내합니다.',
+    defaultTitle: '청소년보호정책',
+    placeholder: '책임자 정보, 유해정보 차단 정책, 신고 절차 등을 작성해주세요.',
+    publicPath: '/youth-protection'
+  }
+];
+
+const HISTORY_LIMIT = 12;
+
+function formatTimestamp(timestamp) {
+  if (!timestamp) return '기록된 시간 없음';
+  try {
+    const date = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);
+    return new Intl.DateTimeFormat('ko-KR', {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    }).format(date);
+  } catch (error) {
+    console.warn('타임스탬프 포맷 실패:', error);
+    return '기록된 시간 없음';
+  }
+}
+
+export default function AdminStaticPagesPage() {
+  const [activeSlug, setActiveSlug] = useState(STATIC_PAGE_ITEMS[0].slug);
+  const [title, setTitle] = useState(STATIC_PAGE_ITEMS[0].defaultTitle);
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [history, setHistory] = useState([]);
+  const [meta, setMeta] = useState({ updatedAt: null, updatedBy: '' });
+  const { user } = useAuth();
+
+  const activeItem = useMemo(
+    () => STATIC_PAGE_ITEMS.find((item) => item.slug === activeSlug) ?? STATIC_PAGE_ITEMS[0],
+    [activeSlug]
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    setError('');
+    setMessage('');
+
+    Promise.all([getStaticPageContent(activeSlug), getStaticPageHistory(activeSlug, HISTORY_LIMIT)])
+      .then(([pageData, historyData]) => {
+        if (!isMounted) return;
+        setTitle(pageData?.title?.trim() || activeItem.defaultTitle);
+        setContent(typeof pageData?.content === 'string' ? pageData.content : '');
+        setMeta({
+          updatedAt: pageData?.updatedAt ?? null,
+          updatedBy: pageData?.updatedBy ?? ''
+        });
+        setHistory(historyData ?? []);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.error('정적 페이지 데이터 로드 실패:', err);
+        setError('선택한 페이지 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+        setTitle(activeItem.defaultTitle);
+        setContent('');
+        setHistory([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeSlug, activeItem.defaultTitle]);
+
+  useEffect(() => {
+    if (!message) return;
+    const timer = setTimeout(() => setMessage(''), 4000);
+    return () => clearTimeout(timer);
+  }, [message]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!activeSlug) return;
+
+    setSaving(true);
+    setError('');
+    setMessage('');
+
+    const normalizedTitle = title.trim() || activeItem.defaultTitle;
+    const normalizedContent = content.replace(/\r\n/g, '\n').trimEnd();
+    const updatedBy = user?.email || user?.displayName || '관리자';
+
+    try {
+      await saveStaticPageContent(activeSlug, {
+        title: normalizedTitle,
+        content: normalizedContent,
+        updatedBy
+      });
+
+      const [pageData, historyData] = await Promise.all([
+        getStaticPageContent(activeSlug),
+        getStaticPageHistory(activeSlug, HISTORY_LIMIT)
+      ]);
+
+      setTitle(pageData?.title?.trim() || activeItem.defaultTitle);
+      setContent(typeof pageData?.content === 'string' ? pageData.content : '');
+      setMeta({
+        updatedAt: pageData?.updatedAt ?? null,
+        updatedBy: pageData?.updatedBy ?? ''
+      });
+      setHistory(historyData ?? []);
+      setMessage('저장되었습니다.');
+    } catch (err) {
+      console.error('정적 페이지 저장 실패:', err);
+      setError('저장 중 문제가 발생했습니다. 입력값을 확인하거나 잠시 후 다시 시도해주세요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSelectPage = (slug) => {
+    if (saving) return;
+    setActiveSlug(slug);
+  };
+
+  return (
+    <section className="space-y-6">
+      <header className="space-y-2">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">환경/설정</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          회사소개, 약관 등 정적 페이지 내용을 직접 편집할 수 있습니다. 저장 시 Firestore에 자동 반영되고 이력이 남습니다.
+        </p>
+      </header>
+
+      <div className="flex flex-wrap gap-2">
+        {STATIC_PAGE_ITEMS.map((item) => {
+          const isActive = item.slug === activeSlug;
+          return (
+            <button
+              key={item.slug}
+              type="button"
+              onClick={() => handleSelectPage(item.slug)}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                isActive
+                  ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:border-indigo-400/70 dark:bg-indigo-500/10 dark:text-indigo-200'
+                  : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200'
+              }`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{activeItem.label}</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{activeItem.description}</p>
+            </div>
+            <Link
+              to={activeItem.publicPath}
+              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:text-slate-300 dark:hover:border-indigo-400 dark:hover:text-indigo-200 dark:focus-visible:ring-offset-slate-900"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              새 창에서 미리보기
+            </Link>
+          </div>
+
+          {error ? (
+            <div className="rounded-lg border border-rose-300 bg-rose-100/70 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-100">
+              {error}
+            </div>
+          ) : null}
+          {message ? (
+            <div className="rounded-lg border border-emerald-300 bg-emerald-100/70 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100">
+              {message}
+            </div>
+          ) : null}
+
+          <label className="block space-y-1 text-sm">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">페이지 제목</span>
+            <input
+              type="text"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              placeholder={activeItem.defaultTitle}
+              disabled={loading || saving}
+            />
+          </label>
+
+          <label className="block space-y-1 text-sm">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">본문 내용</span>
+            <textarea
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              className="min-h-[320px] w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              placeholder={activeItem.placeholder}
+              disabled={loading || saving}
+            />
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              줄바꿈과 공백은 그대로 저장됩니다. HTML 태그 입력도 가능합니다.
+            </span>
+          </label>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+            <div>
+              <p>
+                마지막 업데이트:{' '}
+                {meta.updatedAt ? formatTimestamp(meta.updatedAt) : '기록 없음'}
+              </p>
+              {meta.updatedBy ? <p>수정자: {meta.updatedBy}</p> : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-indigo-400 dark:focus-visible:ring-offset-slate-900"
+                disabled={loading || saving}
+              >
+                {saving ? '저장 중...' : '저장하기'}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">변경 이력</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              최대 {HISTORY_LIMIT}개의 최근 저장 기록이 표시됩니다.
+            </p>
+          </div>
+
+          {history.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+              아직 저장 이력이 없습니다.
+            </p>
+          ) : (
+            <ol className="space-y-3 text-xs text-slate-600 dark:text-slate-300">
+              {history.map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded-xl border border-slate-200 bg-white/70 px-3 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/60"
+                >
+                  <p className="font-semibold text-slate-700 dark:text-slate-200">{item.title || activeItem.defaultTitle}</p>
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    {formatTimestamp(item.savedAt || item.updatedAt)}
+                    {item.updatedBy ? ` · ${item.updatedBy}` : ''}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}

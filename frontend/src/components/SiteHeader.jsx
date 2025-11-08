@@ -1,7 +1,9 @@
 // src/components/SiteHeader.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { THEME_NAV_ITEMS } from "../constants/themeConfig.js";
+import { useAuth } from "../contexts/AuthContext.jsx";
+import AuthModal from "./AuthModal.jsx";
 
 const navBaseClass =
   "rounded-md px-2 py-1 text-sm font-medium transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:text-slate-100 dark:focus-visible:ring-offset-slate-900";
@@ -19,6 +21,8 @@ export default function SiteHeader() {
   const [q, setQ] = useState(sp.get("q") ?? "");
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [isAuthModalOpen, setAuthModalOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -44,6 +48,12 @@ export default function SiteHeader() {
     setQ(sp.get("q") ?? "");
   }, [sp, location.key]);
 
+  useEffect(() => {
+    if (user) {
+      setAuthModalOpen(false);
+    }
+  }, [user]);
+
   const onSubmitSearch = (e) => {
     e?.preventDefault?.();
     const keyword = (q || "").trim();
@@ -54,6 +64,20 @@ export default function SiteHeader() {
     setQ("");
     navigate("/");
   };
+  const handleAuthButtonClick = () => {
+    if (user) {
+      logout().catch((error) => {
+        console.warn("로그아웃 처리 중 오류가 발생했습니다.", error);
+        window.alert("로그아웃에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      });
+      return;
+    }
+    setAuthModalOpen(true);
+  };
+  const displayName = useMemo(() => {
+    if (!user) return "";
+    return user.displayName?.trim() || user.email || "로그인 사용자";
+  }, [user]);
   const navLinkClassName = ({ isActive }) =>
     [
       navBaseClass,
@@ -62,7 +86,8 @@ export default function SiteHeader() {
     ].join(" ");
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90">
+    <>
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90">
       {/* 1행: 로고 | 검색 | 버튼들 — 한 줄 고정 */}
       <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:px-6 flex-nowrap">
         {/* 로고 */}
@@ -83,6 +108,15 @@ export default function SiteHeader() {
               placeholder="키워드로 전체 테마 검색"
               className="w-full rounded-full border border-slate-300 bg-white/90 px-5 py-3 text-sm text-slate-900 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-100"
             />
+            {q ? (
+              <button
+                type="button"
+                onClick={onResetSearch}
+                className="absolute inset-y-0 right-3 my-auto inline-flex h-7 items-center justify-center rounded-full bg-slate-200 px-3 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 dark:focus-visible:ring-offset-slate-900"
+              >
+                초기화
+              </button>
+            ) : null}
           </div>
         </form>
 
@@ -94,12 +128,19 @@ export default function SiteHeader() {
           >
             검색
           </button>
+          {user ? (
+            <span className="hidden rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-300 sm:inline">
+              {displayName}
+            </span>
+          ) : null}
           <button
             type="button"
-            onClick={onResetSearch}
-            className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800/60"
+            onClick={handleAuthButtonClick}
+            className={`rounded-full px-4 py-2 text-sm font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+              user ? 'bg-rose-500 hover:bg-rose-600' : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
-            초기화
+            {user ? '로그아웃' : '로그인'}
           </button>
           <button
             type="button"
@@ -132,6 +173,8 @@ export default function SiteHeader() {
           관리자
         </Link>
       </div>
-    </header>
+      </header>
+      <AuthModal open={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
+    </>
   );
 }
