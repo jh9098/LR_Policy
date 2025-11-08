@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { THEME_NAV_ITEMS } from "../constants/themeConfig.js";
 import { useAuth } from "../contexts/AuthContext.jsx";
-import AuthModal from "./AuthModal.jsx";
+import { useAuthDialog } from "../contexts/AuthDialogContext.jsx";
 
 const navBaseClass =
   "rounded-md px-2 py-1 text-sm font-medium transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:text-slate-100 dark:focus-visible:ring-offset-slate-900";
@@ -22,7 +22,7 @@ export default function SiteHeader() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+  const { openLogin } = useAuthDialog();
 
   useEffect(() => {
     try {
@@ -48,12 +48,6 @@ export default function SiteHeader() {
     setQ(sp.get("q") ?? "");
   }, [sp, location.key]);
 
-  useEffect(() => {
-    if (user) {
-      setAuthModalOpen(false);
-    }
-  }, [user]);
-
   const onSubmitSearch = (e) => {
     e?.preventDefault?.();
     const keyword = (q || "").trim();
@@ -72,7 +66,7 @@ export default function SiteHeader() {
       });
       return;
     }
-    setAuthModalOpen(true);
+    openLogin();
   };
   const displayName = useMemo(() => {
     if (!user) return "";
@@ -174,7 +168,6 @@ export default function SiteHeader() {
         </Link>
       </div>
       </header>
-      <AuthModal open={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
     </>
   );
 }

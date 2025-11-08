@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import EmailPasswordAuthPanel from './EmailPasswordAuthPanel.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
-export default function AuthModal({ open, onClose }) {
+export default function AuthModal({ open, onClose, reason }) {
   const { processing, clearFeedback } = useAuth();
 
   useEffect(() => {
@@ -37,7 +37,14 @@ export default function AuthModal({ open, onClose }) {
         >
           ✕
         </button>
-        <EmailPasswordAuthPanel heading="이메일 로그인" description="infoall 관리자 계정을 사용해 로그인해주세요." />
+        <div className="space-y-4">
+          {reason ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
+              {reason}
+            </p>
+          ) : null}
+          <EmailPasswordAuthPanel heading="이메일 로그인" description="infoall 계정을 사용해 로그인해주세요." />
+        </div>
       </div>
     </div>
   );
@@ -45,5 +52,6 @@ export default function AuthModal({ open, onClose }) {
 
 AuthModal.propTypes = {
   open: PropTypes.bool,
-  onClose: PropTypes.func
+  onClose: PropTypes.func,
+  reason: PropTypes.string
 };

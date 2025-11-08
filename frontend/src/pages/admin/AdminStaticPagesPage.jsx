@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import {
   getStaticPageContent,
   getStaticPageHistory,
-  saveStaticPageContent
+  getTrendingSettings,
+  saveStaticPageContent,
+  saveTrendingSettings
 } from '../../firebaseClient.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
@@ -84,12 +86,70 @@ export default function AdminStaticPagesPage() {
   const [message, setMessage] = useState('');
   const [history, setHistory] = useState([]);
   const [meta, setMeta] = useState({ updatedAt: null, updatedBy: '' });
+  const [trendingSettingsState, setTrendingSettingsState] = useState({ minUpvotes: '5', withinHours: '24', maxItems: '10' });
+  const [trendingSaving, setTrendingSaving] = useState(false);
+  const [trendingMessage, setTrendingMessage] = useState('');
+  const [trendingError, setTrendingError] = useState('');
   const { user } = useAuth();
 
   const activeItem = useMemo(
     () => STATIC_PAGE_ITEMS.find((item) => item.slug === activeSlug) ?? STATIC_PAGE_ITEMS[0],
     [activeSlug]
   );
+
+  const handleChangeTrendingSetting = (field) => (event) => {
+    const value = event.target.value;
+    setTrendingSettingsState((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveTrendingSettings = async (event) => {
+    event.preventDefault();
+    setTrendingSaving(true);
+    setTrendingError('');
+    setTrendingMessage('');
+    try {
+      const normalized = {
+        minUpvotes: Math.max(Number(trendingSettingsState.minUpvotes) || 0, 0),
+        withinHours: Math.max(Number(trendingSettingsState.withinHours) || 0, 0),
+        maxItems: Math.max(Math.min(Number(trendingSettingsState.maxItems) || 10, 50), 1)
+      };
+      const saved = await saveTrendingSettings(normalized);
+      setTrendingSettingsState({
+        minUpvotes: String(saved.minUpvotes ?? normalized.minUpvotes),
+        withinHours: String(saved.withinHours ?? normalized.withinHours),
+        maxItems: String(saved.maxItems ?? normalized.maxItems)
+      });
+      setTrendingMessage('실시간 인기 게시물 조건이 저장되었습니다.');
+    } catch (err) {
+      console.error('실시간 인기 설정 저장 실패:', err);
+      setTrendingError('설정을 저장하지 못했습니다. 입력값을 확인해주세요.');
+    } finally {
+      setTrendingSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    getTrendingSettings()
+      .then((settings) => {
+        if (!isMounted) return;
+        setTrendingSettingsState({
+          minUpvotes: String(settings?.minUpvotes ?? 5),
+          withinHours: String(settings?.withinHours ?? 24),
+          maxItems: String(settings?.maxItems ?? 10)
+        });
+        setTrendingError('');
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.error('실시간 인기 설정 불러오기 실패:', err);
+        setTrendingError('실시간 인기 게시물 조건을 불러오지 못했습니다.');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -130,6 +190,12 @@ export default function AdminStaticPagesPage() {
     const timer = setTimeout(() => setMessage(''), 4000);
     return () => clearTimeout(timer);
   }, [message]);
+
+  useEffect(() => {
+    if (!trendingMessage) return;
+    const timer = setTimeout(() => setTrendingMessage(''), 4000);
+    return () => clearTimeout(timer);
+  }, [trendingMessage]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -184,6 +250,83 @@ export default function AdminStaticPagesPage() {
           회사소개, 약관 등 정적 페이지 내용을 직접 편집할 수 있습니다. 저장 시 Firestore에 자동 반영되고 이력이 남습니다.
         </p>
       </header>
+
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">실시간 인기 게시물 조건</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              홈 화면의 실시간 인기 게시물 10개 영역에 노출될 최소 추천 수와 기간, 표시 개수를 설정합니다.
+            </p>
+          </div>
+          {trendingSaving ? (
+            <span className="text-xs font-semibold text-indigo-500 dark:text-indigo-300">저장 중…</span>
+          ) : null}
+        </div>
+        <form onSubmit={handleSaveTrendingSettings} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="flex flex-col gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+              최소 추천 수
+              <input
+                type="number"
+                min="0"
+                value={trendingSettingsState.minUpvotes}
+                onChange={handleChangeTrendingSetting('minUpvotes')}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+              최근 시간(시간 단위)
+              <input
+                type="number"
+                min="0"
+                value={trendingSettingsState.withinHours}
+                onChange={handleChangeTrendingSetting('withinHours')}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              />
+              <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">0으로 설정하면 기간 제한이 없습니다.</span>
+            </label>
+            <label className="flex flex-col gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+              노출 개수
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={trendingSettingsState.maxItems}
+                onChange={handleChangeTrendingSetting('maxItems')}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              현재 조건: 추천 {trendingSettingsState.minUpvotes || '0'}회 이상,
+              {` `}
+              {Number(trendingSettingsState.withinHours) > 0
+                ? `최근 ${trendingSettingsState.withinHours}시간 이내`
+                : '기간 제한 없음'}
+              , 최대 {trendingSettingsState.maxItems || '10'}개 노출
+            </div>
+            <button
+              type="submit"
+              disabled={trendingSaving}
+              className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:bg-indigo-500/80 dark:focus-visible:ring-offset-slate-900"
+            >
+              설정 저장
+            </button>
+          </div>
+        </form>
+        {trendingError ? (
+          <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+            {trendingError}
+          </p>
+        ) : null}
+        {trendingMessage ? (
+          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+            {trendingMessage}
+          </p>
+        ) : null}
+      </section>
 
       <div className="flex flex-wrap gap-2">
         {STATIC_PAGE_ITEMS.map((item) => {

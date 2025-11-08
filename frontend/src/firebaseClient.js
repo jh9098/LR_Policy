@@ -41,11 +41,13 @@ import {
   getDoc,
   getDocs,
   getFirestore,
+  increment,
   limit,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where
 } from 'firebase/firestore';
@@ -75,9 +77,129 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+const ISSUE_STATS_COLLECTION = 'issueStats';
+const ISSUE_REACTIONS_COLLECTION = 'issueReactions';
+const USER_SCRAPS_COLLECTION = 'userScraps';
+const TRENDING_SETTINGS_COLLECTION = 'appSettings';
+const TRENDING_SETTINGS_DOC_ID = 'trending';
+
+const DEFAULT_TRENDING_SETTINGS = {
+  minUpvotes: 5,
+  withinHours: 24,
+  maxItems: 10
+};
+
 setPersistence(auth, browserLocalPersistence).catch((error) => {
   console.warn('Firebase 인증 지속성 설정 실패:', error);
 });
+
+function createDefaultIssueStats() {
+  return {
+    upVotes: 0,
+    downVotes: 0,
+    scrapCount: 0,
+    commentCount: 0,
+    lastUpvoteAt: null,
+    lastDownvoteAt: null,
+    lastScrapAt: null,
+    lastCommentAt: null
+  };
+}
+
+function normalizeIssueStats(data) {
+  if (!data) {
+    return createDefaultIssueStats();
+  }
+  return {
+    upVotes: Number(data.upVotes) || 0,
+    downVotes: Number(data.downVotes) || 0,
+    scrapCount: Number(data.scrapCount) || 0,
+    commentCount: Number(data.commentCount) || 0,
+    lastUpvoteAt: data.lastUpvoteAt ?? null,
+    lastDownvoteAt: data.lastDownvoteAt ?? null,
+    lastScrapAt: data.lastScrapAt ?? null,
+    lastCommentAt: data.lastCommentAt ?? null
+  };
+}
+
+async function ensureIssueStatsDocument(issueId) {
+  if (!issueId) return null;
+  const statsRef = doc(db, ISSUE_STATS_COLLECTION, issueId);
+  const snap = await getDoc(statsRef);
+  if (!snap.exists()) {
+    await setDoc(
+      statsRef,
+      {
+        ...createDefaultIssueStats(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      { merge: false }
+    );
+  }
+  return statsRef;
+}
+
+async function getIssueStats(issueId) {
+  if (!issueId) {
+    return createDefaultIssueStats();
+  }
+  const statsRef = doc(db, ISSUE_STATS_COLLECTION, issueId);
+  const snap = await getDoc(statsRef);
+  if (!snap.exists()) {
+    return createDefaultIssueStats();
+  }
+  return normalizeIssueStats(snap.data());
+}
+
+async function fetchIssueStatsBatch(issueIds) {
+  if (!Array.isArray(issueIds) || issueIds.length === 0) {
+    return {};
+  }
+  const results = await Promise.all(
+    issueIds.map(async (issueId) => {
+      const stats = await getIssueStats(issueId);
+      return [issueId, stats];
+    })
+  );
+  return Object.fromEntries(results);
+}
+
+async function attachStatsToIssues(issueList) {
+  if (!Array.isArray(issueList) || issueList.length === 0) {
+    return [];
+  }
+  const statsMap = await fetchIssueStatsBatch(issueList.map((issue) => issue.id));
+  return issueList.map((issue) => ({
+    ...issue,
+    stats: statsMap[issue.id] ?? createDefaultIssueStats()
+  }));
+}
+
+function normalizeCommentSnapshot(docSnap) {
+  const data = docSnap.data() ?? {};
+  return {
+    id: docSnap.id,
+    issueId: data.issueId || '',
+    userId: data.userId || '',
+    displayName: data.displayName || '',
+    email: data.email || '',
+    content: data.content || '',
+    createdAt: data.createdAt ?? null
+  };
+}
+
+function normalizeTrendingSettings(data) {
+  const base = { ...DEFAULT_TRENDING_SETTINGS };
+  if (!data) {
+    return base;
+  }
+  return {
+    minUpvotes: Number(data.minUpvotes) >= 0 ? Number(data.minUpvotes) : base.minUpvotes,
+    withinHours: Number(data.withinHours) >= 0 ? Number(data.withinHours) : base.withinHours,
+    maxItems: Number(data.maxItems) > 0 ? Number(data.maxItems) : base.maxItems
+  };
+}
 
 export function subscribeAuthState(callback) {
   return onAuthStateChanged(auth, callback);
@@ -210,14 +332,16 @@ function normalizeIssueData(issueId, data) {
 export async function getRecentIssues(limitCount = 50) {
   const q = query(collection(db, 'issues'), orderBy('date', 'desc'), limit(limitCount));
   const snap = await getDocs(q);
-  return snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+  const baseList = snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+  return attachStatsToIssues(baseList);
 }
 
 async function fetchIssuesWithFallback(constraints, { fallbackLimit = 80, fallbackFilter = null } = {}) {
   try {
     const q = query(collection(db, 'issues'), ...constraints);
     const snap = await getDocs(q);
-    return snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+    const baseList = snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+    return attachStatsToIssues(baseList);
   } catch (error) {
     console.warn('Firestore 고급 쿼리 실패, 최신 순 결과로 폴백합니다:', error);
     const fallbackList = await getRecentIssues(fallbackLimit);
@@ -303,7 +427,9 @@ export async function getIssueById(issueId) {
   if (!snap.exists()) {
     return null;
   }
-  return normalizeIssueData(issueId, snap.data());
+  const issue = normalizeIssueData(issueId, snap.data());
+  const stats = await getIssueStats(issueId);
+  return { ...issue, stats };
 }
 
 // AdminNewPage에서 직접 호출하여 새 문서를 생성한다. Render 서버를 거치지 않는다.
@@ -340,6 +466,282 @@ export async function deleteIssue(issueId) {
   await deleteDoc(doc(db, 'metrics', issueId)).catch(() => {
     // metrics 문서가 없을 수도 있으므로 오류를 삼킨다.
   });
+}
+
+// ----- 댓글 및 사용자 상호작용 유틸 -----
+
+export async function getIssueComments(issueId, { limitCount = 120 } = {}) {
+  if (!issueId) {
+    return [];
+  }
+  const commentsQuery = query(
+    collection(db, 'issues', issueId, 'comments'),
+    orderBy('createdAt', 'asc'),
+    limit(limitCount)
+  );
+  const snap = await getDocs(commentsQuery);
+  return snap.docs.map((docSnap) => normalizeCommentSnapshot(docSnap));
+}
+
+export async function addIssueComment(issueId, { userId, displayName = '', email = '', content }) {
+  if (!issueId) {
+    throw new Error('issueId가 필요합니다.');
+  }
+  if (!userId) {
+    throw new Error('로그인이 필요합니다.');
+  }
+  const normalized = (content ?? '').trim();
+  if (!normalized) {
+    throw new Error('댓글 내용을 입력해주세요.');
+  }
+
+  await ensureIssueStatsDocument(issueId);
+
+  const commentsRef = collection(db, 'issues', issueId, 'comments');
+  const docRef = await addDoc(commentsRef, {
+    issueId,
+    userId,
+    displayName,
+    email,
+    content: normalized,
+    createdAt: serverTimestamp()
+  });
+
+  const statsRef = doc(db, ISSUE_STATS_COLLECTION, issueId);
+  const now = serverTimestamp();
+  await setDoc(
+    statsRef,
+    {
+      commentCount: increment(1),
+      lastCommentAt: now,
+      updatedAt: now
+    },
+    { merge: true }
+  );
+
+  const [commentSnap, stats] = await Promise.all([getDoc(docRef), getIssueStats(issueId)]);
+  return { comment: normalizeCommentSnapshot(commentSnap), stats };
+}
+
+export async function getIssueUserState(issueId, userId) {
+  if (!issueId || !userId) {
+    return { hasUpvoted: false, hasDownvoted: false, hasScrapped: false };
+  }
+  const [reactionSnap, scrapSnap] = await Promise.all([
+    getDoc(doc(db, ISSUE_REACTIONS_COLLECTION, `${issueId}_${userId}`)),
+    getDoc(doc(db, USER_SCRAPS_COLLECTION, userId, 'items', issueId))
+  ]);
+  const reactionData = reactionSnap.exists() ? reactionSnap.data() : null;
+  return {
+    hasUpvoted: Boolean(reactionData?.upVoted),
+    hasDownvoted: Boolean(reactionData?.downVoted),
+    hasScrapped: scrapSnap.exists()
+  };
+}
+
+export async function submitIssueVote(issueId, { type, userId, isAdmin = false } = {}) {
+  if (!issueId) {
+    throw new Error('issueId가 필요합니다.');
+  }
+  if (type !== 'up' && type !== 'down') {
+    throw new Error('type은 up 또는 down 이어야 합니다.');
+  }
+
+  await ensureIssueStatsDocument(issueId);
+  const statsRef = doc(db, ISSUE_STATS_COLLECTION, issueId);
+  const timestamp = serverTimestamp();
+
+  if (isAdmin) {
+    const payload =
+      type === 'up'
+        ? { upVotes: increment(1), lastUpvoteAt: timestamp, updatedAt: timestamp }
+        : { downVotes: increment(1), lastDownvoteAt: timestamp, updatedAt: timestamp };
+    await setDoc(statsRef, payload, { merge: true });
+    const stats = await getIssueStats(issueId);
+    return { stats, userState: { hasUpvoted: false, hasDownvoted: false } };
+  }
+
+  if (!userId) {
+    throw new Error('로그인이 필요합니다.');
+  }
+
+  const reactionRef = doc(db, ISSUE_REACTIONS_COLLECTION, `${issueId}_${userId}`);
+  const reactionSnap = await getDoc(reactionRef);
+  const reactionData = reactionSnap.exists() ? reactionSnap.data() : {};
+
+  const alreadyPerformed = type === 'up' ? reactionData?.upVoted : reactionData?.downVoted;
+  if (alreadyPerformed) {
+    throw new Error(type === 'up' ? '이미 추천을 완료했습니다.' : '이미 비추천을 완료했습니다.');
+  }
+
+  const reactionPayload = {
+    issueId,
+    userId,
+    updatedAt: timestamp
+  };
+  if (type === 'up') {
+    reactionPayload.upVoted = true;
+    reactionPayload.upVotedAt = timestamp;
+  } else {
+    reactionPayload.downVoted = true;
+    reactionPayload.downVotedAt = timestamp;
+  }
+
+  await setDoc(reactionRef, reactionPayload, { merge: true });
+
+  const statsPayload =
+    type === 'up'
+      ? { upVotes: increment(1), lastUpvoteAt: timestamp, updatedAt: timestamp }
+      : { downVotes: increment(1), lastDownvoteAt: timestamp, updatedAt: timestamp };
+  await setDoc(statsRef, statsPayload, { merge: true });
+
+  const stats = await getIssueStats(issueId);
+  const userState = {
+    hasUpvoted: Boolean(type === 'up' ? true : reactionData?.upVoted),
+    hasDownvoted: Boolean(type === 'down' ? true : reactionData?.downVoted)
+  };
+  return { stats, userState };
+}
+
+export async function toggleIssueScrap(issueId, { userId }) {
+  if (!issueId) {
+    throw new Error('issueId가 필요합니다.');
+  }
+  if (!userId) {
+    throw new Error('로그인이 필요합니다.');
+  }
+
+  await ensureIssueStatsDocument(issueId);
+
+  const scrapRef = doc(db, USER_SCRAPS_COLLECTION, userId, 'items', issueId);
+  const statsRef = doc(db, ISSUE_STATS_COLLECTION, issueId);
+  const snap = await getDoc(scrapRef);
+
+  if (snap.exists()) {
+    await deleteDoc(scrapRef);
+    const timestamp = serverTimestamp();
+    await setDoc(
+      statsRef,
+      {
+        scrapCount: increment(-1),
+        updatedAt: timestamp
+      },
+      { merge: true }
+    );
+    const stats = await getIssueStats(issueId);
+    return { scrapped: false, stats };
+  }
+
+  const timestamp = serverTimestamp();
+  await setDoc(
+    scrapRef,
+    {
+      issueId,
+      userId,
+      createdAt: timestamp
+    },
+    { merge: false }
+  );
+
+  await setDoc(
+    statsRef,
+    {
+      scrapCount: increment(1),
+      lastScrapAt: timestamp,
+      updatedAt: timestamp
+    },
+    { merge: true }
+  );
+  const stats = await getIssueStats(issueId);
+  return { scrapped: true, stats };
+}
+
+export async function getUserScraps(userId, { limitCount = 60 } = {}) {
+  if (!userId) {
+    return [];
+  }
+  const scrapsQuery = query(
+    collection(db, USER_SCRAPS_COLLECTION, userId, 'items'),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  );
+  const snap = await getDocs(scrapsQuery);
+  const items = await Promise.all(
+    snap.docs.map(async (docSnap) => {
+      const issue = await getIssueById(docSnap.id);
+      if (!issue) {
+        return null;
+      }
+      return {
+        issue,
+        createdAt: docSnap.data()?.createdAt ?? null
+      };
+    })
+  );
+  return items.filter(Boolean);
+}
+
+export async function getTrendingSettings() {
+  const settingsRef = doc(db, TRENDING_SETTINGS_COLLECTION, TRENDING_SETTINGS_DOC_ID);
+  const snap = await getDoc(settingsRef);
+  if (!snap.exists()) {
+    return { ...DEFAULT_TRENDING_SETTINGS };
+  }
+  return normalizeTrendingSettings(snap.data());
+}
+
+export async function saveTrendingSettings(settings) {
+  const normalized = normalizeTrendingSettings(settings);
+  const settingsRef = doc(db, TRENDING_SETTINGS_COLLECTION, TRENDING_SETTINGS_DOC_ID);
+  await setDoc(
+    settingsRef,
+    {
+      ...normalized,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+  return normalized;
+}
+
+export async function getTrendingIssues() {
+  const settings = await getTrendingSettings();
+  const limitCount = Math.max(settings.maxItems || DEFAULT_TRENDING_SETTINGS.maxItems, 1);
+  const fetchLimit = Math.max(limitCount * 3, 20);
+
+  const statsQuery = query(collection(db, ISSUE_STATS_COLLECTION), orderBy('upVotes', 'desc'), limit(fetchLimit));
+  const statsSnap = await getDocs(statsQuery);
+
+  const cutoffDate =
+    settings.withinHours > 0 ? new Date(Date.now() - settings.withinHours * 60 * 60 * 1000) : null;
+
+  const shortlisted = [];
+  statsSnap.forEach((docSnap) => {
+    const stats = normalizeIssueStats(docSnap.data());
+    if (stats.upVotes < settings.minUpvotes) {
+      return;
+    }
+    if (cutoffDate) {
+      const lastUpvote = stats.lastUpvoteAt?.toDate?.() ?? (stats.lastUpvoteAt ? new Date(stats.lastUpvoteAt) : null);
+      if (!lastUpvote || lastUpvote < cutoffDate) {
+        return;
+      }
+    }
+    shortlisted.push({ issueId: docSnap.id, stats });
+  });
+
+  const sliced = shortlisted.slice(0, limitCount);
+  const issues = await Promise.all(
+    sliced.map(async ({ issueId, stats }) => {
+      const issue = await getIssueById(issueId);
+      if (!issue) {
+        return null;
+      }
+      return { ...issue, stats };
+    })
+  );
+
+  return { items: issues.filter(Boolean), settings };
 }
 
 // 간단한 클라이언트 측 검색 도우미. Firestore에서 최근 N개를 가져온 뒤 제목/카테고리/요약을 부분 일치로 필터한다.

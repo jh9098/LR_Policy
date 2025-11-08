@@ -1,5 +1,5 @@
 // frontend/src/pages/IssuePage.jsx
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import IntensityBar from '../components/IntensityBar.jsx';
 import MetaTags from '../components/MetaTags.jsx';
@@ -10,13 +10,25 @@ import HealthGuideView from '../components/issue/HealthGuideView.jsx';
 import StockGuideView from '../components/issue/StockGuideView.jsx';
 import SupportGuideView from '../components/issue/SupportGuideView.jsx';
 import { getThemeById } from '../constants/themeConfig.js';
-import { getIssueById } from '../firebaseClient.js';
+import {
+  addIssueComment,
+  getIssueById,
+  getIssueComments,
+  getIssueUserState,
+  submitIssueVote,
+  toggleIssueScrap
+} from '../firebaseClient.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
+import { useAuthDialog } from '../contexts/AuthDialogContext.jsx';
 
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const CONSERVATIVE_NOTE =
   '아래 내용은 일부 보수측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
 const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
+
+const INITIAL_STATS = { upVotes: 0, downVotes: 0, scrapCount: 0, commentCount: 0 };
+const INITIAL_USER_INTERACTION = { hasUpvoted: false, hasDownvoted: false, hasScrapped: false };
 
 function toArray(value) {
   if (!value) {
@@ -31,12 +43,66 @@ function toArray(value) {
     .filter(Boolean);
 }
 
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  return 0;
+}
+
 function IssuePage() {
   const { id } = useParams();
+  const { user, isAdmin } = useAuth();
+  const { requireAuth } = useAuthDialog();
   const [issue, setIssue] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+  const [issueStats, setIssueStats] = useState(INITIAL_STATS);
+  const [userInteraction, setUserInteraction] = useState(INITIAL_USER_INTERACTION);
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentInput, setCommentInput] = useState('');
+  const [commentFeedback, setCommentFeedback] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [isShareOpen, setShareOpen] = useState(false);
+
+  const loadComments = useCallback(async (issueId) => {
+    if (!issueId) {
+      setComments([]);
+      return;
+    }
+    setCommentsLoading(true);
+    setCommentFeedback('');
+    try {
+      const list = await getIssueComments(issueId, { limitCount: 120 });
+      setComments(list);
+    } catch (err) {
+      console.error('댓글 불러오기 실패:', err);
+      setCommentFeedback('댓글을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setCommentsLoading(false);
+    }
+  }, []);
+
+  const refreshUserState = useCallback(async (issueId, uid) => {
+    if (!issueId || !uid) {
+      setUserInteraction(INITIAL_USER_INTERACTION);
+      return;
+    }
+    try {
+      const state = await getIssueUserState(issueId, uid);
+      setUserInteraction({
+        hasUpvoted: Boolean(state?.hasUpvoted),
+        hasDownvoted: Boolean(state?.hasDownvoted),
+        hasScrapped: Boolean(state?.hasScrapped)
+      });
+    } catch (err) {
+      console.error('사용자 상호작용 상태 불러오기 실패:', err);
+    }
+  }, []);
 
   useEffect(() => {
     if (!id) {
@@ -58,6 +124,12 @@ function IssuePage() {
           return;
         }
         setIssue(data);
+        setIssueStats(data.stats ?? INITIAL_STATS);
+        setShareOpen(false);
+        setCommentInput('');
+        setCommentFeedback('');
+        setUserInteraction(INITIAL_USER_INTERACTION);
+        await loadComments(data.id);
       } catch (err) {
         console.error('Firestore에서 이슈 상세 불러오기 실패:', err);
         if (isMounted) {
@@ -75,7 +147,7 @@ function IssuePage() {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, loadComments]);
 
   useEffect(() => {
     if (!toastMessage) {
@@ -84,6 +156,17 @@ function IssuePage() {
     const timer = window.setTimeout(() => setToastMessage(''), 2000);
     return () => window.clearTimeout(timer);
   }, [toastMessage]);
+
+  useEffect(() => {
+    if (!issue?.id) {
+      return;
+    }
+    if (!user) {
+      setUserInteraction(INITIAL_USER_INTERACTION);
+      return;
+    }
+    refreshUserState(issue.id, user.uid);
+  }, [issue?.id, user, refreshUserState]);
 
   const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
   const themeInfo = issue ? getThemeById(issue.theme) : null;
@@ -518,6 +601,142 @@ function IssuePage() {
     }
   };
 
+  const formatCommentTimestamp = useCallback((value) => {
+    if (!value) return '';
+    try {
+      const date = typeof value.toDate === 'function' ? value.toDate() : value instanceof Date ? value : new Date(value);
+      return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+    } catch (err) {
+      console.error('댓글 시간 포맷 실패:', err);
+      return '';
+    }
+  }, []);
+
+  const handleShareToggle = () => {
+    setShareOpen((prev) => !prev);
+  };
+
+  const handleVote = async (type) => {
+    if (!issue?.id) {
+      return;
+    }
+
+    const execute = async () => {
+      try {
+        const result = await submitIssueVote(issue.id, {
+          type,
+          userId: user?.uid,
+          isAdmin
+        });
+        const nextStats = result?.stats ?? INITIAL_STATS;
+        setIssueStats(nextStats);
+        setIssue((prev) => (prev ? { ...prev, stats: nextStats } : prev));
+        if (result?.userState) {
+          setUserInteraction((prev) => ({
+            ...prev,
+            ...result.userState
+          }));
+        }
+        setToastMessage(type === 'up' ? '추천했습니다.' : '비추천했습니다.');
+      } catch (err) {
+        console.error('투표 처리 실패:', err);
+        setToastMessage(err?.message || '처리 중 문제가 발생했습니다.');
+      }
+    };
+
+    if (!user) {
+      requireAuth(execute, { message: '로그인 후 추천/비추천을 이용할 수 있습니다.' });
+      return;
+    }
+
+    execute();
+  };
+
+  const handleToggleScrap = async () => {
+    if (!issue?.id) {
+      return;
+    }
+
+    const execute = async () => {
+      try {
+        const result = await toggleIssueScrap(issue.id, { userId: user.uid });
+        const nextStats = result?.stats ?? INITIAL_STATS;
+        setIssueStats(nextStats);
+        setIssue((prev) => (prev ? { ...prev, stats: nextStats } : prev));
+        setUserInteraction((prev) => ({ ...prev, hasScrapped: Boolean(result?.scrapped) }));
+        setToastMessage(result?.scrapped ? '스크랩에 추가했습니다.' : '스크랩을 해제했습니다.');
+      } catch (err) {
+        console.error('스크랩 처리 실패:', err);
+        setToastMessage(err?.message || '스크랩 처리 중 문제가 발생했습니다.');
+      }
+    };
+
+    if (!user) {
+      requireAuth(execute, { message: '로그인 후 스크랩 기능을 이용할 수 있습니다.' });
+      return;
+    }
+
+    execute();
+  };
+
+  const handleSubmitComment = async (event) => {
+    event.preventDefault();
+    if (!issue?.id) {
+      return;
+    }
+    const trimmed = commentInput.trim();
+    if (!trimmed) {
+      setCommentFeedback('댓글 내용을 입력해주세요.');
+      return;
+    }
+
+    const execute = async () => {
+      setCommentSubmitting(true);
+      setCommentFeedback('');
+      try {
+        const result = await addIssueComment(issue.id, {
+          userId: user.uid,
+          displayName: user.displayName?.trim() || user.email || '회원',
+          email: user.email || '',
+          content: trimmed
+        });
+        if (result?.comment) {
+          setComments((prev) => {
+            const next = [...prev, result.comment];
+            return next.sort((a, b) => toMillis(a.createdAt) - toMillis(b.createdAt));
+          });
+        }
+        if (result?.stats) {
+          setIssueStats(result.stats);
+          setIssue((prev) => (prev ? { ...prev, stats: result.stats } : prev));
+        }
+        setCommentInput('');
+        setToastMessage('댓글이 등록되었습니다.');
+      } catch (err) {
+        console.error('댓글 작성 실패:', err);
+        setCommentFeedback(err?.message || '댓글 작성에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      } finally {
+        setCommentSubmitting(false);
+      }
+    };
+
+    if (!user) {
+      requireAuth(execute, { message: '댓글 작성은 로그인 후 이용할 수 있습니다.' });
+      return;
+    }
+
+    execute();
+  };
+
+  const handleReport = () => {
+    if (!issue) {
+      return;
+    }
+    const subject = encodeURIComponent(`[신고] ${issue.title || '게시물'}`);
+    const body = encodeURIComponent(`문제가 발생한 내용을 자세히 적어주세요.\n\n게시물 링크: ${window.location.href}`);
+    window.location.href = `mailto:report@infoall.kr?subject=${subject}&body=${body}`;
+  };
+
   return (
     <section className="space-y-8">
       <MetaTags title={metaTitle} description={metaDescription} url={pageUrl} />
@@ -561,7 +780,12 @@ function IssuePage() {
                 </div>
               )}
             </div>
-            <h1 className="mt-3 text-3xl font-bold leading-snug text-slate-900 dark:text-slate-100">{issue.title}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-bold leading-snug text-slate-900 dark:text-slate-100">{issue.title}</h1>
+              <span className="rounded-md bg-rose-500/10 px-2 py-1 text-sm font-semibold text-rose-600 dark:bg-rose-500/20 dark:text-rose-200">
+                [{issueStats.commentCount ?? comments.length}]
+              </span>
+            </div>
             <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{issue.summaryCard}</p>
             <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
               <button
@@ -711,6 +935,153 @@ function IssuePage() {
               <p className="text-sm text-slate-500 dark:text-slate-400">등록된 출처가 없습니다.</p>
             )}
           </SectionCard>
+
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">댓글</h2>
+              <span className="text-sm font-semibold text-rose-600 dark:text-rose-300">
+                총 {issueStats.commentCount ?? comments.length}개
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">로그인한 회원만 댓글을 작성할 수 있습니다.</p>
+            <div className="space-y-3">
+              {commentsLoading ? (
+                <p className="rounded-lg border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">
+                  댓글을 불러오는 중입니다…
+                </p>
+              ) : comments.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-300">
+                  아직 댓글이 없습니다. 첫 번째 댓글을 남겨보세요!
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {comments.map((comment) => (
+                    <li key={comment.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-600 dark:bg-slate-900/40">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                          {comment.displayName || comment.email || '회원'}
+                        </span>
+                        <span>{formatCommentTimestamp(comment.createdAt)}</span>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                        {comment.content}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <form onSubmit={handleSubmitComment} className="space-y-2">
+              <textarea
+                value={commentInput}
+                onChange={(event) => setCommentInput(event.target.value)}
+                disabled={!user || commentSubmitting}
+                placeholder={user ? '댓글을 입력해주세요.' : '로그인 후 댓글을 작성할 수 있습니다.'}
+                className="min-h-[100px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+              />
+              {commentFeedback ? (
+                <p className="text-xs text-rose-600 dark:text-rose-300">{commentFeedback}</p>
+              ) : null}
+              <div className="flex items-center justify-end gap-2">
+                {!user ? (
+                  <button
+                    type="button"
+                    onClick={() => requireAuth(() => {}, { message: '로그인 후 댓글을 작성할 수 있습니다.' })}
+                    className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:text-slate-300 dark:hover:border-indigo-400 dark:hover:text-indigo-200 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    로그인하기
+                  </button>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={!user || commentSubmitting}
+                  className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:bg-indigo-500/80 dark:focus-visible:ring-offset-slate-900"
+                >
+                  댓글 등록
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="text-lg font-bold text-rose-600 dark:text-rose-300">{issueStats.upVotes ?? 0}</span>
+                <button
+                  type="button"
+                  onClick={() => handleVote('up')}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                    userInteraction.hasUpvoted
+                      ? 'bg-rose-500 text-white hover:bg-rose-600'
+                      : 'border border-slate-300 bg-white text-slate-700 hover:border-rose-300 hover:text-rose-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-rose-400 dark:hover:text-rose-200'
+                  }`}
+                >
+                  ⭐ 추천
+                </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleVote('down')}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                    userInteraction.hasDownvoted
+                      ? 'bg-slate-800 text-white hover:bg-slate-900'
+                      : 'border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-400'
+                  }`}
+                >
+                  📉 비추천
+                </button>
+                <span className="text-lg font-bold text-slate-900 dark:text-slate-200">{issueStats.downVotes ?? 0}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-600 dark:text-slate-300">
+              <button
+                type="button"
+                onClick={handleShareToggle}
+                className="rounded-full border border-slate-300 bg-white px-3 py-1.5 transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:hover:border-indigo-400 dark:hover:text-indigo-200 dark:focus-visible:ring-offset-slate-900"
+              >
+                공유
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleScrap}
+                className={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                  userInteraction.hasScrapped
+                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                    : 'border border-slate-300 bg-white text-slate-700 hover:border-amber-300 hover:text-amber-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-amber-400 dark:hover:text-amber-200'
+                }`}
+              >
+                {userInteraction.hasScrapped ? '스크랩됨' : '스크랩'}
+              </button>
+              <button
+                type="button"
+                onClick={handleReport}
+                className="rounded-full border border-slate-300 bg-white px-3 py-1.5 transition hover:border-rose-300 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-rose-400 dark:hover:text-rose-200 dark:focus-visible:ring-offset-slate-900"
+              >
+                신고
+              </button>
+            </div>
+            {isShareOpen ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm dark:border-slate-600 dark:bg-slate-900/40">
+                <p className="mb-2 font-semibold text-slate-800 dark:text-slate-100">공유 링크</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={pageUrl}
+                    readOnly
+                    className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:bg-indigo-500/80 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    복사
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">버튼을 눌러 링크를 복사한 뒤 원하는 곳에 붙여넣으세요.</p>
+              </div>
+            ) : null}
+          </section>
         </div>
       )}
     </section>
