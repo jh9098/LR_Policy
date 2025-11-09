@@ -17,6 +17,7 @@ import StockThemePreview from '../../components/admin/StockThemePreview.jsx';
 import SupportThemeEditor from '../../components/admin/SupportThemeEditor.jsx';
 import SupportThemePreview from '../../components/admin/SupportThemePreview.jsx';
 import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 import {
   createHealthGuide,
@@ -137,7 +138,16 @@ function AdminEditPage() {
   const copyTimeoutRef = useRef(null);
 
   const { titles: sectionTitles } = useSectionTitles();
-  const selectedTheme = issueDraft?.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
+  const { adminRole } = useAuth();
+  const isGroupbuyOnly = adminRole === 'groupp';
+  const fallbackThemeId = isGroupbuyOnly ? 'groupbuy' : DEFAULT_THEME_ID;
+  const availableThemes = useMemo(
+    () => (isGroupbuyOnly ? THEME_CONFIG.filter((item) => item.id === 'groupbuy') : THEME_CONFIG),
+    [isGroupbuyOnly]
+  );
+  const isThemeSelectionLocked = availableThemes.length === 1;
+  const selectedTheme =
+    issueDraft?.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : fallbackThemeId;
   const fallbackCategory = getDefaultCategory(selectedTheme);
   const categoryValue = issueDraft?.category ?? fallbackCategory;
   const subcategoryValue = issueDraft?.subcategory ?? '';
@@ -223,6 +233,10 @@ function AdminEditPage() {
           throw new Error('해당 문서를 찾을 수 없습니다.');
         }
         const normalized = normalizeDraft(data);
+        if (isGroupbuyOnly && normalized.theme !== 'groupbuy') {
+          setIssueDraft(null);
+          throw new Error('공동구매 글만 수정할 수 있습니다.');
+        }
         setIssueDraft(normalized);
         setPromptKeywordInput('');
         setContentKeywordInput('');
@@ -242,7 +256,7 @@ function AdminEditPage() {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, isGroupbuyOnly]);
 
   useEffect(() => {
     if (!submitSuccess) {
@@ -499,6 +513,9 @@ function AdminEditPage() {
 
   const handleThemeChange = (event) => {
     const { value } = event.target;
+    if (isGroupbuyOnly && value !== 'groupbuy') {
+      return;
+    }
     const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
     setIssueDraft((prev) => {
       if (!prev) {
@@ -838,7 +855,7 @@ function AdminEditPage() {
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
-            {THEME_CONFIG.map((theme) => (
+            {availableThemes.map((theme) => (
               <button
                 key={theme.id}
                 type="button"
@@ -848,10 +865,16 @@ function AdminEditPage() {
                     ? 'inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
                     : 'inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-200 dark:bg-slate-900/40 dark:text-slate-100 dark:hover:bg-slate-900/70'
                 }
+                disabled={isThemeSelectionLocked && theme.id !== 'groupbuy'}
               >
                 {theme.label}
               </button>
             ))}
+            {isGroupbuyOnly ? (
+              <p className="w-full text-xs font-medium text-emerald-600 dark:text-emerald-300">
+                공동구매 전용 계정은 공동구매 테마만 수정할 수 있습니다.
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -994,9 +1017,10 @@ function AdminEditPage() {
                 <select
                   value={selectedTheme}
                   onChange={handleThemeChange}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                  disabled={isGroupbuyOnly}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
               >
-                {THEME_CONFIG.map((theme) => (
+                {availableThemes.map((theme) => (
                   <option key={theme.id} value={theme.id}>
                     {theme.label}
                   </option>

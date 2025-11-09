@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { deleteIssue, getIssuesByTheme, getRecentIssues } from '../../firebaseClient.js';
 import { getThemeLabel, THEME_CONFIG } from '../../constants/themeConfig.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -41,13 +42,26 @@ function buildPaginationItems(totalPages, currentPage) {
 }
 
 function AdminListPage() {
+  const { adminRole } = useAuth();
+  const isGroupbuyOnly = adminRole === 'groupp';
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [themeFilter, setThemeFilter] = useState('all');
+  const [themeFilter, setThemeFilter] = useState(isGroupbuyOnly ? 'groupbuy' : 'all');
   const [keyword, setKeyword] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
+  const availableThemes = useMemo(
+    () => (isGroupbuyOnly ? THEME_CONFIG.filter((item) => item.id === 'groupbuy') : THEME_CONFIG),
+    [isGroupbuyOnly]
+  );
+  const activeThemeFilter = isGroupbuyOnly ? 'groupbuy' : themeFilter;
+
+  useEffect(() => {
+    if (isGroupbuyOnly) {
+      setThemeFilter('groupbuy');
+    }
+  }, [isGroupbuyOnly]);
 
   useEffect(() => {
     let isMounted = true;
@@ -57,9 +71,9 @@ function AdminListPage() {
       setError('');
       try {
         const data =
-          themeFilter === 'all'
+          activeThemeFilter === 'all'
             ? await getRecentIssues(120)
-            : await getIssuesByTheme(themeFilter, { sort: 'recent', limitCount: 120 });
+            : await getIssuesByTheme(activeThemeFilter, { sort: 'recent', limitCount: 120 });
         if (!isMounted) return;
         setItems(data);
       } catch (err) {
@@ -75,7 +89,7 @@ function AdminListPage() {
     return () => {
       isMounted = false;
     };
-  }, [themeFilter]);
+  }, [activeThemeFilter]);
 
   const handleDelete = async (id, title) => {
     if (!id) return;
@@ -103,7 +117,7 @@ function AdminListPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [themeFilter, keyword]);
+  }, [activeThemeFilter, keyword]);
 
   const totalItems = filtered.length;
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 0;
@@ -139,20 +153,22 @@ function AdminListPage() {
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">등록된 글 목록</h2>
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setThemeFilter('all')}
-                className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
-                  themeFilter === 'all'
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:border-indigo-400/70 dark:bg-indigo-500/10 dark:text-indigo-200'
-                    : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200'
-                }`}
-                aria-pressed={themeFilter === 'all'}
-              >
-                전체
-              </button>
-              {THEME_CONFIG.map((theme) => {
-                const isActive = themeFilter === theme.id;
+              {!isGroupbuyOnly ? (
+                <button
+                  type="button"
+                  onClick={() => setThemeFilter('all')}
+                  className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                    activeThemeFilter === 'all'
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:border-indigo-400/70 dark:bg-indigo-500/10 dark:text-indigo-200'
+                      : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200'
+                  }`}
+                  aria-pressed={activeThemeFilter === 'all'}
+                >
+                  전체
+                </button>
+              ) : null}
+              {availableThemes.map((theme) => {
+                const isActive = activeThemeFilter === theme.id;
                 return (
                   <button
                     key={theme.id}
@@ -169,6 +185,11 @@ function AdminListPage() {
                   </button>
                 );
               })}
+              {isGroupbuyOnly ? (
+                <p className="w-full text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                  공동구매 전용 계정은 공동구매 글만 확인할 수 있습니다.
+                </p>
+              ) : null}
             </div>
 
             <label className="block max-w-lg text-xs text-slate-600 dark:text-slate-300">
