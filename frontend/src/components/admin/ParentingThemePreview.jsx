@@ -3,6 +3,8 @@
 
 import PropTypes from 'prop-types';
 import SectionCard from '../SectionCard.jsx';
+import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 
 function filterList(items) {
   if (!Array.isArray(items)) return [];
@@ -56,11 +58,19 @@ function ParentingThemePreview({ guide }) {
 
   const generalTips = filterList(guide.generalTips);
   const emergencyContacts = filterList(guide.emergencyContacts);
+  const { titles } = useSectionTitles();
+  const overviewTitle = getSectionTitleValue(titles, 'themes.parenting.overview.title');
+  const generalTipsTitle = getSectionTitleValue(titles, 'themes.parenting.generalTips.title');
+  const generalTipsBadge = getSectionTitleValue(titles, 'themes.parenting.generalTips.badge');
+  const ageGroupFallback = getSectionTitleValue(titles, 'themes.parenting.ageGroupFallback.title');
+  const ageGroupBadge = getSectionTitleValue(titles, 'themes.parenting.ageGroups.badge') || generalTipsBadge;
+  const emergencyTitle = getSectionTitleValue(titles, 'themes.parenting.emergencyContacts.title');
+  const emergencyBadge = getSectionTitleValue(titles, 'themes.parenting.emergencyContacts.badge');
 
   return (
     <div className="space-y-5">
       {guide.overview ? (
-        <SectionCard title="육아 테마 개요" tone="neutral">
+        <SectionCard title={overviewTitle} tone="neutral">
           <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             <TextWithLinks text={guide.overview} />
           </p>
@@ -68,7 +78,7 @@ function ParentingThemePreview({ guide }) {
       ) : null}
 
       {generalTips.length > 0 ? (
-        <SectionCard title="전체 공통 팁" tone="neutral" badgeText="TIP">
+        <SectionCard title={generalTipsTitle} tone="neutral" badgeText={generalTipsBadge}>
           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {generalTips.map((tip, index) => (
               <li key={`general-tip-${index}`}>
@@ -96,9 +106,9 @@ function ParentingThemePreview({ guide }) {
               return (
                 <SectionCard
                   key={`preview-parenting-${index}`}
-                  title={group?.ageRange || `연령대 ${index + 1}`}
+                  title={group?.ageRange || `${ageGroupFallback} ${index + 1}`}
                   tone="neutral"
-                  badgeText="육아"
+                  badgeText={ageGroupBadge}
                 >
                   {group?.focusSummary ? (
                     <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
@@ -150,7 +160,7 @@ function ParentingThemePreview({ guide }) {
         : null}
 
       {emergencyContacts.length > 0 ? (
-        <SectionCard title="긴급/상담 연락처" tone="impact" badgeText="긴급">
+        <SectionCard title={emergencyTitle} tone="impact" badgeText={emergencyBadge}>
           <ul className="space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {emergencyContacts.map((contact, index) => (
               <li key={`emergency-${index}`}>

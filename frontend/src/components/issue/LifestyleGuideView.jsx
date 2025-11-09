@@ -2,6 +2,8 @@
 // 생활정보 테마 상세 렌더러 (URL 자동 링크 + violet 톤)
 import PropTypes from 'prop-types';
 import SectionCard from '../SectionCard.jsx';
+import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 
 function normalizeList(items) {
   if (!Array.isArray(items)) return [];
@@ -54,11 +56,21 @@ function LifestyleGuideView({ guide }) {
 
   const quickTips = normalizeList(guide.quickTips);
   const affiliateNotes = normalizeList(guide.affiliateNotes);
+  const { titles } = useSectionTitles();
+  const overviewTitle = getSectionTitleValue(titles, 'themes.lifestyle.overview.title');
+  const quickTipsTitle = getSectionTitleValue(titles, 'themes.lifestyle.quickTips.title');
+  const quickTipsBadge = getSectionTitleValue(titles, 'themes.lifestyle.quickTips.badge');
+  const hotItemsTitle = getSectionTitleValue(titles, 'themes.lifestyle.hotItems.title');
+  const hotItemsBadge = getSectionTitleValue(titles, 'themes.lifestyle.hotItems.badge');
+  const hotDealsTitle = getSectionTitleValue(titles, 'themes.lifestyle.hotDeals.title');
+  const hotDealsBadge = getSectionTitleValue(titles, 'themes.lifestyle.hotDeals.badge');
+  const affiliateTitle = getSectionTitleValue(titles, 'themes.lifestyle.affiliateNotes.title');
+  const affiliateBadge = getSectionTitleValue(titles, 'themes.lifestyle.affiliateNotes.badge');
 
   return (
     <div className="space-y-5">
       {guide.overview ? (
-        <SectionCard title="생활정보 개요" tone="neutral">
+        <SectionCard title={overviewTitle} tone="neutral">
           <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             <TextWithLinks text={guide.overview} />
           </p>
@@ -66,7 +78,7 @@ function LifestyleGuideView({ guide }) {
       ) : null}
 
       {quickTips.length > 0 ? (
-        <SectionCard title="생활 꿀팁" tone="neutral" badgeText="TIP">
+        <SectionCard title={quickTipsTitle} tone="neutral" badgeText={quickTipsBadge}>
           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {quickTips.map((tip, index) => (
               <li key={`lifestyle-tip-${index}`}>
@@ -78,7 +90,7 @@ function LifestyleGuideView({ guide }) {
       ) : null}
 
       {Array.isArray(guide.hotItems) && guide.hotItems.length > 0 ? (
-        <SectionCard title="추천 아이템" tone="neutral" badgeText="아이템">
+        <SectionCard title={hotItemsTitle} tone="neutral" badgeText={hotItemsBadge}>
           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {guide.hotItems
               .filter((item) => item && (item.name || item.highlight || item.link))
@@ -107,7 +119,7 @@ function LifestyleGuideView({ guide }) {
       ) : null}
 
       {Array.isArray(guide.hotDeals) && guide.hotDeals.length > 0 ? (
-        <SectionCard title="핫딜 정보" tone="impact" badgeText="딜">
+        <SectionCard title={hotDealsTitle} tone="impact" badgeText={hotDealsBadge}>
           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {guide.hotDeals
               .filter((deal) => deal && (deal.title || deal.description || deal.link || deal.priceInfo))
@@ -139,7 +151,7 @@ function LifestyleGuideView({ guide }) {
       ) : null}
 
       {affiliateNotes.length > 0 ? (
-        <SectionCard title="제휴/운영 노트" tone="neutral" badgeText="운영">
+        <SectionCard title={affiliateTitle} tone="neutral" badgeText={affiliateBadge}>
           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {affiliateNotes.map((note, index) => (
               <li key={`lifestyle-affiliate-${index}`}>

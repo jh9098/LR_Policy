@@ -20,6 +20,8 @@ import {
 } from '../firebaseClient.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useAuthDialog } from '../contexts/AuthDialogContext.jsx';
+import { useSectionTitles } from '../contexts/SectionTitlesContext.jsx';
+import { getSectionTitleValue } from '../constants/sectionTitleConfig.js';
 
 const PROGRESSIVE_NOTE =
   '아래 내용은 일부 진보측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
@@ -56,6 +58,7 @@ function IssuePage() {
   const { id } = useParams();
   const { user, isAdmin } = useAuth();
   const { requireAuth } = useAuthDialog();
+  const { titles: sectionTitles } = useSectionTitles();
   const [issue, setIssue] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -68,6 +71,41 @@ function IssuePage() {
   const [commentFeedback, setCommentFeedback] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [isShareOpen, setShareOpen] = useState(false);
+
+  const easySummaryHeading = getSectionTitleValue(sectionTitles, 'general.easySummary.title');
+  const backgroundHeading = getSectionTitleValue(sectionTitles, 'general.background.title');
+  const keyPointsHeading = getSectionTitleValue(sectionTitles, 'general.keyPoints.title');
+  const progressiveHeading = getSectionTitleValue(sectionTitles, 'general.progressiveView.title');
+  const progressiveBadge = getSectionTitleValue(sectionTitles, 'general.progressiveView.badge');
+  const conservativeHeading = getSectionTitleValue(sectionTitles, 'general.conservativeView.title');
+  const conservativeBadge = getSectionTitleValue(sectionTitles, 'general.conservativeView.badge');
+  const impactHeading = getSectionTitleValue(sectionTitles, 'general.impactToLife.title');
+  const impactBadge = getSectionTitleValue(sectionTitles, 'general.impactToLife.badge');
+  const sourcesHeading = getSectionTitleValue(sectionTitles, 'general.sources.title');
+  const relatedLinksHeading = getSectionTitleValue(sectionTitles, 'general.relatedLinks.title');
+  const groupbuyLinkHeading = getSectionTitleValue(sectionTitles, 'themes.groupbuy.linkSection.title');
+  const groupbuyLinkNote = getSectionTitleValue(sectionTitles, 'themes.groupbuy.linkSection.note');
+  const parentingAgeFallback = getSectionTitleValue(sectionTitles, 'themes.parenting.ageGroupFallback.title');
+  const parentingOverviewHeading = getSectionTitleValue(sectionTitles, 'themes.parenting.overview.title');
+  const parentingGeneralTipsHeading = getSectionTitleValue(sectionTitles, 'themes.parenting.generalTips.title');
+  const parentingEmergencyHeading = getSectionTitleValue(sectionTitles, 'themes.parenting.emergencyContacts.title');
+  const healthConditionFallback = getSectionTitleValue(sectionTitles, 'themes.health.conditionFallback.title');
+  const healthOverviewHeading = getSectionTitleValue(sectionTitles, 'themes.health.overview.title');
+  const healthLifestyleHeading = getSectionTitleValue(sectionTitles, 'themes.health.lifestyleTips.title');
+  const healthEmergencyHeading = getSectionTitleValue(sectionTitles, 'themes.health.emergencyGuide.title');
+  const lifestyleOverviewHeading = getSectionTitleValue(sectionTitles, 'themes.lifestyle.overview.title');
+  const lifestyleQuickTipsHeading = getSectionTitleValue(sectionTitles, 'themes.lifestyle.quickTips.title');
+  const lifestyleHotItemsHeading = getSectionTitleValue(sectionTitles, 'themes.lifestyle.hotItems.title');
+  const lifestyleHotDealsHeading = getSectionTitleValue(sectionTitles, 'themes.lifestyle.hotDeals.title');
+  const lifestyleAffiliateHeading = getSectionTitleValue(sectionTitles, 'themes.lifestyle.affiliateNotes.title');
+  const stocksOverviewHeading = getSectionTitleValue(sectionTitles, 'themes.stocks.overview.title');
+  const stocksMarketSummaryHeading = getSectionTitleValue(sectionTitles, 'themes.stocks.marketSummary.title');
+  const stocksSectorHeading = getSectionTitleValue(sectionTitles, 'themes.stocks.sectorHighlights.title');
+  const stocksCompanyHeading = getSectionTitleValue(sectionTitles, 'themes.stocks.companyAnalyses.title');
+  const stocksWatchlistHeading = getSectionTitleValue(sectionTitles, 'themes.stocks.watchlist.title');
+  const supportOverviewHeading = getSectionTitleValue(sectionTitles, 'themes.support.overview.title');
+  const supportCommonHeading = getSectionTitleValue(sectionTitles, 'themes.support.commonResources.title');
+  const supportProgramFallback = getSectionTitleValue(sectionTitles, 'themes.support.programs.fallbackTitle');
 
   const loadComments = useCallback(async (issueId) => {
     if (!issueId) {
@@ -219,9 +257,9 @@ function IssuePage() {
     if (issue.theme === 'groupbuy' && shouldShowGroupbuyLink) {
       themeSpecificContent += `
     <div class="section groupbuy-link">
-      <h2 class="section-title">관련 링크</h2>
+      <h2 class="section-title">${escapeHtml(groupbuyLinkHeading || relatedLinksHeading)}</h2>
       <p><a href="${escapeHtml(groupbuyLink)}" target="_blank" rel="noopener">${escapeHtml(groupbuyLink)}</a></p>
-      <p>위 링크에서 공동구매 참여 가능합니다!</p>
+      <p>${escapeHtml(groupbuyLinkNote)}</p>
     </div>`;
     }
 
@@ -230,15 +268,15 @@ function IssuePage() {
       if (parentingGuide.overview) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">육아 테마 개요</h2>
+      <h2 class="section-title">${escapeHtml(parentingOverviewHeading)}</h2>
       <p>${escapeHtml(parentingGuide.overview)}</p>
     </div>`;
       }
-      
+
       if (Array.isArray(parentingGuide.generalTips) && parentingGuide.generalTips.length > 0) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">전체 공통 팁</h2>
+      <h2 class="section-title">${escapeHtml(parentingGeneralTipsHeading)}</h2>
       <ul>${parentingGuide.generalTips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ul>
     </div>`;
       }
@@ -248,7 +286,7 @@ function IssuePage() {
           if (!group.ageRange && !group.focusSummary) return;
           themeSpecificContent += `
     <div class="section parenting">
-      <h2 class="section-title">${escapeHtml(group.ageRange || '연령대')}</h2>
+      <h2 class="section-title">${escapeHtml(group.ageRange || parentingAgeFallback)}</h2>
       ${group.focusSummary ? `<p>${escapeHtml(group.focusSummary)}</p>` : ''}
       ${Array.isArray(group.developmentFocus) && group.developmentFocus.length > 0 ? `
         <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">발달 포인트</h3>
@@ -269,7 +307,7 @@ function IssuePage() {
       if (Array.isArray(parentingGuide.emergencyContacts) && parentingGuide.emergencyContacts.length > 0) {
         themeSpecificContent += `
     <div class="section emergency">
-      <h2 class="section-title">긴급/상담 연락처</h2>
+      <h2 class="section-title">${escapeHtml(parentingEmergencyHeading)}</h2>
       <ul>${parentingGuide.emergencyContacts.map(contact => `<li>${escapeHtml(contact)}</li>`).join('')}</ul>
     </div>`;
       }
@@ -280,7 +318,7 @@ function IssuePage() {
       if (healthGuide.overview) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">건강 테마 개요</h2>
+      <h2 class="section-title">${escapeHtml(healthOverviewHeading)}</h2>
       <p>${escapeHtml(healthGuide.overview)}</p>
     </div>`;
       }
@@ -288,7 +326,7 @@ function IssuePage() {
       if (Array.isArray(healthGuide.lifestyleTips) && healthGuide.lifestyleTips.length > 0) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">생활 습관 팁</h2>
+      <h2 class="section-title">${escapeHtml(healthLifestyleHeading)}</h2>
       <ul>${healthGuide.lifestyleTips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ul>
     </div>`;
       }
@@ -298,7 +336,7 @@ function IssuePage() {
           if (!condition.name && !condition.summary) return;
           themeSpecificContent += `
     <div class="section health">
-      <h2 class="section-title">${escapeHtml(condition.name || '건강 주제')}</h2>
+      <h2 class="section-title">${escapeHtml(condition.name || healthConditionFallback)}</h2>
       ${condition.summary ? `<p>${escapeHtml(condition.summary)}</p>` : ''}
       ${Array.isArray(condition.warningSigns) && condition.warningSigns.length > 0 ? `
         <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">경고 신호</h3>
@@ -319,7 +357,7 @@ function IssuePage() {
       if (Array.isArray(healthGuide.emergencyGuide) && healthGuide.emergencyGuide.length > 0) {
         themeSpecificContent += `
     <div class="section emergency">
-      <h2 class="section-title">긴급 대응 가이드</h2>
+      <h2 class="section-title">${escapeHtml(healthEmergencyHeading)}</h2>
       <ul>${healthGuide.emergencyGuide.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
     </div>`;
       }
@@ -330,7 +368,7 @@ function IssuePage() {
       if (lifestyleGuide.overview) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">생활정보 개요</h2>
+      <h2 class="section-title">${escapeHtml(lifestyleOverviewHeading)}</h2>
       <p>${escapeHtml(lifestyleGuide.overview)}</p>
     </div>`;
       }
@@ -338,7 +376,7 @@ function IssuePage() {
       if (Array.isArray(lifestyleGuide.quickTips) && lifestyleGuide.quickTips.length > 0) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">생활 꿀팁</h2>
+      <h2 class="section-title">${escapeHtml(lifestyleQuickTipsHeading)}</h2>
       <ul>${lifestyleGuide.quickTips.map(tip => `<li>${escapeHtml(tip)}</li>`).join('')}</ul>
     </div>`;
       }
@@ -346,7 +384,7 @@ function IssuePage() {
       if (Array.isArray(lifestyleGuide.hotItems) && lifestyleGuide.hotItems.length > 0) {
         themeSpecificContent += `
     <div class="section lifestyle">
-      <h2 class="section-title">추천 아이템</h2>
+      <h2 class="section-title">${escapeHtml(lifestyleHotItemsHeading)}</h2>
       ${lifestyleGuide.hotItems.map(item => `
         <div class="item-card">
           ${item.name ? `<h3>${escapeHtml(item.name)}</h3>` : ''}
@@ -360,7 +398,7 @@ function IssuePage() {
       if (Array.isArray(lifestyleGuide.hotDeals) && lifestyleGuide.hotDeals.length > 0) {
         themeSpecificContent += `
     <div class="section deal">
-      <h2 class="section-title">핫딜 정보</h2>
+      <h2 class="section-title">${escapeHtml(lifestyleHotDealsHeading)}</h2>
       ${lifestyleGuide.hotDeals.map(deal => `
         <div class="item-card">
           ${deal.title ? `<h3>${escapeHtml(deal.title)}</h3>` : ''}
@@ -378,7 +416,7 @@ function IssuePage() {
       if (stockGuide.overview) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">주식정보 개요</h2>
+      <h2 class="section-title">${escapeHtml(stocksOverviewHeading)}</h2>
       <p>${escapeHtml(stockGuide.overview)}</p>
     </div>`;
       }
@@ -386,7 +424,7 @@ function IssuePage() {
       if (stockGuide.marketSummary) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">시장 요약</h2>
+      <h2 class="section-title">${escapeHtml(stocksMarketSummaryHeading)}</h2>
       <p>${escapeHtml(stockGuide.marketSummary)}</p>
     </div>`;
       }
@@ -394,7 +432,7 @@ function IssuePage() {
       if (Array.isArray(stockGuide.sectorHighlights) && stockGuide.sectorHighlights.length > 0) {
         themeSpecificContent += `
     <div class="section stock">
-      <h2 class="section-title">섹터 하이라이트</h2>
+      <h2 class="section-title">${escapeHtml(stocksSectorHeading)}</h2>
       ${stockGuide.sectorHighlights.map(sector => `
         <div class="item-card">
           ${sector.name ? `<h3>${escapeHtml(sector.name)}</h3>` : ''}
@@ -410,7 +448,7 @@ function IssuePage() {
       if (Array.isArray(stockGuide.companyAnalyses) && stockGuide.companyAnalyses.length > 0) {
         themeSpecificContent += `
     <div class="section stock">
-      <h2 class="section-title">기업 분석</h2>
+      <h2 class="section-title">${escapeHtml(stocksCompanyHeading)}</h2>
       ${stockGuide.companyAnalyses.map(company => `
         <div class="item-card">
           ${company.name ? `<h3>${escapeHtml(company.name)}</h3>` : ''}
@@ -433,7 +471,7 @@ function IssuePage() {
       if (Array.isArray(stockGuide.watchlist) && stockGuide.watchlist.length > 0) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">워치리스트</h2>
+      <h2 class="section-title">${escapeHtml(stocksWatchlistHeading)}</h2>
       <ul>${stockGuide.watchlist.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>
     </div>`;
       }
@@ -444,7 +482,7 @@ function IssuePage() {
       if (supportGuide.overview) {
         themeSpecificContent += `
     <div class="section">
-      <h2 class="section-title">정부지원정보 개요</h2>
+      <h2 class="section-title">${escapeHtml(supportOverviewHeading)}</h2>
       <p>${escapeHtml(supportGuide.overview)}</p>
     </div>`;
       }
@@ -454,7 +492,7 @@ function IssuePage() {
           if (!program.name && !program.summary) return;
           themeSpecificContent += `
     <div class="section support">
-      <h2 class="section-title">${escapeHtml(program.name || '지원 프로그램')}</h2>
+      <h2 class="section-title">${escapeHtml(program.name || supportProgramFallback)}</h2>
       ${program.summary ? `<p>${escapeHtml(program.summary)}</p>` : ''}
       ${Array.isArray(program.eligibility) && program.eligibility.length > 0 ? `
         <h3 style="font-size: 1rem; margin-top: 1rem; font-weight: 600;">지원 대상</h3>
@@ -479,7 +517,7 @@ function IssuePage() {
       if (Array.isArray(supportGuide.commonResources) && supportGuide.commonResources.length > 0) {
         themeSpecificContent += `
     <div class="section emergency">
-      <h2 class="section-title">공통 참고자료</h2>
+      <h2 class="section-title">${escapeHtml(supportCommonHeading)}</h2>
       <ul>${supportGuide.commonResources.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
     </div>`;
       }
@@ -532,34 +570,34 @@ function IssuePage() {
       <p class="summary">${escapeHtml(issue.summaryCard)}</p>
     </div>
     ${easySummary ? `<div class="section">
-      <h2 class="section-title">쉬운 요약</h2>
+      <h2 class="section-title">${escapeHtml(easySummaryHeading)}</h2>
       <p>${escapeHtml(easySummary)}</p>
     </div>` : ''}
     <div class="section">
-      <h2 class="section-title">무슨 일이 있었나요?</h2>
+      <h2 class="section-title">${escapeHtml(backgroundHeading)}</h2>
       ${backgroundParagraphs.map(p => `<p style="margin: 0.75rem 0;">${escapeHtml(p)}</p>`).join('')}
     </div>
     <div class="section">
-      <h2 class="section-title">핵심 쟁점 정리</h2>
+      <h2 class="section-title">${escapeHtml(keyPointsHeading)}</h2>
       <ul>${keyPoints.map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ul>
     </div>
     ${progressiveView ? `<div class="section progressive">
-      <h2 class="section-title">진보 성향에서 보는 전망</h2>
+      <h2 class="section-title">${escapeHtml(progressiveHeading)}</h2>
       <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem;">${escapeHtml(progressiveView.headline)}</h3>
       <ul>${progressiveView.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>
     </div>` : ''}
     ${conservativeView ? `<div class="section conservative">
-      <h2 class="section-title">보수 성향에서 보는 전망</h2>
+      <h2 class="section-title">${escapeHtml(conservativeHeading)}</h2>
       <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem;">${escapeHtml(conservativeView.headline)}</h3>
       <ul>${conservativeView.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>
     </div>` : ''}
     ${impactToLife ? `<div class="section">
-      <h2 class="section-title">생활에 어떤 영향이 있나요?</h2>
+      <h2 class="section-title">${escapeHtml(impactHeading)}</h2>
       <p>${escapeHtml(impactToLife.text)}</p>
     </div>` : ''}
     ${themeSpecificContent}
     <div class="section">
-      <h2 class="section-title">근거 자료</h2>
+      <h2 class="section-title">${escapeHtml(sourcesHeading)}</h2>
       ${Array.isArray(issue.sources) && issue.sources.length > 0 ? issue.sources.map(s => `
         <div class="source-item">
           <strong>${escapeHtml(s.channelName || '출처 미상')}</strong>
@@ -824,12 +862,12 @@ function IssuePage() {
           </header>
 
           {easySummary && (
-            <SectionCard title="쉬운 요약" tone="neutral">
+            <SectionCard title={easySummaryHeading} tone="neutral">
               <p className="text-base leading-relaxed text-slate-700 dark:text-slate-200">{easySummary}</p>
             </SectionCard>
           )}
 
-          <SectionCard title="무슨 일이 있었나요?" tone="neutral">
+          <SectionCard title={backgroundHeading} tone="neutral">
             {backgroundParagraphs.length > 0 ? (
               <div className="space-y-3">
                 {backgroundParagraphs.map((paragraph, index) => (
@@ -843,7 +881,7 @@ function IssuePage() {
             )}
           </SectionCard>
 
-          <SectionCard title="핵심 쟁점 정리" tone="neutral">
+          <SectionCard title={keyPointsHeading} tone="neutral">
             {keyPoints.length > 0 ? (
               <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
                 {keyPoints.map((point, index) => (
@@ -856,7 +894,7 @@ function IssuePage() {
           </SectionCard>
 
           {progressiveView && (
-            <SectionCard title="진보 성향에서 보는 전망" tone="progressive" badgeText="진보 시각">
+            <SectionCard title={progressiveHeading} tone="progressive" badgeText={progressiveBadge}>
               <div className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-200">{progressiveView.headline}</h3>
@@ -879,7 +917,7 @@ function IssuePage() {
           )}
 
           {conservativeView && (
-            <SectionCard title="보수 성향에서 보는 전망" tone="conservative" badgeText="보수 시각">
+            <SectionCard title={conservativeHeading} tone="conservative" badgeText={conservativeBadge}>
               <div className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-lg font-semibold text-rose-900 dark:text-rose-100">{conservativeView.headline}</h3>
@@ -902,7 +940,7 @@ function IssuePage() {
           )}
 
           {impactToLife && (
-            <SectionCard title="생활에 어떤 영향이 있나요?" tone="impact" badgeText="체감 영향">
+            <SectionCard title={impactHeading} tone="impact" badgeText={impactBadge}>
               <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{impactToLife.text}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">{impactToLife.note || IMPACT_NOTE}</p>
             </SectionCard>
@@ -928,7 +966,7 @@ function IssuePage() {
             <SupportGuideView guide={supportGuide} />
           ) : null}
 
-          <SectionCard title="근거 자료" tone="neutral">
+          <SectionCard title={sourcesHeading} tone="neutral">
             {Array.isArray(issue.sources) && issue.sources.length > 0 ? (
               <ul className="space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
                 {issue.sources.map((source, index) => (
@@ -948,7 +986,7 @@ function IssuePage() {
           </SectionCard>
 
           {shouldShowGroupbuyLink ? (
-            <SectionCard title="관련 링크" tone="neutral">
+            <SectionCard title={groupbuyLinkHeading || relatedLinksHeading} tone="neutral">
               <a
                 href={groupbuyLink}
                 target="_blank"
@@ -957,7 +995,9 @@ function IssuePage() {
               >
                 {groupbuyLink}
               </a>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">위 링크에서 공동구매 참여 가능합니다!</p>
+              {groupbuyLinkNote ? (
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{groupbuyLinkNote}</p>
+              ) : null}
             </SectionCard>
           ) : null}
 
