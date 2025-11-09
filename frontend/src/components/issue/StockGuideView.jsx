@@ -2,6 +2,8 @@
 // 주식정보 상세 페이지 섹션 렌더러 (URL 자동 링크 + amber 톤)
 import PropTypes from 'prop-types';
 import SectionCard from '../SectionCard.jsx';
+import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 
 function asArray(value) {
   if (!value) return [];
@@ -54,11 +56,20 @@ function StockGuideView({ guide }) {
   if (!guide) return null;
 
   const watchlist = asArray(guide.watchlist);
+  const { titles } = useSectionTitles();
+  const overviewTitle = getSectionTitleValue(titles, 'themes.stocks.overview.title');
+  const marketSummaryTitle = getSectionTitleValue(titles, 'themes.stocks.marketSummary.title');
+  const sectorTitle = getSectionTitleValue(titles, 'themes.stocks.sectorHighlights.title');
+  const sectorBadge = getSectionTitleValue(titles, 'themes.stocks.sectorHighlights.badge');
+  const companyTitle = getSectionTitleValue(titles, 'themes.stocks.companyAnalyses.title');
+  const companyBadge = getSectionTitleValue(titles, 'themes.stocks.companyAnalyses.badge');
+  const watchlistTitle = getSectionTitleValue(titles, 'themes.stocks.watchlist.title');
+  const watchlistBadge = getSectionTitleValue(titles, 'themes.stocks.watchlist.badge');
 
   return (
     <div className="space-y-6">
       {guide.overview ? (
-        <SectionCard title="주식정보 개요" tone="neutral">
+        <SectionCard title={overviewTitle} tone="neutral">
           <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             <TextWithLinks text={guide.overview} />
           </p>
@@ -66,7 +77,7 @@ function StockGuideView({ guide }) {
       ) : null}
 
       {guide.marketSummary ? (
-        <SectionCard title="시장 요약" tone="neutral">
+        <SectionCard title={marketSummaryTitle} tone="neutral">
           <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             <TextWithLinks text={guide.marketSummary} />
           </p>
@@ -74,7 +85,7 @@ function StockGuideView({ guide }) {
       ) : null}
 
       {Array.isArray(guide.sectorHighlights) && guide.sectorHighlights.length > 0 ? (
-        <SectionCard title="섹터 하이라이트" tone="neutral" badgeText="섹터">
+        <SectionCard title={sectorTitle} tone="neutral" badgeText={sectorBadge}>
           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {guide.sectorHighlights
               .filter((s) => s && (s.name || s.outlook || (s.leaders && s.leaders.length > 0)))
@@ -102,7 +113,7 @@ function StockGuideView({ guide }) {
       ) : null}
 
       {Array.isArray(guide.companyAnalyses) && guide.companyAnalyses.length > 0 ? (
-        <SectionCard title="기업 분석" tone="impact" badgeText="기업">
+        <SectionCard title={companyTitle} tone="impact" badgeText={companyBadge}>
           <ul className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {guide.companyAnalyses
               .filter(
@@ -167,7 +178,7 @@ function StockGuideView({ guide }) {
       ) : null}
 
       {watchlist.length > 0 ? (
-        <SectionCard title="워치리스트" tone="neutral" badgeText="관찰">
+        <SectionCard title={watchlistTitle} tone="neutral" badgeText={watchlistBadge}>
           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {watchlist.map((w, index) => (
               <li key={`watch-${index}`}>

@@ -1,13 +1,34 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getStaticPageContent,
   getStaticPageHistory,
   getTrendingSettings,
+  getSectionTitles,
+  saveSectionTitles,
   saveStaticPageContent,
   saveTrendingSettings
 } from '../../firebaseClient.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import {
+  SECTION_TITLE_FIELD_GROUPS,
+  mergeSectionTitles,
+  getSectionTitleValue,
+  getDefaultSectionTitleValue,
+  setValueAtPath
+} from '../../constants/sectionTitleConfig.js';
+
+function buildSectionTitleFormValues(sourceTitles) {
+  const merged = mergeSectionTitles(sourceTitles);
+  const values = {};
+  SECTION_TITLE_FIELD_GROUPS.forEach((group) => {
+    group.fields.forEach((field) => {
+      values[field.path] = getSectionTitleValue(merged, field.path);
+    });
+  });
+  return values;
+}
 
 const STATIC_PAGE_ITEMS = [
   {
@@ -91,10 +112,86 @@ export default function AdminStaticPagesPage() {
   const [trendingMessage, setTrendingMessage] = useState('');
   const [trendingError, setTrendingError] = useState('');
   const { user } = useAuth();
+  const { titles: globalSectionTitles, refresh: refreshSectionTitlesContext } = useSectionTitles();
+  const [sectionTitleValues, setSectionTitleValues] = useState(() => buildSectionTitleFormValues(globalSectionTitles));
+  const [sectionTitleLoading, setSectionTitleLoading] = useState(true);
+  const [sectionTitleSaving, setSectionTitleSaving] = useState(false);
+  const [sectionTitleMessage, setSectionTitleMessage] = useState('');
+  const [sectionTitleError, setSectionTitleError] = useState('');
+  const [sectionTitleMeta, setSectionTitleMeta] = useState({ updatedAt: null, updatedBy: '' });
+  const [activeSectionTab, setActiveSectionTab] = useState(SECTION_TITLE_FIELD_GROUPS[0].id);
 
   const activeItem = useMemo(
     () => STATIC_PAGE_ITEMS.find((item) => item.slug === activeSlug) ?? STATIC_PAGE_ITEMS[0],
     [activeSlug]
+  );
+
+  const loadSectionTitles = useCallback(async () => {
+    setSectionTitleLoading(true);
+    try {
+      const data = await getSectionTitles();
+      setSectionTitleValues(buildSectionTitleFormValues(data?.titles ?? globalSectionTitles));
+      setSectionTitleMeta({ updatedAt: data?.updatedAt ?? null, updatedBy: data?.updatedBy ?? '' });
+      setSectionTitleError('');
+    } catch (err) {
+      console.error('섹션 제목 로드 실패:', err);
+      setSectionTitleError('소제목 설정을 불러오지 못했습니다. 기본값이 표시됩니다.');
+      setSectionTitleValues(buildSectionTitleFormValues(globalSectionTitles));
+    } finally {
+      setSectionTitleLoading(false);
+    }
+  }, [globalSectionTitles]);
+
+  useEffect(() => {
+    loadSectionTitles();
+  }, [loadSectionTitles]);
+
+  const handleSectionTitleChange = useCallback(
+    (path) => (event) => {
+      const value = event.target.value;
+      setSectionTitleValues((prev) => ({ ...prev, [path]: value }));
+    },
+    []
+  );
+
+  const handleResetSectionTitles = useCallback(() => {
+    setSectionTitleValues(buildSectionTitleFormValues(mergeSectionTitles()));
+    setSectionTitleError('');
+    setSectionTitleMessage('기본값을 불러왔습니다. 저장을 눌러 적용하세요.');
+  }, []);
+
+  const handleSaveSectionTitles = useCallback(
+    async (event) => {
+      event.preventDefault();
+      setSectionTitleSaving(true);
+      setSectionTitleError('');
+      setSectionTitleMessage('');
+      try {
+        const normalized = mergeSectionTitles();
+        SECTION_TITLE_FIELD_GROUPS.forEach((group) => {
+          group.fields.forEach((field) => {
+            const raw = sectionTitleValues[field.path] ?? '';
+            const trimmed = typeof raw === 'string' ? raw.trim() : '';
+            const fallback = getDefaultSectionTitleValue(field.path);
+            const finalValue = trimmed.length > 0 ? trimmed : fallback;
+            setValueAtPath(normalized, field.path, finalValue);
+          });
+        });
+        const updatedBy = user?.email || user?.displayName || user?.uid || '관리자';
+        await saveSectionTitles(normalized, { updatedBy });
+        setSectionTitleValues(buildSectionTitleFormValues(normalized));
+        setSectionTitleMeta({ updatedAt: new Date(), updatedBy });
+        setSectionTitleMessage('소제목 설정이 저장되었습니다.');
+        await refreshSectionTitlesContext();
+        await loadSectionTitles();
+      } catch (err) {
+        console.error('소제목 설정 저장 실패:', err);
+        setSectionTitleError('소제목 설정을 저장하지 못했습니다. 입력값을 확인해주세요.');
+      } finally {
+        setSectionTitleSaving(false);
+      }
+    },
+    [loadSectionTitles, refreshSectionTitlesContext, sectionTitleValues, user]
   );
 
   const handleChangeTrendingSetting = (field) => (event) => {
@@ -192,6 +289,12 @@ export default function AdminStaticPagesPage() {
   }, [message]);
 
   useEffect(() => {
+    if (!sectionTitleMessage) return;
+    const timer = setTimeout(() => setSectionTitleMessage(''), 4000);
+    return () => clearTimeout(timer);
+  }, [sectionTitleMessage]);
+
+  useEffect(() => {
     if (!trendingMessage) return;
     const timer = setTimeout(() => setTrendingMessage(''), 4000);
     return () => clearTimeout(timer);
@@ -250,6 +353,123 @@ export default function AdminStaticPagesPage() {
           회사소개, 약관 등 정적 페이지 내용을 직접 편집할 수 있습니다. 저장 시 Firestore에 자동 반영되고 이력이 남습니다.
         </p>
       </header>
+
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">섹션 소제목 관리</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              테마별 상세 페이지에 표시되는 카드 제목과 배지 문구를 수정합니다. 변경 사항은 즉시 사용자 화면에 반영됩니다.
+            </p>
+          </div>
+          {sectionTitleSaving ? (
+            <span className="text-xs font-semibold text-indigo-500 dark:text-indigo-300">저장 중…</span>
+          ) : null}
+        </div>
+
+        {sectionTitleError ? (
+          <div className="rounded-lg border border-rose-300 bg-rose-100/70 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+            {sectionTitleError}
+          </div>
+        ) : null}
+
+        {sectionTitleMessage ? (
+          <div className="rounded-lg border border-emerald-300 bg-emerald-100/70 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100">
+            {sectionTitleMessage}
+          </div>
+        ) : null}
+
+        <form onSubmit={handleSaveSectionTitles} className="space-y-5">
+          <div className="flex flex-wrap gap-2">
+            {SECTION_TITLE_FIELD_GROUPS.map((group) => {
+              const isActive = activeSectionTab === group.id;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => setActiveSectionTab(group.id)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                    isActive
+                      ? 'bg-indigo-600 text-white shadow-sm dark:bg-indigo-500'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {group.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+            {SECTION_TITLE_FIELD_GROUPS.map((group) =>
+              group.id === activeSectionTab ? (
+                <div key={group.id} className="space-y-4">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{group.description}</p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {group.fields.map((field) => (
+                      <label
+                        key={field.path}
+                        className="flex flex-col gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300"
+                      >
+                        {field.label}
+                        {field.multiline ? (
+                          <textarea
+                            value={sectionTitleValues[field.path] ?? ''}
+                            onChange={handleSectionTitleChange(field.path)}
+                            className="min-h-[64px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-indigo-500/60"
+                            placeholder={field.placeholder}
+                            disabled={sectionTitleLoading || sectionTitleSaving}
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            value={sectionTitleValues[field.path] ?? ''}
+                            onChange={handleSectionTitleChange(field.path)}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-indigo-500/60"
+                            placeholder={field.placeholder}
+                            disabled={sectionTitleLoading || sectionTitleSaving}
+                          />
+                        )}
+                        <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
+                          기본값: {field.placeholder}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null
+            )}
+
+            {sectionTitleLoading ? (
+              <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">소제목 설정을 불러오는 중입니다…</p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+            <div>
+              <p>마지막 저장: {sectionTitleMeta.updatedAt ? formatTimestamp(sectionTitleMeta.updatedAt) : '기록 없음'}</p>
+              {sectionTitleMeta.updatedBy ? <p>수정자: {sectionTitleMeta.updatedBy}</p> : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleResetSectionTitles}
+                className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-indigo-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:text-slate-300 dark:hover:border-indigo-400 dark:hover:text-indigo-200 dark:focus-visible:ring-offset-slate-900"
+                disabled={sectionTitleSaving}
+              >
+                기본값으로 복원
+              </button>
+              <button
+                type="submit"
+                className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-indigo-400 dark:hover:bg-indigo-500/80 dark:focus-visible:ring-offset-slate-900"
+                disabled={sectionTitleSaving || sectionTitleLoading}
+              >
+                소제목 저장
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
 
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <div className="flex flex-wrap items-center justify-between gap-3">

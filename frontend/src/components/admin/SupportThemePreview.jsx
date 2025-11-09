@@ -3,6 +3,8 @@
 
 import PropTypes from 'prop-types';
 import SectionCard from '../SectionCard.jsx';
+import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 
 function filterList(items) {
   if (!Array.isArray(items)) return [];
@@ -56,11 +58,17 @@ function SupportThemePreview({ guide }) {
   if (!guide) return null;
 
   const commonResources = filterList(guide.commonResources);
+  const { titles } = useSectionTitles();
+  const overviewTitle = getSectionTitleValue(titles, 'themes.support.overview.title');
+  const programBadge = getSectionTitleValue(titles, 'themes.support.programs.badge');
+  const programFallback = getSectionTitleValue(titles, 'themes.support.programs.fallbackTitle');
+  const commonTitle = getSectionTitleValue(titles, 'themes.support.commonResources.title');
+  const commonBadge = getSectionTitleValue(titles, 'themes.support.commonResources.badge');
 
   return (
     <div className="space-y-5">
       {guide.overview ? (
-        <SectionCard title="정부지원정보 개요" tone="neutral">
+        <SectionCard title={overviewTitle} tone="neutral">
           <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             <TextWithLinks text={guide.overview} />
           </p>
@@ -88,9 +96,9 @@ function SupportThemePreview({ guide }) {
               return (
                 <SectionCard
                   key={`preview-support-${index}`}
-                  title={program?.name || `지원 프로그램 ${index + 1}`}
+                  title={program?.name || `${programFallback} ${index + 1}`}
                   tone="neutral"
-                  badgeText="지원"
+                  badgeText={programBadge}
                 >
                   <div className="space-y-3">
                     {program?.summary ? (
@@ -157,7 +165,7 @@ function SupportThemePreview({ guide }) {
         : null}
 
       {commonResources.length > 0 ? (
-        <SectionCard title="공통 참고자료" tone="neutral" badgeText="참고">
+        <SectionCard title={commonTitle} tone="neutral" badgeText={commonBadge}>
           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {commonResources.map((resource, index) => (
               <li key={`support-resource-${index}`}>

@@ -3,6 +3,8 @@
 
 import PropTypes from 'prop-types';
 import SectionCard from '../SectionCard.jsx';
+import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 
 function filterList(items) {
   if (!Array.isArray(items)) return [];
@@ -42,17 +44,25 @@ function HealthThemePreview({ guide }) {
 
   const lifestyleTips = filterList(guide.lifestyleTips);
   const emergencyGuide = filterList(guide.emergencyGuide);
+  const { titles } = useSectionTitles();
+  const overviewTitle = getSectionTitleValue(titles, 'themes.health.overview.title');
+  const lifestyleTitle = getSectionTitleValue(titles, 'themes.health.lifestyleTips.title');
+  const lifestyleBadge = getSectionTitleValue(titles, 'themes.health.lifestyleTips.badge');
+  const conditionFallback = getSectionTitleValue(titles, 'themes.health.conditionFallback.title');
+  const conditionBadge = getSectionTitleValue(titles, 'themes.health.conditions.badge');
+  const emergencyTitle = getSectionTitleValue(titles, 'themes.health.emergencyGuide.title');
+  const emergencyBadge = getSectionTitleValue(titles, 'themes.health.emergencyGuide.badge');
 
   return (
     <div className="space-y-5">
       {guide.overview ? (
-        <SectionCard title="건강 테마 개요" tone="neutral">
+        <SectionCard title={overviewTitle} tone="neutral">
           <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{guide.overview}</p>
         </SectionCard>
       ) : null}
 
       {lifestyleTips.length > 0 ? (
-        <SectionCard title="생활 습관 팁" tone="neutral" badgeText="생활">
+        <SectionCard title={lifestyleTitle} tone="neutral" badgeText={lifestyleBadge}>
           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {lifestyleTips.map((tip, index) => (
               <li key={`health-tip-${index}`}>{tip}</li>
@@ -79,9 +89,9 @@ function HealthThemePreview({ guide }) {
               return (
                 <SectionCard
                   key={`preview-health-${index}`}
-                  title={condition?.name || `건강 주제 ${index + 1}`}
+                  title={condition?.name || `${conditionFallback} ${index + 1}`}
                   tone="neutral"
-                  badgeText="건강"
+                  badgeText={conditionBadge}
                 >
                   {condition?.summary ? (
                     <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{condition.summary}</p>
@@ -127,7 +137,7 @@ function HealthThemePreview({ guide }) {
         : null}
 
       {emergencyGuide.length > 0 ? (
-        <SectionCard title="긴급 대응 가이드" tone="impact" badgeText="긴급">
+        <SectionCard title={emergencyTitle} tone="impact" badgeText={emergencyBadge}>
           <ul className="space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
             {emergencyGuide.map((item, index) => (
               <li key={`emergency-guide-${index}`}>{item}</li>

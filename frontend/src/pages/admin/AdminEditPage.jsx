@@ -16,6 +16,8 @@ import StockThemeEditor from '../../components/admin/StockThemeEditor.jsx';
 import StockThemePreview from '../../components/admin/StockThemePreview.jsx';
 import SupportThemeEditor from '../../components/admin/SupportThemeEditor.jsx';
 import SupportThemePreview from '../../components/admin/SupportThemePreview.jsx';
+import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 import {
   createHealthGuide,
   createLifestyleGuide,
@@ -134,6 +136,7 @@ function AdminEditPage() {
   const [contentKeywordInput, setContentKeywordInput] = useState('');
   const copyTimeoutRef = useRef(null);
 
+  const { titles: sectionTitles } = useSectionTitles();
   const selectedTheme = issueDraft?.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
   const fallbackCategory = getDefaultCategory(selectedTheme);
   const categoryValue = issueDraft?.category ?? fallbackCategory;
@@ -151,6 +154,17 @@ function AdminEditPage() {
   const isCopyError = promptCopyFeedback.startsWith('복사 실패');
   const isJsonInputEmpty = jsonInput.trim().length === 0;
   const isJsonAdjustRecommended = jsonError.includes('Bad control character');
+
+  const easySummaryHeading = getSectionTitleValue(sectionTitles, 'general.easySummary.title');
+  const backgroundHeading = getSectionTitleValue(sectionTitles, 'general.background.title');
+  const keyPointsHeading = getSectionTitleValue(sectionTitles, 'general.keyPoints.title');
+  const progressiveHeading = getSectionTitleValue(sectionTitles, 'general.progressiveView.title');
+  const progressiveBadge = getSectionTitleValue(sectionTitles, 'general.progressiveView.badge');
+  const conservativeHeading = getSectionTitleValue(sectionTitles, 'general.conservativeView.title');
+  const conservativeBadge = getSectionTitleValue(sectionTitles, 'general.conservativeView.badge');
+  const impactHeading = getSectionTitleValue(sectionTitles, 'general.impactToLife.title');
+  const impactBadge = getSectionTitleValue(sectionTitles, 'general.impactToLife.badge');
+  const sourcesHeading = getSectionTitleValue(sectionTitles, 'general.sources.title');
 
   const categoryOptions = useMemo(() => getCategoryOptions(selectedTheme), [selectedTheme]);
   const subcategoryOptions = useMemo(
@@ -1571,12 +1585,12 @@ function AdminEditPage() {
           </div>
 
           {issueDraft.easySummary && (
-            <SectionCard title="쉬운 요약" tone="neutral">
+            <SectionCard title={easySummaryHeading} tone="neutral">
               <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{issueDraft.easySummary}</p>
             </SectionCard>
           )}
 
-          <SectionCard title="무슨 일이 있었나요?" tone="neutral">
+          <SectionCard title={backgroundHeading} tone="neutral">
             {previewBackground.length > 0 ? (
               <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
                 {previewBackground.map((paragraph, index) => (
@@ -1588,7 +1602,7 @@ function AdminEditPage() {
             )}
           </SectionCard>
 
-          <SectionCard title="핵심 쟁점" tone="neutral">
+          <SectionCard title={keyPointsHeading} tone="neutral">
             {previewKeyPoints.length > 0 ? (
               <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
                 {previewKeyPoints.map((point, index) => (
@@ -1620,7 +1634,7 @@ function AdminEditPage() {
           ) : null}
 
           {issueDraft.progressiveView ? (
-            <SectionCard title="진보 시각" tone="progressive" badgeText="진보">
+            <SectionCard title={progressiveHeading} tone="progressive" badgeText={progressiveBadge}>
               <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">{issueDraft.progressiveView.headline}</p>
               <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">{issueDraft.progressiveView.note}</p>
               <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-emerald-900 dark:text-emerald-100">
@@ -1635,7 +1649,7 @@ function AdminEditPage() {
           ) : null}
 
           {issueDraft.conservativeView ? (
-            <SectionCard title="보수 시각" tone="conservative" badgeText="보수">
+            <SectionCard title={conservativeHeading} tone="conservative" badgeText={conservativeBadge}>
               <p className="text-sm font-semibold text-rose-900 dark:text-rose-100">{issueDraft.conservativeView.headline}</p>
               <p className="text-xs text-rose-700/80 dark:text-rose-200/80">{issueDraft.conservativeView.note}</p>
               <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-rose-900 dark:text-rose-100">
@@ -1650,13 +1664,13 @@ function AdminEditPage() {
           ) : null}
 
           {issueDraft.impactToLife ? (
-            <SectionCard title="생활 영향" tone="impact" badgeText="체감">
+            <SectionCard title={impactHeading} tone="impact" badgeText={impactBadge}>
               <p className="text-sm text-slate-700 dark:text-slate-200">{issueDraft.impactToLife.text}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">{issueDraft.impactToLife.note}</p>
             </SectionCard>
           ) : null}
 
-          <SectionCard title="출처" tone="neutral">
+          <SectionCard title={sourcesHeading} tone="neutral">
             {previewSources.length > 0 ? (
               <ul className="space-y-2 text-xs leading-relaxed text-slate-700 dark:text-slate-200">
                 {previewSources.map((source) => (

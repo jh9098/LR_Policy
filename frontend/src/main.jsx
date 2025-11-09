@@ -9,6 +9,7 @@ import App from './App.jsx';
 import './index.css';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { AuthDialogProvider } from './contexts/AuthDialogContext.jsx';
+import { SectionTitlesProvider } from './contexts/SectionTitlesContext.jsx';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -16,7 +17,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <AuthProvider>
           <AuthDialogProvider>
-            <App />
+            <SectionTitlesProvider>
+              <App />
+            </SectionTitlesProvider>
           </AuthDialogProvider>
         </AuthProvider>
       </BrowserRouter>

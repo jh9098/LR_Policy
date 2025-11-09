@@ -52,6 +52,7 @@ import {
   where
 } from 'firebase/firestore';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from './constants/themeConfig.js';
+import { mergeSectionTitles } from './constants/sectionTitleConfig.js';
 import { getDefaultCategory, isValidCategory, isValidSubcategory } from './constants/categoryStructure.js';
 import { normalizeCoreKeywords } from './utils/draftSerialization.js';
 import {
@@ -82,12 +83,22 @@ const ISSUE_REACTIONS_COLLECTION = 'issueReactions';
 const USER_SCRAPS_COLLECTION = 'userScraps';
 const TRENDING_SETTINGS_COLLECTION = 'appSettings';
 const TRENDING_SETTINGS_DOC_ID = 'trending';
+const SECTION_TITLES_DOC_ID = 'sectionTitles';
 
 const DEFAULT_TRENDING_SETTINGS = {
   minUpvotes: 5,
   withinHours: 24,
   maxItems: 10
 };
+
+function normalizeSectionTitlesDoc(data) {
+  const titles = mergeSectionTitles(data?.titles ?? {});
+  return {
+    titles,
+    updatedAt: data?.updatedAt ?? null,
+    updatedBy: data?.updatedBy ?? ''
+  };
+}
 
 setPersistence(auth, browserLocalPersistence).catch((error) => {
   console.warn('Firebase 인증 지속성 설정 실패:', error);
@@ -703,6 +714,34 @@ export async function saveTrendingSettings(settings) {
     { merge: true }
   );
   return normalized;
+}
+
+export async function getSectionTitles() {
+  const settingsRef = doc(db, TRENDING_SETTINGS_COLLECTION, SECTION_TITLES_DOC_ID);
+  const snap = await getDoc(settingsRef);
+  if (!snap.exists()) {
+    return { titles: mergeSectionTitles(), updatedAt: null, updatedBy: '' };
+  }
+  return normalizeSectionTitlesDoc(snap.data());
+}
+
+export async function saveSectionTitles(titles, { updatedBy } = {}) {
+  const normalizedTitles = mergeSectionTitles(titles);
+  const settingsRef = doc(db, TRENDING_SETTINGS_COLLECTION, SECTION_TITLES_DOC_ID);
+  await setDoc(
+    settingsRef,
+    {
+      titles: normalizedTitles,
+      updatedAt: serverTimestamp(),
+      updatedBy: updatedBy ?? ''
+    },
+    { merge: true }
+  );
+  return {
+    titles: normalizedTitles,
+    updatedAt: new Date(),
+    updatedBy: updatedBy ?? ''
+  };
 }
 
 export async function getTrendingIssues() {
