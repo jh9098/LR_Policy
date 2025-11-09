@@ -72,12 +72,34 @@ export default function SiteHeader() {
     if (!user) return "";
     return user.displayName?.trim() || user.email || "로그인 사용자";
   }, [user]);
+  const isScrapOpen = sp.get("scrap") === "open";
+
   const navLinkClassName = ({ isActive }) =>
     [
       navBaseClass,
       isActive ? "text-indigo-600 dark:text-indigo-300" : "text-slate-600 dark:text-slate-300",
       "block"
     ].join(" ");
+
+  const handleScrapButtonClick = () => {
+    if (!user) {
+      openLogin();
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(sp);
+    if (isScrapOpen) nextSearchParams.delete("scrap");
+    else nextSearchParams.set("scrap", "open");
+
+    const searchString = nextSearchParams.toString();
+    navigate(
+      {
+        pathname: "/",
+        search: searchString ? `?${searchString}` : ""
+      },
+      { replace: location.pathname === "/" }
+    );
+  };
 
   return (
     <>
@@ -123,9 +145,18 @@ export default function SiteHeader() {
             검색
           </button>
           {user ? (
-            <span className="hidden rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-300 sm:inline">
-              {displayName}
-            </span>
+            <div className="flex min-w-[8rem] shrink-0 flex-col items-end gap-1">
+              <span className="hidden w-full rounded-lg border border-slate-200 px-3 py-1 text-right text-xs font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-300 sm:block">
+                {displayName}
+              </span>
+              <button
+                type="button"
+                onClick={handleScrapButtonClick}
+                className="inline-flex w-full items-center justify-center rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-indigo-500/20 dark:text-indigo-200 dark:hover:bg-indigo-500/30 dark:focus-visible:ring-offset-slate-900"
+              >
+                {isScrapOpen ? "내 스크랩 닫기" : "내 스크랩 보기"}
+              </button>
+            </div>
           ) : null}
           <button
             type="button"
