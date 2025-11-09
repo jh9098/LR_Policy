@@ -109,12 +109,11 @@ function AdminNewPage() {
   const isClipboardSupported = typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
   const coreKeywords = Array.isArray(issueDraft.coreKeywords) ? issueDraft.coreKeywords : [];
   const keywordCount = coreKeywords.length;
-  const hasEnoughKeywords = keywordCount >= 5;
-  const keywordStatusText = hasEnoughKeywords
-    ? `최소 조건 충족 (${keywordCount}개 입력됨)`
-    : `최소 5개 이상 필요 (현재 ${keywordCount}개)`;
-  const isCopyError =
-    promptCopyFeedback.startsWith('복사 실패') || promptCopyFeedback.startsWith('핵심 키워드를 최소 5개 이상 입력해주세요');
+  const hasRecommendedKeywordCount = keywordCount >= 5;
+  const keywordStatusText = hasRecommendedKeywordCount
+    ? `권장 개수 충족 (${keywordCount}개 입력됨)`
+    : `권장 5개 이상 (현재 ${keywordCount}개)`;
+  const isCopyError = promptCopyFeedback.startsWith('복사 실패');
   const showPerspectiveSections = themeMeta?.showPerspectives ?? false;
   const isJsonAdjustRecommended = jsonError.includes('Bad control character');
 
@@ -190,12 +189,6 @@ function AdminNewPage() {
     }
     setPromptCopyFeedback('');
   }, [selectedTheme]);
-
-  useEffect(() => {
-    if (hasEnoughKeywords && promptCopyFeedback.startsWith('핵심 키워드를 최소 5개 이상 입력해주세요')) {
-      setPromptCopyFeedback('');
-    }
-  }, [hasEnoughKeywords, promptCopyFeedback]);
 
   const previewBackground = useMemo(() => {
     if (!issueDraft.background) {
@@ -402,7 +395,7 @@ function AdminNewPage() {
     if (coreKeywords.length === 0) {
       return (
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          아직 입력된 핵심 키워드가 없습니다. 최소 5개 이상 추가해주세요.
+          아직 입력된 핵심 키워드가 없습니다. AI 응답을 확인한 뒤 최소 5개 이상 정리해 주세요.
         </p>
       );
     }
@@ -432,17 +425,12 @@ function AdminNewPage() {
     if (!themePrompt) {
       return;
     }
-    if (!hasEnoughKeywords) {
-      setPromptCopyFeedback('핵심 키워드를 최소 5개 이상 입력해주세요.');
-      return;
-    }
     if (!isClipboardSupported) {
       setPromptCopyFeedback('복사 실패: 브라우저가 클립보드를 지원하지 않습니다.');
       return;
     }
     try {
-      const keywordInstruction = `\n\n추가 지시사항: 아래 핵심키워드를 반드시 참고해 JSON을 작성하세요. 최소 5개 이상을 모두 반영해야 합니다.\n핵심키워드: ${coreKeywords.join(', ')}`;
-      await navigator.clipboard.writeText(`${themePrompt}${keywordInstruction}`);
+      await navigator.clipboard.writeText(themePrompt);
       setPromptCopyFeedback('프롬프트를 복사했어요.');
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
@@ -773,9 +761,9 @@ function AdminNewPage() {
             <button
               type="button"
               onClick={handleCopyPrompt}
-              disabled={!isClipboardSupported || !themePrompt || !hasEnoughKeywords}
+              disabled={!isClipboardSupported || !themePrompt}
               className={
-                isClipboardSupported && themePrompt && hasEnoughKeywords
+                isClipboardSupported && themePrompt
                   ? 'inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
                   : 'inline-flex items-center rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'
               }
@@ -797,17 +785,17 @@ function AdminNewPage() {
           <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/40">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">핵심 키워드 (프롬프트 & 저장용)</h3>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">핵심 키워드 (데이터 수집용)</h3>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  최소 5개 이상 입력해야 프롬프트를 복사할 수 있습니다. 쉼표 또는 줄바꿈으로 여러 개를 한 번에 추가하세요.
+                  AI 응답에서 도출된 정보를 바탕으로 최소 5개 이상 정리해 두면 데이터 수집에 도움이 됩니다. 쉼표 또는 줄바꿈으로 여러 개를 한 번에 추가하세요.
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <span
                   className={
-                    hasEnoughKeywords
+                    hasRecommendedKeywordCount
                       ? 'text-xs font-semibold text-emerald-600 dark:text-emerald-300'
-                      : 'text-xs font-semibold text-rose-600 dark:text-rose-300'
+                      : 'text-xs font-semibold text-slate-600 dark:text-slate-300'
                   }
                 >
                   {keywordStatusText}
@@ -996,9 +984,9 @@ function AdminNewPage() {
                   <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">핵심 키워드 관리</span>
                   <span
                     className={
-                      hasEnoughKeywords
+                      hasRecommendedKeywordCount
                         ? 'text-xs font-semibold text-emerald-600 dark:text-emerald-300'
-                        : 'text-xs font-semibold text-rose-600 dark:text-rose-300'
+                        : 'text-xs font-semibold text-slate-600 dark:text-slate-300'
                     }
                   >
                     {keywordStatusText}
