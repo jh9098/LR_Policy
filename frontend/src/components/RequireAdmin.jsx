@@ -1,9 +1,11 @@
 import PropTypes from 'prop-types';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import EmailPasswordAuthPanel from './EmailPasswordAuthPanel.jsx';
 
 export default function RequireAdmin({ children }) {
-  const { user, isAdmin, loading, adminError, logout } = useAuth();
+  const { user, hasAdminAccess, adminRole, loading, adminError, logout } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -31,7 +33,7 @@ export default function RequireAdmin({ children }) {
     );
   }
 
-  if (!isAdmin) {
+  if (!hasAdminAccess) {
     return (
       <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4 px-4 py-12 text-center">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">관리자 권한이 없습니다.</h2>
@@ -54,6 +56,20 @@ export default function RequireAdmin({ children }) {
         </button>
       </div>
     );
+  }
+
+  const pathname = location.pathname.replace(/\/*$/, '') || '/admin';
+
+  if (adminRole === 'groupp') {
+    const isAllowedPath =
+      pathname === '/admin' ||
+      pathname === '/admin/new' ||
+      pathname === '/admin/list' ||
+      pathname.startsWith('/admin/edit');
+
+    if (!isAllowedPath) {
+      return <Navigate to="/admin/list" replace />;
+    }
   }
 
   return children;

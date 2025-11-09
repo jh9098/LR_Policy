@@ -2,9 +2,10 @@
 // 현재 /admin/* 페이지는 인증 없이 누구나 접근 가능하다.
 // TODO(프로덕션): 관리자 인증, Firestore 보안 규칙 잠금, 접근 제한을 반드시 구현해야 한다.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import SiteHeader from './SiteHeader.jsx';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 const NAV_ITEMS = [
   { type: 'route', label: '새 글 작성', to: '/admin/new', description: 'Firestore에 새 글을 추가합니다.' },
@@ -12,8 +13,25 @@ const NAV_ITEMS = [
   { type: 'route', label: '환경/설정', to: '/admin/settings', description: '회사소개·정책 페이지 내용을 관리합니다.' }
 ];
 
+const GROUPBUY_NAV_ITEMS = [
+  {
+    type: 'route',
+    label: '공동구매 글 작성',
+    to: '/admin/new',
+    description: '공동구매 테마 신규 글을 등록합니다.'
+  },
+  {
+    type: 'route',
+    label: '공동구매 글 목록',
+    to: '/admin/list',
+    description: '등록된 공동구매 글을 확인하고 관리합니다.'
+  }
+];
+
 export default function AdminLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { adminRole } = useAuth();
+  const navItems = useMemo(() => (adminRole === 'groupp' ? GROUPBUY_NAV_ITEMS : NAV_ITEMS), [adminRole]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 transition-colors dark:bg-slate-900 dark:text-slate-100">
@@ -39,7 +57,7 @@ export default function AdminLayout() {
           <nav
             className={`${isMenuOpen ? 'flex' : 'hidden'} flex-col gap-2 border-t border-slate-200 pt-3 text-sm lg:flex lg:flex-row lg:flex-wrap lg:items-center lg:gap-3 lg:border-none lg:pt-0`}
           >
-            {NAV_ITEMS.map((item, index) => {
+            {navItems.map((item, index) => {
               if (item.type === 'placeholder') {
                 return (
                   <div

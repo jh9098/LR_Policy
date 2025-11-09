@@ -42,6 +42,7 @@ import {
   withDefaultDate
 } from '../../utils/draftSerialization.js';
 import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 
 const STORAGE_KEY = 'adminDraftV7';
@@ -104,9 +105,17 @@ function AdminNewPage() {
   const copyTimeoutRef = useRef(null);
 
   const { titles: sectionTitles } = useSectionTitles();
+  const { adminRole } = useAuth();
+  const isGroupbuyOnly = adminRole === 'groupp';
+  const fallbackThemeId = isGroupbuyOnly ? 'groupbuy' : DEFAULT_THEME_ID;
+  const availableThemes = useMemo(
+    () => (isGroupbuyOnly ? THEME_CONFIG.filter((item) => item.id === 'groupbuy') : THEME_CONFIG),
+    [isGroupbuyOnly]
+  );
+  const isThemeSelectionLocked = availableThemes.length === 1;
+  const selectedTheme = issueDraft.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : fallbackThemeId;
   const categoryValue = issueDraft.category;
   const subcategoryValue = issueDraft.subcategory;
-  const selectedTheme = issueDraft.theme && isValidThemeId(issueDraft.theme) ? issueDraft.theme : DEFAULT_THEME_ID;
   const themeMeta = THEME_CONFIG.find((item) => item.id === selectedTheme) ?? THEME_CONFIG[0];
   const themePrompt = getThemePrompt(selectedTheme);
   const isClipboardSupported = typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
@@ -136,6 +145,24 @@ function AdminNewPage() {
     () => getSubcategoryOptions(selectedTheme, categoryValue),
     [categoryValue, selectedTheme]
   );
+
+  useEffect(() => {
+    if (!isGroupbuyOnly) {
+      return;
+    }
+    setIssueDraft((prev) => {
+      if (!prev || prev.theme === 'groupbuy') {
+        return prev;
+      }
+      const defaultCategory = getDefaultCategory('groupbuy');
+      return {
+        ...prev,
+        theme: 'groupbuy',
+        category: defaultCategory,
+        subcategory: ''
+      };
+    });
+  }, [isGroupbuyOnly]);
 
   useEffect(() => {
     if (categoryOptions.length === 0) {
@@ -498,6 +525,9 @@ function AdminNewPage() {
 
   const handleThemeChange = (event) => {
     const { value } = event.target;
+    if (isGroupbuyOnly && value !== 'groupbuy') {
+      return;
+    }
     const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
     setIssueDraft((prev) => {
       const base = ensureThemeGuides(prev);
@@ -760,7 +790,7 @@ function AdminNewPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* 왼쪽: 테마 버튼들 */}
             <div className="flex flex-wrap gap-2">
-              {THEME_CONFIG.map((theme) => (
+              {availableThemes.map((theme) => (
                 <button
                   key={theme.id}
                   type="button"
@@ -770,10 +800,16 @@ function AdminNewPage() {
                       ? 'inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
                       : 'inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-200 dark:bg-slate-900/40 dark:text-slate-100 dark:hover:bg-slate-900/70'
                   }
+                  disabled={isThemeSelectionLocked && theme.id !== 'groupbuy'}
                 >
                   {theme.label}
                 </button>
               ))}
+              {isGroupbuyOnly ? (
+                <p className="w-full text-xs font-medium text-emerald-600 dark:text-emerald-300">
+                  공동구매 전용 계정은 공동구매 테마만 작성할 수 있습니다.
+                </p>
+              ) : null}
             </div>
 
             {/* 오른쪽: 프롬프트 복사 버튼 */}

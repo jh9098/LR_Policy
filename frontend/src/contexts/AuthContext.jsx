@@ -13,6 +13,9 @@ import {
 const AuthContext = createContext({
   user: null,
   isAdmin: false,
+  hasAdminAccess: false,
+  adminRole: '',
+  canManageGroupbuy: false,
   adminRecord: null,
   loading: true,
   processing: false,
@@ -47,6 +50,8 @@ function resolveFirebaseError(error) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
+  const [adminRole, setAdminRole] = useState('');
   const [adminRecord, setAdminRecord] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -62,6 +67,8 @@ export function AuthProvider({ children }) {
       if (!firebaseUser) {
         setUser(null);
         setIsAdmin(false);
+        setHasAdminAccess(false);
+        setAdminRole('');
         setAdminRecord(null);
         setAdminError('');
         setLoading(false);
@@ -73,14 +80,19 @@ export function AuthProvider({ children }) {
       try {
         const adminInfo = await getAdminRole(firebaseUser.uid);
         if (!isMounted) return;
-        setAdminRecord(adminInfo);
-        setIsAdmin(adminInfo?.role === 'admin');
+        const role = typeof adminInfo?.role === 'string' ? adminInfo.role : '';
+        setAdminRecord(adminInfo ? { ...adminInfo, role } : null);
+        setAdminRole(role);
+        setIsAdmin(role === 'admin');
+        setHasAdminAccess(role === 'admin' || role === 'groupp');
         setAdminError('');
       } catch (error) {
         console.error('관리자 권한 확인 실패:', error);
         if (!isMounted) return;
         setAdminRecord(null);
         setIsAdmin(false);
+        setHasAdminAccess(false);
+        setAdminRole('');
         setAdminError('관리자 권한을 확인하는 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
       } finally {
         if (isMounted) setLoading(false);
@@ -204,6 +216,9 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       isAdmin,
+      hasAdminAccess,
+      adminRole,
+      canManageGroupbuy: isAdmin || adminRole === 'groupp',
       adminRecord,
       loading,
       processing,
@@ -219,6 +234,8 @@ export function AuthProvider({ children }) {
     [
       user,
       isAdmin,
+      hasAdminAccess,
+      adminRole,
       adminRecord,
       loading,
       processing,
