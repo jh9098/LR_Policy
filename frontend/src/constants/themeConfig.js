@@ -71,6 +71,15 @@ export const THEME_CONFIG = [
     keyAreas: ['질병관리', '정신건강', '생애주기 건강', '예방/응급', '증상별 가이드', '검사/수치 해석']
   },
   {
+    id: 'groupbuy',
+    label: '공동구매정보',
+    description:
+      '육아·생활·식품·패션 공동구매 소식을 한 곳에 모아, 품목별 필수 스펙과 구매 체크포인트를 정리합니다.',
+    accent: 'rose',
+    showPerspectives: false,
+    keyAreas: ['육아용품', '생활용품', '식품·건강식품', '패션·가전·인테리어']
+  },
+  {
     id: 'support',
     label: '정부지원정보',
     description:

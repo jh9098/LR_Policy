@@ -23,6 +23,8 @@ const THEME_PILL_CLASS = {
     'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-400/50',
   health:
     'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-400/50',
+  groupbuy:
+    'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-200 dark:ring-rose-400/50',
   // ✅ support 테마를 violet로 통일
   support:
     'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-400/50'
@@ -35,6 +37,7 @@ const THEME_RING_CLASS = {
   parenting: 'focus-visible:ring-sky-400',
   lifestyle: 'focus-visible:ring-violet-400',
   health: 'focus-visible:ring-emerald-400',
+  groupbuy: 'focus-visible:ring-rose-400',
   support: 'focus-visible:ring-violet-400'
 };
 
