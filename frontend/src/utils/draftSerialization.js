@@ -177,6 +177,8 @@ export function buildSubmissionPayload(draft) {
       }))
     : [];
   const normalizedCoreKeywords = normalizeCoreKeywords(ensured.coreKeywords);
+  const normalizedGroupbuyLink =
+    typeof ensured.groupbuyLink === 'string' ? ensured.groupbuyLink.trim() : '';
 
   return {
     ...ensured,
@@ -187,6 +189,7 @@ export function buildSubmissionPayload(draft) {
     keyPoints: normalizedKeyPoints,
     sources: normalizedSources,
     coreKeywords: normalizedCoreKeywords,
+    groupbuyLink: theme === 'groupbuy' ? normalizedGroupbuyLink : '',
     progressiveView: allowPerspectives ? ensured.progressiveView : null,
     conservativeView: allowPerspectives ? ensured.conservativeView : null,
     parentingGuide: theme === 'parenting' ? ensured.parentingGuide : null,

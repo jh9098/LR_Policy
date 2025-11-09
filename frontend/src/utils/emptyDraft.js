@@ -17,6 +17,7 @@ export function createEmptyDraft() {
     easySummary: '',
     title: '',
     date: '',
+    groupbuyLink: '',
     category: getDefaultCategory(DEFAULT_THEME_ID),
     subcategory: '',
     summaryCard: '',
@@ -77,6 +78,7 @@ export function createFreshDraft() {
   return {
     ...draft,
     date: getCurrentKoreanDateTimeString(),
+    groupbuyLink: draft.groupbuyLink,
     keyPoints: [...draft.keyPoints],
     sources: [...draft.sources],
     coreKeywords: [...draft.coreKeywords]
