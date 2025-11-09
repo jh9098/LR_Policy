@@ -199,10 +199,12 @@ function IssuePage() {
   const healthGuide = issue?.healthGuide ?? null;
   const stockGuide = issue?.stockGuide ?? null;
   const supportGuide = issue?.supportGuide ?? null;
+  const groupbuyLink = typeof issue?.groupbuyLink === 'string' ? issue.groupbuyLink.trim() : '';
+  const shouldShowGroupbuyLink = issue?.theme === 'groupbuy' && groupbuyLink.length > 0;
 
   const generateHTML = () => {
     if (!issue) return '';
-    
+
     const escapeHtml = (text) => {
       return String(text)
         .replace(/&/g, '&amp;')
@@ -213,6 +215,15 @@ function IssuePage() {
     };
 
     let themeSpecificContent = '';
+
+    if (issue.theme === 'groupbuy' && shouldShowGroupbuyLink) {
+      themeSpecificContent += `
+    <div class="section groupbuy-link">
+      <h2 class="section-title">관련 링크</h2>
+      <p><a href="${escapeHtml(groupbuyLink)}" target="_blank" rel="noopener">${escapeHtml(groupbuyLink)}</a></p>
+      <p>위 링크에서 공동구매 참여 가능합니다!</p>
+    </div>`;
+    }
 
     // 육아 테마
     if (issue.theme === 'parenting' && parentingGuide) {
@@ -935,6 +946,20 @@ function IssuePage() {
               <p className="text-sm text-slate-500 dark:text-slate-400">등록된 출처가 없습니다.</p>
             )}
           </SectionCard>
+
+          {shouldShowGroupbuyLink ? (
+            <SectionCard title="관련 링크" tone="neutral">
+              <a
+                href={groupbuyLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-rose-600 underline decoration-rose-400 decoration-2 underline-offset-4 transition hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200"
+              >
+                {groupbuyLink}
+              </a>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">위 링크에서 공동구매 참여 가능합니다!</p>
+            </SectionCard>
+          ) : null}
 
           <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-3">

@@ -298,6 +298,7 @@ function normalizeIssueData(issueId, data) {
     easySummary: typeof data?.easySummary === 'string' ? data.easySummary : '',
     title: typeof data?.title === 'string' ? data.title : '',
     date: typeof data?.date === 'string' ? data.date : '',
+    groupbuyLink: typeof data?.groupbuyLink === 'string' ? data.groupbuyLink : '',
     category,
     subcategory,
     summaryCard: typeof data?.summaryCard === 'string' ? data.summaryCard : '',

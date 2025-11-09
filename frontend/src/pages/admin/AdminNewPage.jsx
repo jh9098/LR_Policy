@@ -450,6 +450,11 @@ function AdminNewPage() {
     setIssueDraft((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleGroupbuyLinkChange = (event) => {
+    const { value } = event.target;
+    setIssueDraft((prev) => ({ ...prev, groupbuyLink: value }));
+  };
+
   const handleEasySummaryChange = (event) => {
     const value = event.target.value.replace(/\n+/g, ' ').trimStart();
     setIssueDraft((prev) => ({ ...prev, easySummary: value }));
@@ -925,6 +930,22 @@ function AdminNewPage() {
                   placeholder="한 줄로 핵심을 설명해 주세요."
                 />
               </label>
+              {selectedTheme === 'groupbuy' ? (
+                <label className="flex flex-col gap-2 text-sm">
+                  <span className="font-medium">관련 링크</span>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    value={issueDraft.groupbuyLink ?? ''}
+                    onChange={handleGroupbuyLinkChange}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    placeholder="https://"
+                  />
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    공동구매를 진행하는 페이지 주소를 입력해 주세요.
+                  </span>
+                </label>
+              ) : null}
               <label className="flex flex-col gap-2 text-sm">
                 <span className="font-medium">제목</span>
                 <input
