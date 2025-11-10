@@ -47,7 +47,8 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function fetchChannelVideos({ apiKey, channelId, publishedAfter, maxResults }) {
+async function fetchChannelVideos({ apiKey, channelId, channelName, publishedAfter, maxResults }) {
+  const searchQuery = typeof channelName === 'string' ? channelName.trim() : '';
   const params = new URLSearchParams({
     key: apiKey,
     channelId,
@@ -59,10 +60,25 @@ async function fetchChannelVideos({ apiKey, channelId, publishedAfter, maxResult
   if (publishedAfter) {
     params.set('publishedAfter', publishedAfter);
   }
-  const searchData = await fetchJson(`${YOUTUBE_API_BASE}/search?${params.toString()}`);
-  const videoIds = (searchData.items || [])
+  if (searchQuery) {
+    params.set('q', searchQuery);
+  }
+  const searchUrl = `${YOUTUBE_API_BASE}/search?${params.toString()}`;
+  let searchData = await fetchJson(searchUrl);
+  let videoIds = (searchData.items || [])
     .filter((item) => item.id?.videoId)
     .map((item) => item.id.videoId);
+
+  // 검색어 기반 조회가 0건일 경우, 채널 ID만으로 한 번 더 조회해 본다.
+  if (videoIds.length === 0 && searchQuery) {
+    const fallbackParams = new URLSearchParams(params);
+    fallbackParams.delete('q');
+    const fallbackUrl = `${YOUTUBE_API_BASE}/search?${fallbackParams.toString()}`;
+    searchData = await fetchJson(fallbackUrl);
+    videoIds = (searchData.items || [])
+      .filter((item) => item.id?.videoId)
+      .map((item) => item.id.videoId);
+  }
   if (videoIds.length === 0) {
     return [];
   }
@@ -134,6 +150,7 @@ export async function scanFactoryChannels({ apiKey, channels, fallbackPublishedA
       const items = await fetchChannelVideos({
         apiKey,
         channelId: channel.channelId,
+        channelName: channel.channelName,
         publishedAfter,
         maxResults: maxResultsPerChannel
       });
