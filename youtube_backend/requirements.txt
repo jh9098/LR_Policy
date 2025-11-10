@@ -1,0 +1,4 @@
+fastapi==0.115.5
+uvicorn==0.32.0
+yt-dlp==2025.01.07
+google-api-python-client==2.151.0

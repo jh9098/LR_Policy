@@ -10,7 +10,19 @@ const defaultBaseUrl = import.meta.env.DEV ? 'http://localhost:5000/api' : '/api
 export const API_BASE_URL = envBaseUrl || normalize(defaultBaseUrl);
 export const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || '';
 
-export const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || '';
+const detectFactoryBaseUrl = () => {
+  const envFactoryUrl = import.meta.env.VITE_FACTORY_API_BASE_URL;
+  if (envFactoryUrl && typeof envFactoryUrl === 'string') {
+    return normalize(envFactoryUrl);
+  }
+  if (import.meta.env.DEV) {
+    return 'http://127.0.0.1:8000';
+  }
+  return '';
+};
+
+export const FACTORY_API_BASE_URL = detectFactoryBaseUrl();
+export const IS_FACTORY_API_CONFIGURED = Boolean(FACTORY_API_BASE_URL);
 
 // Firebase Web SDK 초기화를 위해서는 다음 Vite 환경 변수를 반드시 설정해야 한다.
 // VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
