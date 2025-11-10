@@ -342,6 +342,23 @@ def remove_channels_from_store(ids: List[str]):
     save_channel_store(data)
 
 
+def _ensure_netscape_cookie_text(cookie_text: str) -> str:
+    """쿠키 텍스트가 Netscape 포맷을 따르도록 헤더를 보강한다."""
+
+    if not cookie_text.strip():
+        return ""
+
+    normalized = cookie_text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.split("\n")
+
+    header = "# Netscape HTTP Cookie File"
+    if not lines[0].startswith("# Netscape"):
+        lines.insert(0, header)
+    if lines[-1] != "":
+        lines.append("")
+    return "\n".join(lines)
+
+
 class ExtractReq(BaseModel):
     urls: List[str] = Field(default_factory=list)
     cookie_text: Optional[str] = Field(default=None, description="Netscape 쿠키 텍스트")
@@ -395,6 +412,7 @@ def api_extract(req: ExtractReq):
     tmp_file = None
     try:
         if cookie_text:
+            cookie_text = _ensure_netscape_cookie_text(cookie_text)
             tmp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8", suffix=".txt")
             tmp_file.write(cookie_text)
             tmp_file.flush()
