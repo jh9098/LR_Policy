@@ -206,6 +206,61 @@ function ResultTranscriptModal({ result, onClose }) {
   );
 }
 
+function FactoryHelpModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4">
+      <div className="flex w-full max-w-4xl flex-col gap-5 rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900">
+        <header className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-indigo-600 dark:text-indigo-300">사용 가이드</p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">YouTube 스크립트 공정 매뉴얼</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              큐/탐색 데이터를 수동 워커(예: Tkinter 추출 도구)와 연동하는 절차를 정리했습니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          >
+            닫기
+          </button>
+        </header>
+        <section className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+          <p>
+            자동 워커가 아직 붙어있지 않기 때문에, 제공해주신 Tkinter 기반 추출 프로그램을 이용해 영상을 수동으로 처리해야 합니다.
+            아래 순서를 따라가면 공장 대시보드와 오프라인 프로그램을 맞물리게 사용할 수 있습니다.
+          </p>
+          <ol className="list-decimal space-y-3 pl-6">
+            <li>
+              <strong>탐색 탭</strong>에서 신규 영상을 고른 뒤 <strong>큐에 담기</strong> 버튼을 눌러 Firestore 대기열을 채웁니다.
+              필요하다면 제외/플래그 처리를 이용해 원치 않는 영상을 숨길 수 있습니다.
+            </li>
+            <li>
+              <strong>큐 탭</strong>에서 작업할 항목을 선택하고 상단의 <strong>URL 복사</strong> 또는 <strong>TXT 다운로드</strong> 버튼을 사용해 YouTube 주소 목록을 확보합니다.
+              각 항목은
+              <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">https://www.youtube.com/watch?v=&lt;videoId&gt;</code>
+              형식으로 내보냅니다.
+            </li>
+            <li>
+              Tkinter 프로그램을 실행한 뒤 상단의 “유튜브 URL” 입력 영역에 복사한 주소들을 붙여넣습니다.
+              필요 시 <strong>쿠키 선택</strong> 버튼으로 인증 쿠키를 연결하고, <strong>추출 시작</strong>을 눌러 자막을 내려받습니다.
+              프로그램 코드는 API Key 설정, 자막 정제(<code>clean_vtt</code>) 및 파일 저장 경로(<code>추출</code> 폴더) 설정을 이미 포함하고 있습니다.
+            </li>
+            <li>
+              추출이 끝나면 생성된 TXT 파일을 검토한 뒤, 공장 결과 탭의 <strong>임시글 전환</strong> 기능을 이용해 새 이슈 등록으로 이어가거나 JSON/Threads 요약 복사를 활용합니다.
+            </li>
+          </ol>
+          <p>
+            위 과정을 반복하면서 대시보드 토글(스캔/추출/변환)을 켜두면 현재 작업 단계가 Firestore에 기록되어 다른 팀원도 진행 상황을 한눈에 확인할 수 있습니다.
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function AdminFactoryPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -252,6 +307,7 @@ function AdminFactoryPage() {
   const [resultDateFrom, setResultDateFrom] = useState('');
   const [resultDateTo, setResultDateTo] = useState('');
   const [selectedResult, setSelectedResult] = useState(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -793,6 +849,51 @@ function AdminFactoryPage() {
     }
   };
 
+  const buildVideoUrl = (videoId) => {
+    if (!videoId) return '';
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  };
+
+  const handleQueueCopyUrls = async () => {
+    if (queueSelection.length === 0) {
+      window.alert('먼저 큐에서 내보낼 항목을 선택하세요.');
+      return;
+    }
+    const urls = queueItems
+      .filter((item) => queueSelectionSet.has(item.id))
+      .map((item) => buildVideoUrl(item.videoId))
+      .filter(Boolean);
+    if (urls.length === 0) {
+      window.alert('선택한 항목에서 유효한 YouTube ID를 찾지 못했습니다.');
+      return;
+    }
+    try {
+      await copyToClipboard(urls.join('\n'));
+      window.alert(`${urls.length}개의 URL을 클립보드에 복사했습니다.`);
+    } catch (error) {
+      console.error('URL 복사 실패:', error);
+      window.alert('클립보드 접근 권한을 확인해주세요.');
+    }
+  };
+
+  const handleQueueDownloadUrls = () => {
+    if (queueSelection.length === 0) {
+      window.alert('먼저 큐에서 내보낼 항목을 선택하세요.');
+      return;
+    }
+    const urls = queueItems
+      .filter((item) => queueSelectionSet.has(item.id))
+      .map((item) => buildVideoUrl(item.videoId))
+      .filter(Boolean);
+    if (urls.length === 0) {
+      window.alert('선택한 항목에서 유효한 YouTube ID를 찾지 못했습니다.');
+      return;
+    }
+    const filename = `factory_queue_${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}.txt`;
+    downloadText(filename, urls.join('\n'));
+    window.alert(`${filename} 파일로 ${urls.length}개의 URL을 내려받았습니다.`);
+  };
+
   const handleTemplateChange = (themeId, field, value) => {
     setTemplates((prev) => {
       const nextItems = { ...prev.items, [themeId]: { ...(prev.items?.[themeId] ?? { prompt: '', variables: [], sampleInput: '' }), [field]: value } };
@@ -991,6 +1092,13 @@ function AdminFactoryPage() {
                 {key === 'convert' && '지금 변환(JSON)'}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              className="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+            >
+              사용 가이드
+            </button>
           </div>
         </div>
         {dashboardError && <p className="mt-4 text-sm text-rose-500">{dashboardError}</p>}
@@ -1389,6 +1497,20 @@ function AdminFactoryPage() {
                       </option>
                     ))}
                   </select>
+                  <button
+                    type="button"
+                    onClick={handleQueueCopyUrls}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    URL 복사
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleQueueDownloadUrls}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    TXT 다운로드
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleQueueAction('extract')}
@@ -1908,6 +2030,7 @@ function AdminFactoryPage() {
       </div>
 
       <ResultTranscriptModal result={selectedResult} onClose={() => setSelectedResult(null)} />
+      <FactoryHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </section>
   );
 }
