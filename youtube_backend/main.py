@@ -1,9 +1,11 @@
 import os
 import re
 import json
+import time
+import hashlib
 import tempfile
 import datetime as dt
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -73,6 +75,15 @@ def _build_ydl_opts(base_opts: Optional[dict] = None) -> dict:
 
 
 _CUE_RE = re.compile(r"^\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}")
+_COOKIE_LINE_RE = re.compile(
+    r"^(?P<domain>\S+)\s+"
+    r"(?P<flag>\S+)\s+"
+    r"(?P<path>\S+)\s+"
+    r"(?P<secure>\S+)\s+"
+    r"(?P<expiry>-?\d+)\s+"
+    r"(?P<name>[^\s]+)\s+"
+    r"(?P<value>.*)$"
+)
 
 
 def clean_vtt(vtt_text: str) -> str:
@@ -127,7 +138,9 @@ def _format_upload_datestr_iso8601_to_pair(iso_str: str):
         return "", ""
 
 
-def _extract_text_and_title(youtube_url: str, cookie_path: str = ""):
+def _extract_text_and_title(
+    youtube_url: str, cookie_path: str = "", http_headers: Optional[Dict[str, str]] = None
+):
     opts = {
         "skip_download": True,
         "writesubtitles": True,
@@ -135,7 +148,7 @@ def _extract_text_and_title(youtube_url: str, cookie_path: str = ""):
         "quiet": True,
         "forcejson": True,
         "simulate": True,
-        "http_headers": {"User-Agent": "Mozilla/5.0"},
+        "http_headers": http_headers or {"User-Agent": "Mozilla/5.0"},
     }
     if cookie_path and os.path.exists(cookie_path):
         opts["cookiefile"] = cookie_path
@@ -342,6 +355,121 @@ def remove_channels_from_store(ids: List[str]):
     save_channel_store(data)
 
 
+def _ensure_netscape_cookie_text(cookie_text: str) -> str:
+    """쿠키 텍스트가 Netscape 포맷을 따르도록 헤더 및 구분자를 보강한다."""
+
+    if not cookie_text.strip():
+        return ""
+
+    normalized = cookie_text.replace("\r\n", "\n").replace("\r", "\n")
+    raw_lines = normalized.split("\n")
+
+    header = "# Netscape HTTP Cookie File"
+    output_lines: List[str] = [header]
+
+    for raw_line in raw_lines:
+        if not raw_line:
+            continue
+        if raw_line.startswith("# Netscape"):
+            continue
+        stripped = raw_line.rstrip()
+        if stripped.startswith("#") and not stripped.startswith("#HttpOnly_"):
+            output_lines.append(stripped)
+            continue
+        parsed = _split_cookie_line(stripped)
+        if not parsed:
+            output_lines.append(stripped)
+            continue
+        domain, flag, path, secure, expiry, name, value = parsed
+        http_only_prefix = ""
+        if domain.startswith("#HttpOnly_"):
+            http_only_prefix = "#HttpOnly_"
+            domain = domain[len("#HttpOnly_"):]
+        normalized_line = "\t".join(
+            [
+                f"{http_only_prefix}{domain.strip()}",
+                flag.strip(),
+                path.strip(),
+                secure.strip(),
+                expiry.strip(),
+                name.strip(),
+                value.strip(),
+            ]
+        )
+        output_lines.append(normalized_line)
+
+    if output_lines[-1] != "":
+        output_lines.append("")
+    return "\n".join(output_lines)
+
+
+def _split_cookie_line(line: str) -> Optional[Tuple[str, str, str, str, str, str, str]]:
+    http_only_prefix = ""
+    working = line.strip()
+    if not working:
+        return None
+    if working.startswith("#HttpOnly_"):
+        http_only_prefix = "#HttpOnly_"
+        working = working[len("#HttpOnly_"):]
+
+    parts = working.split("\t")
+    if len(parts) < 7:
+        match = _COOKIE_LINE_RE.match(working)
+        if match:
+            parts = [
+                match.group("domain"),
+                match.group("flag"),
+                match.group("path"),
+                match.group("secure"),
+                match.group("expiry"),
+                match.group("name"),
+                match.group("value"),
+            ]
+        elif "=" in working and not working.startswith("#"):
+            name, value = working.split("=", 1)
+            parts = [".youtube.com", "TRUE", "/", "TRUE", "0", name.strip(), value.strip()]
+        else:
+            return None
+
+    if len(parts) > 7:
+        parts = parts[:6] + ["\t".join(parts[6:])]
+
+    domain = parts[0].strip()
+    if http_only_prefix:
+        domain = f"{http_only_prefix}{domain}"
+    parts = [domain] + [p.strip() if idx < 6 else p for idx, p in enumerate(parts[1:], start=1)]
+    if len(parts) < 7:
+        return None
+    return tuple(parts[:7])  # type: ignore[return-value]
+
+
+def _extract_cookie_map(cookie_text: str) -> Dict[str, str]:
+    cookies: Dict[str, str] = {}
+    normalized = cookie_text.replace("\r\n", "\n").replace("\r", "\n")
+    for raw_line in normalized.split("\n"):
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#") and not stripped.startswith("#HttpOnly_"):
+            continue
+        parsed = _split_cookie_line(raw_line)
+        if not parsed:
+            continue
+        _, _, _, _, _, name, value = parsed
+        cookies[name] = value
+    return cookies
+
+
+def _build_sapisidhash_header(cookies: Dict[str, str], origin: str = "https://www.youtube.com") -> Optional[str]:
+    sapisid = cookies.get("SAPISID") or cookies.get("__Secure-3PAPISID")
+    if not sapisid:
+        return None
+    timestamp = str(int(time.time()))
+    digest_src = " ".join([timestamp, sapisid, origin])
+    digest = hashlib.sha1(digest_src.encode("utf-8")).hexdigest()
+    return f"SAPISIDHASH {timestamp}_{digest}"
+
+
 class ExtractReq(BaseModel):
     urls: List[str] = Field(default_factory=list)
     cookie_text: Optional[str] = Field(default=None, description="Netscape 쿠키 텍스트")
@@ -392,9 +520,24 @@ def api_extract(req: ExtractReq):
 
     cookie_text = (req.cookie_text or "").strip() or DEFAULT_COOKIE_TEXT
     cookie_path = ""
+    http_headers: Dict[str, str] = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.youtube.com/",
+    }
     tmp_file = None
     try:
         if cookie_text:
+            cookie_text = _ensure_netscape_cookie_text(cookie_text)
+            cookies = _extract_cookie_map(cookie_text)
+            auth_header = _build_sapisidhash_header(cookies)
+            if auth_header:
+                http_headers["Authorization"] = auth_header
+                http_headers.setdefault("Origin", "https://www.youtube.com")
+                http_headers.setdefault("X-Origin", "https://www.youtube.com")
+                http_headers.setdefault("X-Youtube-Client-Name", "1")
+                http_headers.setdefault("X-Youtube-Client-Version", "2.20240501.01.00")
             tmp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8", suffix=".txt")
             tmp_file.write(cookie_text)
             tmp_file.flush()
@@ -404,7 +547,9 @@ def api_extract(req: ExtractReq):
         results: List[ExtractItem] = []
         for url in req.urls:
             try:
-                text, title = _extract_text_and_title(url, cookie_path=cookie_path)
+                text, title = _extract_text_and_title(
+                    url, cookie_path=cookie_path, http_headers=dict(http_headers)
+                )
                 filename = sanitize_filename(title) + ".txt"
                 if text:
                     results.append(ExtractItem(url=url, title=title, filename=filename, text=text))
