@@ -4,7 +4,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { THEME_CONFIG, getThemeById, getThemeLabel } from '../../constants/themeConfig.js';
-import { YOUTUBE_API_KEY } from '../../config.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import {
   addFactoryQueueItems,
@@ -31,8 +30,10 @@ import {
   updateFactoryQueueItems
 } from '../../firebaseClient.js';
 import { scanFactoryChannels } from '../../utils/factoryScanner.js';
+import FactorySearchTools from '../../components/factory/FactorySearchTools.jsx';
 
 const TAB_ITEMS = [
+  { id: 'tools', label: '키워드 검색/자막 추출' },
   { id: 'explorer', label: '탐색 (최신 영상 검색)' },
   { id: 'queue', label: '큐 (대기열)' },
   { id: 'templates', label: '템플릿' },
@@ -227,7 +228,7 @@ function AdminFactoryPage() {
   const [selectedThemeId, setSelectedThemeId] = useState(() => THEME_CONFIG[0]?.id ?? 'policy');
   const [templateThemeId, setTemplateThemeId] = useState(() => THEME_CONFIG[0]?.id ?? 'policy');
   const [selectedGroupId, setSelectedGroupId] = useState('');
-  const [activeTab, setActiveTab] = useState('explorer');
+  const [activeTab, setActiveTab] = useState('tools');
 
   const [explorerItems, setExplorerItems] = useState([]);
   const [explorerLoading, setExplorerLoading] = useState(false);
@@ -747,12 +748,6 @@ function AdminFactoryPage() {
 
   const handleManualScan = async () => {
     if (!dashboard) return;
-    if (!YOUTUBE_API_KEY) {
-      const message = 'YouTube API 키가 설정되지 않았습니다. Netlify/Vite 환경 변수 VITE_YOUTUBE_API_KEY를 확인하세요.';
-      setScanStatus({ type: 'error', message });
-      window.alert(message);
-      return;
-    }
     if (allActiveChannels.length === 0) {
       const message = '활성화된 채널이 없습니다. 채널 구성에서 "활성" 체크를 확인하세요.';
       setScanStatus({ type: 'error', message });
@@ -766,7 +761,6 @@ function AdminFactoryPage() {
     setScanRunning(true);
     try {
       const { discovered, errors } = await scanFactoryChannels({
-        apiKey: YOUTUBE_API_KEY,
         channels: allActiveChannels,
         fallbackPublishedAfter: dashboard.summary?.lastScanAt ?? null,
         maxResultsPerChannel: 5
@@ -1376,6 +1370,8 @@ function AdminFactoryPage() {
               </button>
             ))}
           </nav>
+
+          {activeTab === 'tools' && <FactorySearchTools />}
 
           {activeTab === 'explorer' && (
             <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
