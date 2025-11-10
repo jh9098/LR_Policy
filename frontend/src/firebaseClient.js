@@ -1307,6 +1307,58 @@ export async function updateFactoryExplorerItem(id, updates = {}) {
   return normalizeFactoryExplorerDoc(snap);
 }
 
+export async function upsertFactoryExplorerItems(items = [], { discoveredBy = '' } = {}) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { created: 0, updated: 0 };
+  }
+  let created = 0;
+  let updated = 0;
+  await Promise.all(
+    items.map(async (item) => {
+      const docId = typeof item.id === 'string' && item.id ? item.id : item.videoId;
+      if (!docId) return;
+      const ref = doc(db, FACTORY_EXPLORER_COLLECTION, docId);
+      const snap = await getDoc(ref);
+      const existed = snap.exists();
+      const existingData = existed ? snap.data() : {};
+      const baseMeta =
+        existingData && typeof existingData.meta === 'object' && existingData.meta ? existingData.meta : {};
+      const payload = {
+        themeId: typeof item.themeId === 'string' ? item.themeId : existingData?.themeId || '',
+        themeLabel: typeof item.themeLabel === 'string' ? item.themeLabel : existingData?.themeLabel || '',
+        groupId: typeof item.groupId === 'string' ? item.groupId : existingData?.groupId || '',
+        groupName: typeof item.groupName === 'string' ? item.groupName : existingData?.groupName || '',
+        channelId: typeof item.channelId === 'string' ? item.channelId : existingData?.channelId || '',
+        channelName: typeof item.channelName === 'string' ? item.channelName : existingData?.channelName || '',
+        videoId: typeof item.videoId === 'string' ? item.videoId : existingData?.videoId || docId,
+        videoTitle: typeof item.videoTitle === 'string' ? item.videoTitle : existingData?.videoTitle || '',
+        thumbnail: typeof item.thumbnail === 'string' ? item.thumbnail : existingData?.thumbnail || '',
+        durationSeconds: ensureNonNegativeInteger(item.durationSeconds, existingData?.durationSeconds ?? 0),
+        language: typeof item.language === 'string' ? item.language : existingData?.language || '',
+        hasCaptions: item.hasCaptions !== undefined ? Boolean(item.hasCaptions) : Boolean(existingData?.hasCaptions),
+        updatedAt: serverTimestamp(),
+        meta: {
+          ...baseMeta,
+          ...(typeof item.meta === 'object' && item.meta ? item.meta : {}),
+          lastDiscoveredBy: discoveredBy
+        }
+      };
+      if (item.publishedAt instanceof Date) {
+        payload.publishedAt = Timestamp.fromDate(item.publishedAt);
+      } else if (item.publishedAt) {
+        payload.publishedAt = item.publishedAt;
+      }
+      if (!existed) {
+        payload.discoveredAt = serverTimestamp();
+      }
+      await setDoc(ref, payload, { merge: true });
+      if (existed) updated += 1;
+      else created += 1;
+    })
+  );
+  return { created, updated };
+}
+
 export async function addFactoryQueueItems(items = [], { requestedBy = '' } = {}) {
   if (!Array.isArray(items) || items.length === 0) {
     return [];

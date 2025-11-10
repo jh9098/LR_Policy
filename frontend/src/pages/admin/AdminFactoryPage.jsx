@@ -4,6 +4,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { THEME_CONFIG, getThemeById, getThemeLabel } from '../../constants/themeConfig.js';
+import { YOUTUBE_API_KEY } from '../../config.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import {
   addFactoryQueueItems,
@@ -19,6 +20,7 @@ import {
   getFactorySchedules,
   getFactoryTemplates,
   getFactoryThemeConfigs,
+  upsertFactoryExplorerItems,
   saveFactoryBalanceSettings,
   saveFactorySafetyOptions,
   saveFactorySchedules,
@@ -28,6 +30,7 @@ import {
   updateFactoryExplorerItem,
   updateFactoryQueueItems
 } from '../../firebaseClient.js';
+import { scanFactoryChannels } from '../../utils/factoryScanner.js';
 
 const TAB_ITEMS = [
   { id: 'explorer', label: '탐색 (최신 영상 검색)' },
@@ -263,6 +266,8 @@ function AdminFactoryPage() {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
+  const [scanRunning, setScanRunning] = useState(false);
+  const [scanStatus, setScanStatus] = useState({ type: '', message: '' });
 
   useEffect(() => {
     let mounted = true;
@@ -472,6 +477,50 @@ function AdminFactoryPage() {
     });
     return channels;
   }, [themeGroups]);
+
+  const allActiveChannels = useMemo(() => {
+    const items = [];
+    Object.entries(themeConfigs || {}).forEach(([themeId, theme]) => {
+      const themeLabel = getThemeLabel(themeId);
+      ensureArray(theme?.groups).forEach((group) => {
+        const baseGroupName = group.name || themeLabel || themeId;
+        ensureArray(group.channels).forEach((channel) => {
+          if (channel?.id && channel.active !== false) {
+            items.push({
+              themeId,
+              themeLabel: themeLabel || themeId,
+              groupId: group.id || '',
+              groupName: baseGroupName,
+              channelId: channel.id,
+              channelName: channel.name || channel.id,
+              priority: channel.priority || '중간',
+              intervalMinutes: channel.intervalMinutes,
+              lastSyncedAt: channel.lastSyncedAt
+            });
+          }
+        });
+        ensureArray(group.children).forEach((child) => {
+          const childName = child.name || baseGroupName;
+          ensureArray(child.channels).forEach((channel) => {
+            if (channel?.id && channel.active !== false) {
+              items.push({
+                themeId,
+                themeLabel: themeLabel || themeId,
+                groupId: group.id || '',
+                groupName: childName,
+                channelId: channel.id,
+                channelName: channel.name || channel.id,
+                priority: channel.priority || '중간',
+                intervalMinutes: channel.intervalMinutes,
+                lastSyncedAt: channel.lastSyncedAt
+              });
+            }
+          });
+        });
+      });
+    });
+    return items;
+  }, [themeConfigs]);
 
   const filteredExplorerItems = useMemo(() => {
     return explorerItems.filter((item) => {
@@ -696,8 +745,88 @@ function AdminFactoryPage() {
     }
   };
 
+  const handleManualScan = async () => {
+    if (!dashboard) return;
+    if (!YOUTUBE_API_KEY) {
+      const message = 'YouTube API 키가 설정되지 않았습니다. Netlify/Vite 환경 변수 VITE_YOUTUBE_API_KEY를 확인하세요.';
+      setScanStatus({ type: 'error', message });
+      window.alert(message);
+      return;
+    }
+    if (allActiveChannels.length === 0) {
+      const message = '활성화된 채널이 없습니다. 채널 구성에서 "활성" 체크를 확인하세요.';
+      setScanStatus({ type: 'error', message });
+      window.alert(message);
+      return;
+    }
+    setDashboardError('');
+    setExplorerError('');
+    setScanStatus({ type: 'info', message: 'YouTube에서 최신 영상을 불러오는 중입니다...' });
+    setDashboardSaving(true);
+    setScanRunning(true);
+    try {
+      const { discovered, errors } = await scanFactoryChannels({
+        apiKey: YOUTUBE_API_KEY,
+        channels: allActiveChannels,
+        fallbackPublishedAfter: dashboard.summary?.lastScanAt ?? null,
+        maxResultsPerChannel: 5
+      });
+      let createdCount = 0;
+      let updatedCount = 0;
+      if (discovered.length > 0) {
+        const writeResult = await upsertFactoryExplorerItems(discovered, { discoveredBy: updatedBy });
+        createdCount = writeResult?.created ?? 0;
+        updatedCount = writeResult?.updated ?? 0;
+        if (createdCount > 0 || updatedCount > 0) {
+          setExplorerLoading(true);
+          try {
+            const refreshed = await getFactoryExplorerItems({ limitCount: 120 });
+            setExplorerItems(refreshed);
+          } catch (refreshError) {
+            console.error('탐색 목록 새로고침 실패:', refreshError);
+            setExplorerError('탐색 목록을 새로고침하지 못했습니다.');
+          } finally {
+            setExplorerLoading(false);
+          }
+        }
+      }
+      const now = new Date();
+      const previousNewVideos = Number(dashboard?.summary?.newVideosToday ?? 0);
+      const nextSummary = {
+        ...dashboard.summary,
+        totalChannels: allActiveChannels.length,
+        newVideosToday: previousNewVideos + createdCount,
+        lastScanAt: now
+      };
+      const updatedDashboard = await updateFactoryDashboard({
+        summary: nextSummary,
+        toggles: { ...dashboard.toggles, scan: false },
+        updatedBy
+      });
+      setDashboard(updatedDashboard);
+      const baseMessage = `스캔 완료: 신규 영상 ${createdCount}건${updatedCount ? `, 갱신 ${updatedCount}건` : ''}.`;
+      const errorSuffix = errors.length ? ` 오류 ${errors.length}건(자세한 내용은 콘솔 참조).` : '';
+      setScanStatus({ type: errors.length ? 'warning' : 'success', message: `${baseMessage}${errorSuffix}` });
+      if (errors.length > 0) {
+        console.warn('채널 스캔 오류', errors);
+      }
+    } catch (error) {
+      console.error('수동 스캔 실패:', error);
+      const message = error.message || '수동 스캔에 실패했습니다. 네트워크와 API 키를 확인하세요.';
+      setScanStatus({ type: 'error', message });
+      setDashboardError('수동 스캔에 실패했습니다. 네트워크 또는 API 키를 확인하세요.');
+    } finally {
+      setDashboardSaving(false);
+      setScanRunning(false);
+    }
+  };
+
   const handleDashboardToggle = async (key) => {
     if (!dashboard) return;
+    if (key === 'scan') {
+      await handleManualScan();
+      return;
+    }
     const nextToggles = { ...dashboard.toggles, [key]: !dashboard.toggles[key] };
     try {
       setDashboardSaving(true);
@@ -986,7 +1115,7 @@ function AdminFactoryPage() {
                 }`}
                 disabled={dashboardSaving}
               >
-                {key === 'scan' && '지금 스캔'}
+                {key === 'scan' && (scanRunning ? '스캔 중...' : '지금 스캔')}
                 {key === 'extract' && '지금 추출'}
                 {key === 'convert' && '지금 변환(JSON)'}
               </button>
@@ -994,6 +1123,21 @@ function AdminFactoryPage() {
           </div>
         </div>
         {dashboardError && <p className="mt-4 text-sm text-rose-500">{dashboardError}</p>}
+        {scanStatus.message && (
+          <p
+            className={`mt-2 text-sm ${
+              scanStatus.type === 'error'
+                ? 'text-rose-500'
+                : scanStatus.type === 'success'
+                  ? 'text-emerald-600'
+                  : scanStatus.type === 'warning'
+                    ? 'text-amber-600'
+                    : 'text-slate-500'
+            }`}
+          >
+            {scanStatus.message}
+          </p>
+        )}
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {summaryMetrics.map((metric) => {
             const toneClass = METRIC_TONE_STYLES[metric.tone] ?? METRIC_TONE_STYLES.default;
