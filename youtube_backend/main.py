@@ -21,9 +21,35 @@ except Exception:  # pragma: no cover - google client가 설치되지 않은 로
 
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 DEFAULT_COOKIE_TEXT = os.environ.get("YOUTUBE_COOKIE_TEXT", "").strip()
-ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
-if not ALLOWED_ORIGINS:
+def _normalize_origin(origin: str) -> str:
+    return origin.strip().rstrip("/")
+
+
+_raw_allowed_origins = [
+    _normalize_origin(origin)
+    for origin in os.environ.get("ALLOWED_ORIGINS", "*").split(",")
+    if origin.strip()
+]
+
+# 기본적으로 운영 중인 Netlify/Render 도메인과 로컬 개발 주소를 허용한다.
+_default_allowed_origins = {
+    "http://localhost:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:4173",
+    "https://lrissues.netlify.app",
+    "https://www.lrissues.netlify.app",
+    "https://lr-policy.onrender.com",
+    "https://infoall.netlify.app",
+    "https://www.infoall.netlify.app",
+}
+
+if not _raw_allowed_origins:
     ALLOWED_ORIGINS = ["*"]
+elif "*" in _raw_allowed_origins:
+    ALLOWED_ORIGINS = ["*"]
+else:
+    ALLOWED_ORIGINS = sorted(_default_allowed_origins | set(_raw_allowed_origins))
 
 DATA_DIR = "data"
 CHANNEL_STORE_PATH = os.path.join(DATA_DIR, "channels.json")

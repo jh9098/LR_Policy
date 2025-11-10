@@ -23,7 +23,9 @@ const defaultAllowedOrigins = [
   'http://127.0.0.1:4173',
   'https://lrissues.netlify.app',
   'https://www.lrissues.netlify.app',
-  'https://lr-policy.onrender.com'
+  'https://lr-policy.onrender.com',
+  'https://infoall.netlify.app',
+  'https://www.infoall.netlify.app'
 ];
 
 const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || '')
