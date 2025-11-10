@@ -2,15 +2,19 @@ import os
 import re
 import json
 import time
+import uuid
 import hashlib
-import tempfile
 import datetime as dt
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import Body, FastAPI, HTTPException
+import urllib.error
+import urllib.request
+
+from fastapi import Body, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import yt_dlp
+from yt_dlp.utils import DownloadError
 
 try:
     from googleapiclient.discovery import build
@@ -53,7 +57,17 @@ else:
 
 DATA_DIR = "data"
 CHANNEL_STORE_PATH = os.path.join(DATA_DIR, "channels.json")
+JOB_STORE_DIR = os.path.join(DATA_DIR, "caption_jobs")
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(JOB_STORE_DIR, exist_ok=True)
+
+CAPTION_WORKFLOW_REPO = os.environ.get("CAPTION_WORKFLOW_REPO", "").strip()
+CAPTION_WORKFLOW_FILE = os.environ.get("CAPTION_WORKFLOW_FILE", "").strip()
+CAPTION_WORKFLOW_REF = os.environ.get("CAPTION_WORKFLOW_REF", "main").strip() or "main"
+CAPTION_WORKFLOW_TOKEN = os.environ.get("CAPTION_WORKFLOW_TOKEN", "").strip()
+CAPTION_WORKFLOW_BASE_URL = os.environ.get("CAPTION_JOB_BASE_URL", "").strip()
+CAPTION_WORKFLOW_RUNNER_LABELS = os.environ.get("CAPTION_WORKFLOW_RUNNER_LABELS", "").strip()
+CAPTION_INTERNAL_JOB_TOKEN = os.environ.get("CAPTION_JOB_TOKEN", "").strip()
 
 app = FastAPI(title="YouTube Search & Caption API", version="1.1.0")
 app.add_middleware(
@@ -79,7 +93,11 @@ class QuietLogger:
         print(msg)
 
 
-def _build_ydl_opts(base_opts: Optional[dict] = None) -> dict:
+def _build_ydl_opts(
+    base_opts: Optional[dict] = None,
+    *,
+    disable_adaptive_formats: bool = True,
+) -> dict:
     ydl_opts = {
         "skip_download": True,
         "writesubtitles": True,
@@ -90,8 +108,11 @@ def _build_ydl_opts(base_opts: Optional[dict] = None) -> dict:
         "forcejson": True,
         "simulate": True,
         "http_headers": {"User-Agent": "Mozilla/5.0"},
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"], "skip": ["dash", "hls"]}},
     }
+    extractor_args: Dict[str, Any] = {"youtube": {"player_client": ["android", "ios"]}}
+    if disable_adaptive_formats:
+        extractor_args["youtube"]["skip"] = ["dash", "hls"]
+    ydl_opts["extractor_args"] = extractor_args
     if base_opts:
         ydl_opts.update(base_opts)
     proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or ""
@@ -134,6 +155,75 @@ def sanitize_filename(name: str, max_len: int = 150) -> str:
     return (name[:max_len].rstrip() or "video")
 
 
+def _job_file_path(job_id: str) -> str:
+    return os.path.join(JOB_STORE_DIR, f"{job_id}.json")
+
+
+def _load_job(job_id: str) -> Optional[Dict[str, Any]]:
+    path = _job_file_path(job_id)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return None
+
+
+def _save_job(job: Dict[str, Any]):
+    path = _job_file_path(job.get("job_id", ""))
+    if not path:
+        raise RuntimeError("잘못된 작업 ID")
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as file:
+        json.dump(job, file, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
+
+
+def _require_internal_token(token: str):
+    if not CAPTION_INTERNAL_JOB_TOKEN:
+        raise HTTPException(500, "CAPTION_JOB_TOKEN 환경변수 미설정")
+    if token != CAPTION_INTERNAL_JOB_TOKEN:
+        raise HTTPException(403, "작업 토큰 불일치")
+
+
+def _dispatch_caption_workflow(job_id: str, *, runner_labels: Optional[str] = None):
+    if not CAPTION_WORKFLOW_REPO or not CAPTION_WORKFLOW_FILE or not CAPTION_WORKFLOW_TOKEN:
+        raise RuntimeError("CAPTION_WORKFLOW 환경변수 미설정")
+    if not CAPTION_WORKFLOW_BASE_URL:
+        raise RuntimeError("CAPTION_JOB_BASE_URL 환경변수 미설정")
+    url = (
+        f"https://api.github.com/repos/{CAPTION_WORKFLOW_REPO}/actions/workflows/"
+        f"{CAPTION_WORKFLOW_FILE}/dispatches"
+    )
+    headers = {
+        "Authorization": f"Bearer {CAPTION_WORKFLOW_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "lr-policy-backend",
+    }
+    inputs: Dict[str, str] = {
+        "job_id": job_id,
+        "base_url": CAPTION_WORKFLOW_BASE_URL,
+    }
+    labels = runner_labels or CAPTION_WORKFLOW_RUNNER_LABELS
+    if labels:
+        inputs["runner_labels"] = labels
+    payload = json.dumps({"ref": CAPTION_WORKFLOW_REF, "inputs": inputs}).encode("utf-8")
+    request = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request) as response:
+            if response.status not in (200, 201, 204):
+                raise RuntimeError(f"GitHub Actions 응답 오류: {response.status}")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore") if hasattr(exc, "read") else str(exc)
+        raise RuntimeError(f"GitHub Actions 트리거 실패: {exc.code} {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"GitHub Actions 호출 실패: {exc.reason}") from exc
+
+
 def _fmt_hhmmss(total_sec: int) -> str:
     h = total_sec // 3600
     m = (total_sec % 3600) // 60
@@ -165,7 +255,10 @@ def _format_upload_datestr_iso8601_to_pair(iso_str: str):
 
 
 def _extract_text_and_title(
-    youtube_url: str, cookie_path: str = "", http_headers: Optional[Dict[str, str]] = None
+    youtube_url: str,
+    *,
+    cookie_path: str = "",
+    http_headers: Optional[Dict[str, str]] = None,
 ):
     opts = {
         "skip_download": True,
@@ -178,29 +271,47 @@ def _extract_text_and_title(
     }
     if cookie_path and os.path.exists(cookie_path):
         opts["cookiefile"] = cookie_path
-    ydl_opts = _build_ydl_opts(opts)
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=False)
-        title = info.get("title") or "video"
-        subs = info.get("subtitles") or {}
-        auto_subs = info.get("automatic_captions") or {}
 
-        def get_vtt(sub_dict, preferred=("ko", "ko-KR", "ko_KR", "en")):
-            for lang in preferred:
-                if lang in sub_dict:
-                    for fmt in sub_dict[lang]:
-                        if fmt.get("ext") == "vtt":
-                            return ydl.urlopen(fmt["url"]).read().decode("utf-8")
-            for _, formats in sub_dict.items():
-                for fmt in formats:
-                    if fmt.get("ext") == "vtt":
-                        return ydl.urlopen(fmt["url"]).read().decode("utf-8")
-            return None
+    last_error: Optional[Exception] = None
+    for disable_adaptive in (True, False):
+        ydl_opts = _build_ydl_opts(opts, disable_adaptive_formats=disable_adaptive)
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=False)
+                title = info.get("title") or "video"
+                subs = info.get("subtitles") or {}
+                auto_subs = info.get("automatic_captions") or {}
 
-        vtt_text = get_vtt(subs) or get_vtt(auto_subs)
-        if not vtt_text:
-            return None, title
-        return clean_vtt(vtt_text), title
+                def get_vtt(sub_dict, preferred=("ko", "ko-KR", "ko_KR", "en")):
+                    for lang in preferred:
+                        if lang in sub_dict:
+                            for fmt in sub_dict[lang]:
+                                if fmt.get("ext") == "vtt":
+                                    return ydl.urlopen(fmt["url"]).read().decode("utf-8")
+                    for _, formats in sub_dict.items():
+                        for fmt in formats:
+                            if fmt.get("ext") == "vtt":
+                                return ydl.urlopen(fmt["url"]).read().decode("utf-8")
+                    return None
+
+                vtt_text = get_vtt(subs) or get_vtt(auto_subs)
+                if not vtt_text:
+                    return None, title
+                return clean_vtt(vtt_text), title
+        except DownloadError as exc:
+            last_error = exc
+            message = str(exc)
+            if "Requested format is not available" in message or "This video is not available" in message:
+                # 재시도: DASH/HLS 차단 해제 후 한 번 더 시도한다.
+                continue
+            raise
+        except Exception as exc:  # pragma: no cover - 네트워크 의존
+            last_error = exc
+            raise
+
+    if last_error:
+        raise last_error
+    raise RuntimeError("자막 추출 실패: 원인을 확인할 수 없습니다.")
 
 
 _CHANNEL_ID_RE = re.compile(r"^UC[0-9A-Za-z_-]{22,}$")
@@ -509,6 +620,28 @@ class ExtractItem(BaseModel):
     warning: Optional[str] = None
 
 
+class ExtractJobResponse(BaseModel):
+    job_id: str
+    status: str
+    queued_urls: List[str]
+    workflow_url: Optional[str] = None
+    message: Optional[str] = None
+
+
+class ExtractJobStatus(BaseModel):
+    job_id: str
+    status: str
+    results: List[ExtractItem] = Field(default_factory=list)
+    error: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ExtractJobCompleteReq(BaseModel):
+    status: str
+    results: List[ExtractItem] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
 class SearchReq(BaseModel):
     keywords: List[str] = Field(default_factory=list)
     limit: int = 50
@@ -539,57 +672,130 @@ class SearchItem(BaseModel):
     has_captions: bool = False
 
 
-@app.post("/api/extract_captions", response_model=List[ExtractItem])
+@app.post("/api/extract_captions", response_model=ExtractJobResponse)
 def api_extract(req: ExtractReq):
     if not req.urls:
         raise HTTPException(400, "urls 비어있음")
 
+    if not CAPTION_WORKFLOW_REPO or not CAPTION_WORKFLOW_FILE or not CAPTION_WORKFLOW_TOKEN:
+        raise HTTPException(500, "GitHub Actions 연동 환경변수가 설정되지 않았습니다.")
+    if not CAPTION_WORKFLOW_BASE_URL:
+        raise HTTPException(500, "CAPTION_JOB_BASE_URL 환경변수가 설정되지 않았습니다.")
+    if not CAPTION_INTERNAL_JOB_TOKEN:
+        raise HTTPException(500, "CAPTION_JOB_TOKEN 환경변수가 설정되지 않았습니다.")
+
     cookie_text = (req.cookie_text or "").strip() or DEFAULT_COOKIE_TEXT
-    cookie_path = ""
     http_headers: Dict[str, str] = {
         "User-Agent": "Mozilla/5.0",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://www.youtube.com/",
     }
-    tmp_file = None
-    try:
-        if cookie_text:
-            cookie_text = _ensure_netscape_cookie_text(cookie_text)
-            cookies = _extract_cookie_map(cookie_text)
-            auth_header = _build_sapisidhash_header(cookies)
-            if auth_header:
-                http_headers["Authorization"] = auth_header
-                http_headers.setdefault("Origin", "https://www.youtube.com")
-                http_headers.setdefault("X-Origin", "https://www.youtube.com")
-                http_headers.setdefault("X-Youtube-Client-Name", "1")
-                http_headers.setdefault("X-Youtube-Client-Version", "2.20240501.01.00")
-            tmp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8", suffix=".txt")
-            tmp_file.write(cookie_text)
-            tmp_file.flush()
-            tmp_file.close()
-            cookie_path = tmp_file.name
+    if cookie_text:
+        cookie_text = _ensure_netscape_cookie_text(cookie_text)
+        cookies = _extract_cookie_map(cookie_text)
+        auth_header = _build_sapisidhash_header(cookies)
+        if auth_header:
+            http_headers["Authorization"] = auth_header
+            http_headers.setdefault("Origin", "https://www.youtube.com")
+            http_headers.setdefault("X-Origin", "https://www.youtube.com")
+            http_headers.setdefault("X-Youtube-Client-Name", "1")
+            http_headers.setdefault("X-Youtube-Client-Version", "2.20240501.01.00")
 
-        results: List[ExtractItem] = []
-        for url in req.urls:
-            try:
-                text, title = _extract_text_and_title(
-                    url, cookie_path=cookie_path, http_headers=dict(http_headers)
-                )
-                filename = sanitize_filename(title) + ".txt"
-                if text:
-                    results.append(ExtractItem(url=url, title=title, filename=filename, text=text))
-                else:
-                    results.append(ExtractItem(url=url, title=title, filename=filename, text=None, warning="자막 없음"))
-            except Exception as exc:  # pragma: no cover - 네트워크 의존
-                results.append(ExtractItem(url=url, title="(unknown)", filename="video.txt", text=None, warning=str(exc)))
-        return results
-    finally:
-        if tmp_file is not None:
-            try:
-                os.unlink(tmp_file.name)
-            except Exception:
-                pass
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    job_id = f"{now_utc.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    job_data = {
+        "job_id": job_id,
+        "status": "queued",
+        "urls": req.urls,
+        "cookie_text": cookie_text,
+        "http_headers": http_headers,
+        "created_at": now_utc.isoformat(),
+        "updated_at": now_utc.isoformat(),
+        "results": [],
+        "error": None,
+    }
+    _save_job(job_data)
+
+    try:
+        _dispatch_caption_workflow(job_id)
+    except Exception as exc:
+        job_data["status"] = "failed"
+        job_data["error"] = str(exc)
+        job_data["updated_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        _save_job(job_data)
+        raise HTTPException(500, f"GitHub Actions 트리거 실패: {exc}")
+
+    workflow_url = (
+        f"https://github.com/{CAPTION_WORKFLOW_REPO}/actions/workflows/{CAPTION_WORKFLOW_FILE}"
+        if CAPTION_WORKFLOW_REPO and CAPTION_WORKFLOW_FILE
+        else None
+    )
+    return ExtractJobResponse(
+        job_id=job_id,
+        status="queued",
+        queued_urls=req.urls,
+        workflow_url=workflow_url,
+        message="GitHub Actions에 자막 추출 작업을 요청했습니다.",
+    )
+
+
+@app.get("/api/extract_captions/{job_id}", response_model=ExtractJobStatus)
+def api_extract_status(job_id: str):
+    job = _load_job(job_id)
+    if not job:
+        raise HTTPException(404, "작업을 찾을 수 없습니다.")
+    results_data = job.get("results") or []
+    results: List[ExtractItem] = []
+    for item in results_data:
+        try:
+            results.append(ExtractItem(**item))
+        except Exception:
+            continue
+    return ExtractJobStatus(
+        job_id=job_id,
+        status=job.get("status") or "unknown",
+        results=results,
+        error=job.get("error"),
+        updated_at=job.get("updated_at"),
+    )
+
+
+@app.get("/internal/caption_jobs/{job_id}")
+def internal_get_caption_job(job_id: str, x_job_token: str = Header(default="")):
+    _require_internal_token(x_job_token)
+    job = _load_job(job_id)
+    if not job:
+        raise HTTPException(404, "작업을 찾을 수 없습니다.")
+    job["status"] = "running"
+    job["updated_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    _save_job(job)
+    return {
+        "job_id": job_id,
+        "urls": job.get("urls") or [],
+        "cookie_text": job.get("cookie_text") or "",
+        "http_headers": job.get("http_headers") or {},
+    }
+
+
+@app.post("/internal/caption_jobs/{job_id}/complete")
+def internal_complete_caption_job(
+    job_id: str,
+    payload: ExtractJobCompleteReq,
+    x_job_token: str = Header(default=""),
+):
+    _require_internal_token(x_job_token)
+    job = _load_job(job_id)
+    if not job:
+        raise HTTPException(404, "작업을 찾을 수 없습니다.")
+    now_iso = dt.datetime.now(dt.timezone.utc).isoformat()
+    job["status"] = payload.status
+    job["updated_at"] = now_iso
+    job["error"] = payload.error
+    job["results"] = [item.dict() for item in payload.results]
+    job["cookie_text"] = ""
+    _save_job(job)
+    return {"status": job["status"], "updated_at": now_iso}
 
 
 @app.post("/api/search_videos", response_model=Dict[str, List[SearchItem]])
