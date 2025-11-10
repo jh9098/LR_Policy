@@ -53,6 +53,12 @@ export function extractFactoryCaptions(payload) {
   });
 }
 
+export function getFactoryCaptionStatus(jobId) {
+  return requestFactoryApi(`/api/extract_captions/${encodeURIComponent(jobId)}`, {
+    method: 'GET'
+  });
+}
+
 export function getFactoryChannelStore() {
   return requestFactoryApi('/api/channel_store', { method: 'GET' });
 }

@@ -1,11 +1,12 @@
 // frontend/src/components/factory/FactorySearchTools.jsx
 // FastAPI 기반 YouTube 검색 & 자막 추출 도구.
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addChannelsToFactoryStore,
   extractFactoryCaptions,
   getFactoryChannelStore,
+  getFactoryCaptionStatus,
   removeChannelsFromFactoryStore,
   searchFactoryVideos
 } from '../../utils/factoryApi.js';
@@ -118,8 +119,13 @@ export default function FactorySearchTools() {
   const [extractLoading, setExtractLoading] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractResults, setExtractResults] = useState([]);
+  const [extractJobId, setExtractJobId] = useState('');
+  const [extractJobStatus, setExtractJobStatus] = useState('');
+  const [extractWorkflowUrl, setExtractWorkflowUrl] = useState('');
   const [cookieInput, setCookieInput] = useState('');
   const [showCookieGuide, setShowCookieGuide] = useState(false);
+
+  const pollTimerRef = useRef(null);
 
   const [channelStoreLoading, setChannelStoreLoading] = useState(false);
   const [channelStore, setChannelStore] = useState([]);
@@ -195,6 +201,76 @@ export default function FactorySearchTools() {
     });
     return Array.from(map.values());
   }, [searchResults]);
+
+  useEffect(() => {
+    if (!extractJobId) {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      setExtractJobStatus('');
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const status = await getFactoryCaptionStatus(extractJobId);
+        const nextStatus = status?.status || '';
+        setExtractJobStatus(nextStatus);
+        if (nextStatus === 'completed') {
+          const items = ensureArray(status?.results);
+          setExtractResults(items);
+          setExtractError('');
+          const requiresLogin = items.some((item) =>
+            (item?.warning || '').toLowerCase().includes('sign in to confirm')
+          );
+          if (requiresLogin && !cookieInput.trim()) {
+            setFeedbackMessage(
+              '구글 로그인이 필요한 영상이 있습니다. "수동 로그인" 안내에 따라 인증 쿠키를 붙여넣은 뒤 다시 시도해 주세요.'
+            );
+          } else {
+            setFeedbackMessage('자막 추출이 완료되었습니다.');
+          }
+          setExtractLoading(false);
+          setExtractJobId('');
+          return;
+        }
+        if (nextStatus === 'failed') {
+          const items = ensureArray(status?.results);
+          setExtractResults(items);
+          setExtractError(status?.error || 'GitHub Actions 작업이 실패했습니다. 로그를 확인하세요.');
+          setFeedbackMessage('');
+          setExtractLoading(false);
+          setExtractJobId('');
+          return;
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setExtractError(error.message || '작업 상태를 확인하지 못했습니다.');
+          setFeedbackMessage('');
+          setExtractLoading(false);
+          setExtractJobId('');
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        pollTimerRef.current = setTimeout(poll, 5000);
+      }
+    };
+
+    poll();
+
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [extractJobId, cookieInput]);
 
   const allVideoItems = useMemo(
     () =>
@@ -352,27 +428,33 @@ export default function FactorySearchTools() {
     try {
       setExtractError('');
       setFeedbackMessage('');
+      setExtractResults([]);
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      setExtractJobId('');
+      setExtractJobStatus('');
+      setExtractWorkflowUrl('');
       setExtractLoading(true);
       const payload = { urls };
       if (cookieInput.trim()) {
         payload.cookie_text = cookieInput;
       }
-      const result = await extractFactoryCaptions(payload);
-      setExtractResults(result);
-      const requiresLogin = result.some((item) =>
-        (item?.warning || '').toLowerCase().includes('sign in to confirm')
-      );
-      if (requiresLogin && !cookieInput.trim()) {
-        setFeedbackMessage(
-          '구글 로그인이 필요한 영상이 있습니다. 아래 "수동 로그인" 안내에 따라 인증 쿠키를 붙여넣어 주세요.'
-        );
-      } else {
-        setFeedbackMessage('자막 추출이 완료되었습니다.');
+      const response = await extractFactoryCaptions(payload);
+      if (!response?.job_id) {
+        throw new Error('작업 ID를 받지 못했습니다. GitHub Actions 구성을 확인하세요.');
       }
+      setExtractJobId(response.job_id);
+      setExtractJobStatus(response.status || 'queued');
+      setExtractWorkflowUrl(response.workflow_url || '');
+      setFeedbackMessage(
+        `${response.message || '자막 추출 작업을 요청했습니다.'} (작업 ID: ${response.job_id})`
+      );
     } catch (error) {
       setExtractError(error.message || '자막 추출에 실패했습니다.');
-    } finally {
       setExtractLoading(false);
+      setExtractJobId('');
     }
   };
 
@@ -617,6 +699,14 @@ export default function FactorySearchTools() {
           {feedbackMessage}
         </p>
       )}
+      {extractWorkflowUrl && (
+        <p className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200">
+          GitHub Actions 실행 화면:{' '}
+          <a href={extractWorkflowUrl} target="_blank" rel="noreferrer" className="underline">
+            열기
+          </a>
+        </p>
+      )}
 
       <section className="space-y-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
@@ -744,9 +834,33 @@ export default function FactorySearchTools() {
             className="rounded-md border border-indigo-500 bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600"
             disabled={extractLoading}
           >
-            {extractLoading ? '자막 추출 중...' : '자막 추출 실행'}
+            {extractLoading
+              ? `GitHub Actions 처리 중...${extractJobStatus ? ` (${extractJobStatus})` : ''}`
+              : '자막 추출 실행'}
           </button>
         </div>
+        {extractJobId && (
+          <div className="space-y-1 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200">
+            <p>
+              <strong>작업 ID:</strong> {extractJobId}
+            </p>
+            <p>
+              <strong>상태:</strong> {extractJobStatus || '대기 중'}
+            </p>
+            {extractWorkflowUrl && (
+              <p>
+                <a
+                  href={extractWorkflowUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  GitHub Actions에서 실행 현황 보기
+                </a>
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="space-y-3">
