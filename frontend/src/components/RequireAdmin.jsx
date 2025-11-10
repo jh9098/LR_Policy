@@ -65,6 +65,7 @@ export default function RequireAdmin({ children }) {
       pathname === '/admin' ||
       pathname === '/admin/new' ||
       pathname === '/admin/list' ||
+      pathname === '/admin/factory' ||
       pathname.startsWith('/admin/edit');
 
     if (!isAllowedPath) {
