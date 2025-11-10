@@ -10,6 +10,8 @@ const defaultBaseUrl = import.meta.env.DEV ? 'http://localhost:5000/api' : '/api
 export const API_BASE_URL = envBaseUrl || normalize(defaultBaseUrl);
 export const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || '';
 
+export const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || '';
+
 // Firebase Web SDK 초기화를 위해서는 다음 Vite 환경 변수를 반드시 설정해야 한다.
 // VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
 // VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID
