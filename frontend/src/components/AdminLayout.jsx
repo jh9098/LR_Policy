@@ -10,6 +10,12 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 const NAV_ITEMS = [
   { type: 'route', label: '새 글 작성', to: '/admin/new', description: 'Firestore에 새 글을 추가합니다.' },
   { type: 'route', label: '등록된 글 목록', to: '/admin/list', description: '기존 글을 검색하고 수정/삭제합니다.' },
+  {
+    type: 'route',
+    label: '유튜브 스크립트 공장',
+    to: '/admin/factory',
+    description: '테마별 스크립트 추출 공정을 제어합니다.'
+  },
   { type: 'route', label: '환경/설정', to: '/admin/settings', description: '회사소개·정책 페이지 내용을 관리합니다.' }
 ];
 
@@ -25,6 +31,12 @@ const GROUPBUY_NAV_ITEMS = [
     label: '공동구매 글 목록',
     to: '/admin/list',
     description: '등록된 공동구매 글을 확인하고 관리합니다.'
+  },
+  {
+    type: 'route',
+    label: '유튜브 스크립트 공장',
+    to: '/admin/factory',
+    description: '공동구매 채널 큐와 템플릿을 제어합니다.'
   }
 ];
 

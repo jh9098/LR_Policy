@@ -85,6 +85,18 @@ const TRENDING_SETTINGS_COLLECTION = 'appSettings';
 const TRENDING_SETTINGS_DOC_ID = 'trending';
 const SECTION_TITLES_DOC_ID = 'sectionTitles';
 
+const FACTORY_SETTINGS_COLLECTION = 'factorySettings';
+const FACTORY_DASHBOARD_DOC_ID = 'dashboard';
+const FACTORY_TEMPLATE_DOC_ID = 'templates';
+const FACTORY_SCHEDULE_DOC_ID = 'schedules';
+const FACTORY_SAFETY_DOC_ID = 'safety';
+const FACTORY_BALANCE_DOC_ID = 'balance';
+const FACTORY_THEME_COLLECTION = 'factoryThemes';
+const FACTORY_EXPLORER_COLLECTION = 'factoryExplorer';
+const FACTORY_QUEUE_COLLECTION = 'factoryQueue';
+const FACTORY_RESULTS_COLLECTION = 'factoryResults';
+const FACTORY_LOGS_COLLECTION = 'factoryLogs';
+
 const DEFAULT_TRENDING_SETTINGS = {
   minUpvotes: 5,
   withinHours: 24,
@@ -804,6 +816,729 @@ export async function searchIssuesClient(keyword, limitCount = 50) {
       .toLowerCase();
     return haystack.includes(normalizedKeyword);
   });
+}
+
+// ==============================
+// Admin Factory (YouTube Script 공정) 헬퍼
+// ==============================
+
+const DEFAULT_FACTORY_DASHBOARD = {
+  summary: {
+    totalChannels: 0,
+    newVideosToday: 0,
+    queueSize: 0,
+    successCount: 0,
+    failureCount: 0,
+    lastScanAt: null
+  },
+  toggles: {
+    scan: false,
+    extract: false,
+    convert: false
+  },
+  updatedAt: null,
+  updatedBy: ''
+};
+
+const DEFAULT_FACTORY_SCHEDULES = {
+  scanCron: '0 */6 * * *',
+  extractCron: '15 */6 * * *',
+  convertCron: '30 */6 * * *',
+  updatedAt: null,
+  updatedBy: ''
+};
+
+const DEFAULT_FACTORY_SAFETY = {
+  requireReviewBeforePublish: true,
+  dailyMaxPerChannel: 3,
+  updatedAt: null,
+  updatedBy: ''
+};
+
+const DEFAULT_FACTORY_BALANCE = {
+  progressiveWeight: 50,
+  conservativeWeight: 50,
+  autoBalanceEnabled: true,
+  updatedAt: null,
+  updatedBy: ''
+};
+
+function toDateSafe(value) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+  if (typeof value?.toDate === 'function') {
+    try {
+      return value.toDate();
+    } catch (error) {
+      console.warn('Timestamp 변환 실패:', error);
+    }
+  }
+  const parsed = new Date(value);
+  // Invalid Date 여부 검사
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
+function toIntegerSafe(value, fallback = 0) {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return fallback;
+  }
+  return Math.round(num);
+}
+
+function ensureNonNegativeInteger(value, fallback = 0) {
+  const int = toIntegerSafe(value, fallback);
+  return int < 0 ? fallback : int;
+}
+
+function parseIntervalToMinutes(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.round(value));
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const numeric = Number.parseInt(trimmed.replace(/[^0-9]/g, ''), 10);
+    if (!Number.isFinite(numeric)) {
+      return null;
+    }
+    if (trimmed.includes('일')) {
+      return numeric * 24 * 60;
+    }
+    if (trimmed.includes('시간')) {
+      return numeric * 60;
+    }
+    if (trimmed.includes('분')) {
+      return numeric;
+    }
+    return numeric;
+  }
+  return null;
+}
+
+function normalizeFactoryDashboard(data) {
+  if (!data) {
+    return { ...DEFAULT_FACTORY_DASHBOARD };
+  }
+  const summary = data.summary ?? {};
+  const toggles = data.toggles ?? {};
+  return {
+    summary: {
+      totalChannels: ensureNonNegativeInteger(summary.totalChannels, DEFAULT_FACTORY_DASHBOARD.summary.totalChannels),
+      newVideosToday: ensureNonNegativeInteger(summary.newVideosToday, DEFAULT_FACTORY_DASHBOARD.summary.newVideosToday),
+      queueSize: ensureNonNegativeInteger(summary.queueSize, DEFAULT_FACTORY_DASHBOARD.summary.queueSize),
+      successCount: ensureNonNegativeInteger(summary.successCount, DEFAULT_FACTORY_DASHBOARD.summary.successCount),
+      failureCount: ensureNonNegativeInteger(summary.failureCount, DEFAULT_FACTORY_DASHBOARD.summary.failureCount),
+      lastScanAt: toDateSafe(summary.lastScanAt)
+    },
+    toggles: {
+      scan: Boolean(toggles.scan),
+      extract: Boolean(toggles.extract),
+      convert: Boolean(toggles.convert)
+    },
+    updatedAt: toDateSafe(data.updatedAt),
+    updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : ''
+  };
+}
+
+function normalizeFactoryChannel(channel) {
+  if (!channel || typeof channel !== 'object') {
+    return {
+      id: '',
+      name: '',
+      priority: '중간',
+      intervalMinutes: 720,
+      active: true,
+      lastSyncedAt: null,
+      note: ''
+    };
+  }
+  const intervalMinutes =
+    ensureNonNegativeInteger(channel.intervalMinutes, null) ??
+    (typeof channel.intervalHours === 'number'
+      ? ensureNonNegativeInteger(channel.intervalHours * 60, 720)
+      : parseIntervalToMinutes(channel.interval) ?? 720);
+  return {
+    id: typeof channel.id === 'string' ? channel.id : '',
+    name: typeof channel.name === 'string' ? channel.name : '',
+    priority: typeof channel.priority === 'string' ? channel.priority : '중간',
+    intervalMinutes,
+    active: channel.active !== undefined ? Boolean(channel.active) : true,
+    lastSyncedAt: toDateSafe(channel.lastSyncedAt),
+    note: typeof channel.note === 'string' ? channel.note : ''
+  };
+}
+
+function normalizeFactoryChild(child) {
+  if (!child || typeof child !== 'object') {
+    return {
+      id: '',
+      name: '',
+      description: '',
+      channels: []
+    };
+  }
+  return {
+    id: typeof child.id === 'string' ? child.id : '',
+    name: typeof child.name === 'string' ? child.name : '',
+    description: typeof child.description === 'string' ? child.description : '',
+    channels: Array.isArray(child.channels) ? child.channels.map(normalizeFactoryChannel) : []
+  };
+}
+
+function normalizeFactoryThemeDoc(data) {
+  if (!data || typeof data !== 'object') {
+    return { themeId: '', groups: [], updatedAt: null, updatedBy: '' };
+  }
+  return {
+    themeId: typeof data.themeId === 'string' ? data.themeId : '',
+    groups: Array.isArray(data.groups)
+      ? data.groups.map((group) => ({
+          id: typeof group?.id === 'string' ? group.id : '',
+          name: typeof group?.name === 'string' ? group.name : '',
+          description: typeof group?.description === 'string' ? group.description : '',
+          channels: Array.isArray(group?.channels) ? group.channels.map(normalizeFactoryChannel) : [],
+          children: Array.isArray(group?.children) ? group.children.map(normalizeFactoryChild) : []
+        }))
+      : [],
+    updatedAt: toDateSafe(data.updatedAt),
+    updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : ''
+  };
+}
+
+function normalizeFactoryExplorerDoc(docSnap) {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    themeId: typeof data.themeId === 'string' ? data.themeId : '',
+    themeLabel: typeof data.themeLabel === 'string' ? data.themeLabel : '',
+    groupId: typeof data.groupId === 'string' ? data.groupId : '',
+    groupName: typeof data.groupName === 'string' ? data.groupName : '',
+    channelId: typeof data.channelId === 'string' ? data.channelId : '',
+    channelName: typeof data.channelName === 'string' ? data.channelName : '',
+    videoId: typeof data.videoId === 'string' ? data.videoId : '',
+    videoTitle: typeof data.videoTitle === 'string' ? data.videoTitle : '',
+    thumbnail: typeof data.thumbnail === 'string' ? data.thumbnail : '',
+    publishedAt: toDateSafe(data.publishedAt),
+    durationSeconds: ensureNonNegativeInteger(data.durationSeconds, 0),
+    language: typeof data.language === 'string' ? data.language : '',
+    hasCaptions: Boolean(data.hasCaptions),
+    excluded: Boolean(data.excluded),
+    flagged: Boolean(data.flagged),
+    discoveredAt: toDateSafe(data.discoveredAt),
+    meta: typeof data.meta === 'object' && data.meta ? data.meta : {}
+  };
+}
+
+function normalizeFactoryQueueDoc(docSnap) {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    themeId: typeof data.themeId === 'string' ? data.themeId : '',
+    themeLabel: typeof data.themeLabel === 'string' ? data.themeLabel : '',
+    groupId: typeof data.groupId === 'string' ? data.groupId : '',
+    groupName: typeof data.groupName === 'string' ? data.groupName : '',
+    channelId: typeof data.channelId === 'string' ? data.channelId : '',
+    channelName: typeof data.channelName === 'string' ? data.channelName : '',
+    videoId: typeof data.videoId === 'string' ? data.videoId : '',
+    videoTitle: typeof data.videoTitle === 'string' ? data.videoTitle : '',
+    publishedAt: toDateSafe(data.publishedAt),
+    priority: typeof data.priority === 'string' ? data.priority : '중간',
+    status: typeof data.status === 'string' ? data.status : 'pending',
+    errorMessage: typeof data.errorMessage === 'string' ? data.errorMessage : '',
+    requestedBy: typeof data.requestedBy === 'string' ? data.requestedBy : '',
+    createdAt: toDateSafe(data.createdAt),
+    startedAt: toDateSafe(data.startedAt),
+    updatedAt: toDateSafe(data.updatedAt),
+    completedAt: toDateSafe(data.completedAt),
+    meta: typeof data.meta === 'object' && data.meta ? data.meta : {}
+  };
+}
+
+function normalizeFactoryTemplatesDoc(data) {
+  const items = data?.items && typeof data.items === 'object' ? data.items : {};
+  const normalizedItems = {};
+  Object.entries(items).forEach(([themeId, value]) => {
+    normalizedItems[themeId] = {
+      prompt: typeof value?.prompt === 'string' ? value.prompt : '',
+      variables: Array.isArray(value?.variables)
+        ? value.variables.filter((item) => typeof item === 'string')
+        : [],
+      sampleInput: typeof value?.sampleInput === 'string' ? value.sampleInput : ''
+    };
+  });
+  return {
+    items: normalizedItems,
+    schemaPreview: typeof data?.schemaPreview === 'string' ? data.schemaPreview : '',
+    updatedAt: toDateSafe(data?.updatedAt),
+    updatedBy: typeof data?.updatedBy === 'string' ? data.updatedBy : ''
+  };
+}
+
+function normalizeFactoryResultDoc(docSnap) {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    themeId: typeof data.themeId === 'string' ? data.themeId : '',
+    themeLabel: typeof data.themeLabel === 'string' ? data.themeLabel : '',
+    groupName: typeof data.groupName === 'string' ? data.groupName : '',
+    channelId: typeof data.channelId === 'string' ? data.channelId : '',
+    channelName: typeof data.channelName === 'string' ? data.channelName : '',
+    title: typeof data.title === 'string' ? data.title : '',
+    summary: typeof data.summary === 'string' ? data.summary : '',
+    jsonLine: typeof data.jsonLine === 'string' ? data.jsonLine : '',
+    threadsSummary: typeof data.threadsSummary === 'string' ? data.threadsSummary : '',
+    transcript: typeof data.transcript === 'string' ? data.transcript : '',
+    tokens: ensureNonNegativeInteger(data.tokens, 0),
+    status: typeof data.status === 'string' ? data.status : 'success',
+    completedAt: toDateSafe(data.completedAt),
+    createdAt: toDateSafe(data.createdAt),
+    meta: typeof data.meta === 'object' && data.meta ? data.meta : {}
+  };
+}
+
+function normalizeFactoryLogDoc(docSnap) {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    level: typeof data.level === 'string' ? data.level : 'info',
+    message: typeof data.message === 'string' ? data.message : '',
+    context: typeof data.context === 'string' ? data.context : '',
+    phase: typeof data.phase === 'string' ? data.phase : '',
+    createdAt: toDateSafe(data.createdAt)
+  };
+}
+
+function normalizeFactorySchedulesDoc(data) {
+  if (!data) {
+    return { ...DEFAULT_FACTORY_SCHEDULES };
+  }
+  return {
+    scanCron: typeof data.scanCron === 'string' ? data.scanCron : DEFAULT_FACTORY_SCHEDULES.scanCron,
+    extractCron: typeof data.extractCron === 'string' ? data.extractCron : DEFAULT_FACTORY_SCHEDULES.extractCron,
+    convertCron: typeof data.convertCron === 'string' ? data.convertCron : DEFAULT_FACTORY_SCHEDULES.convertCron,
+    updatedAt: toDateSafe(data.updatedAt),
+    updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : ''
+  };
+}
+
+function normalizeFactorySafetyDoc(data) {
+  if (!data) {
+    return { ...DEFAULT_FACTORY_SAFETY };
+  }
+  return {
+    requireReviewBeforePublish:
+      data.requireReviewBeforePublish !== undefined
+        ? Boolean(data.requireReviewBeforePublish)
+        : DEFAULT_FACTORY_SAFETY.requireReviewBeforePublish,
+    dailyMaxPerChannel: ensureNonNegativeInteger(
+      data.dailyMaxPerChannel,
+      DEFAULT_FACTORY_SAFETY.dailyMaxPerChannel
+    ),
+    updatedAt: toDateSafe(data.updatedAt),
+    updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : ''
+  };
+}
+
+function normalizeFactoryBalanceDoc(data) {
+  if (!data) {
+    return { ...DEFAULT_FACTORY_BALANCE };
+  }
+  const progressiveWeight = ensureNonNegativeInteger(
+    data.progressiveWeight,
+    DEFAULT_FACTORY_BALANCE.progressiveWeight
+  );
+  const conservativeWeight = ensureNonNegativeInteger(
+    data.conservativeWeight,
+    DEFAULT_FACTORY_BALANCE.conservativeWeight
+  );
+  const sum = progressiveWeight + conservativeWeight;
+  return {
+    progressiveWeight,
+    conservativeWeight,
+    autoBalanceEnabled:
+      data.autoBalanceEnabled !== undefined
+        ? Boolean(data.autoBalanceEnabled)
+        : DEFAULT_FACTORY_BALANCE.autoBalanceEnabled,
+    updatedAt: toDateSafe(data.updatedAt),
+    updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : '',
+    totalWeight: sum > 0 ? sum : 100
+  };
+}
+
+function minutesToCronLabel(minutes) {
+  if (!minutes || minutes <= 0) {
+    return '알수없음';
+  }
+  if (minutes % (24 * 60) === 0) {
+    const days = minutes / (24 * 60);
+    return `${days}일`;
+  }
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours}시간`;
+  }
+  return `${minutes}분`;
+}
+
+export function formatFactoryInterval(minutes) {
+  return minutesToCronLabel(minutes);
+}
+
+// ------------------------------
+// Dashboard & Quick Toggles
+// ------------------------------
+
+export async function getFactoryDashboard() {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_DASHBOARD_DOC_ID);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    return { ...DEFAULT_FACTORY_DASHBOARD };
+  }
+  return normalizeFactoryDashboard(snap.data());
+}
+
+export async function updateFactoryDashboard(updates = {}) {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_DASHBOARD_DOC_ID);
+  const payload = {};
+  if (updates.summary) {
+    const summary = updates.summary;
+    payload.summary = {
+      totalChannels: ensureNonNegativeInteger(summary.totalChannels, undefined),
+      newVideosToday: ensureNonNegativeInteger(summary.newVideosToday, undefined),
+      queueSize: ensureNonNegativeInteger(summary.queueSize, undefined),
+      successCount: ensureNonNegativeInteger(summary.successCount, undefined),
+      failureCount: ensureNonNegativeInteger(summary.failureCount, undefined),
+      lastScanAt: summary.lastScanAt instanceof Date ? Timestamp.fromDate(summary.lastScanAt) : summary.lastScanAt || null
+    };
+  }
+  if (updates.toggles) {
+    payload.toggles = {
+      scan: Boolean(updates.toggles.scan),
+      extract: Boolean(updates.toggles.extract),
+      convert: Boolean(updates.toggles.convert)
+    };
+  }
+  if (updates.updatedBy) {
+    payload.updatedBy = updates.updatedBy;
+  }
+  payload.updatedAt = serverTimestamp();
+  await setDoc(ref, payload, { merge: true });
+  return getFactoryDashboard();
+}
+
+// ------------------------------
+// Theme & Channel Tree
+// ------------------------------
+
+export async function getFactoryThemeConfigs() {
+  const col = collection(db, FACTORY_THEME_COLLECTION);
+  const snap = await getDocs(col);
+  const result = {};
+  snap.forEach((docSnap) => {
+    result[docSnap.id] = normalizeFactoryThemeDoc(docSnap.data());
+  });
+  return result;
+}
+
+export async function saveFactoryThemeConfig(themeId, config, { updatedBy } = {}) {
+  if (!themeId) {
+    throw new Error('themeId가 필요합니다.');
+  }
+  const ref = doc(db, FACTORY_THEME_COLLECTION, themeId);
+  const payload = {
+    themeId,
+    groups: Array.isArray(config?.groups) ? config.groups : [],
+    updatedAt: serverTimestamp(),
+    updatedBy: updatedBy ?? ''
+  };
+  await setDoc(ref, payload, { merge: false });
+  const snap = await getDoc(ref);
+  return normalizeFactoryThemeDoc(snap.data());
+}
+
+// ------------------------------
+// Explorer 목록
+// ------------------------------
+
+export async function getFactoryExplorerItems({ limitCount = 60 } = {}) {
+  const explorerQuery = query(
+    collection(db, FACTORY_EXPLORER_COLLECTION),
+    orderBy('publishedAt', 'desc'),
+    limit(Math.max(limitCount, 20))
+  );
+  const snap = await getDocs(explorerQuery);
+  return snap.docs.map(normalizeFactoryExplorerDoc);
+}
+
+export async function updateFactoryExplorerItem(id, updates = {}) {
+  if (!id) {
+    throw new Error('Explorer 문서 id가 필요합니다.');
+  }
+  const ref = doc(db, FACTORY_EXPLORER_COLLECTION, id);
+  const payload = { ...updates };
+  if (updates.publishedAt instanceof Date) {
+    payload.publishedAt = Timestamp.fromDate(updates.publishedAt);
+  }
+  if (updates.discoveredAt instanceof Date) {
+    payload.discoveredAt = Timestamp.fromDate(updates.discoveredAt);
+  }
+  payload.updatedAt = serverTimestamp();
+  await setDoc(ref, payload, { merge: true });
+  const snap = await getDoc(ref);
+  return normalizeFactoryExplorerDoc(snap);
+}
+
+export async function addFactoryQueueItems(items = [], { requestedBy = '' } = {}) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+  const created = await Promise.all(
+    items.map(async (item) => {
+      const ref = await addDoc(collection(db, FACTORY_QUEUE_COLLECTION), {
+        themeId: item.themeId ?? '',
+        themeLabel: item.themeLabel ?? '',
+        groupId: item.groupId ?? '',
+        groupName: item.groupName ?? '',
+        channelId: item.channelId ?? '',
+        channelName: item.channelName ?? '',
+        videoId: item.videoId ?? '',
+        videoTitle: item.videoTitle ?? '',
+        publishedAt:
+          item.publishedAt instanceof Date
+            ? Timestamp.fromDate(item.publishedAt)
+            : item.publishedAt ?? null,
+        priority: item.priority ?? '중간',
+        status: item.status ?? 'pending',
+        meta: item.meta ?? {},
+        requestedBy,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      const snap = await getDoc(ref);
+      return normalizeFactoryQueueDoc(snap);
+    })
+  );
+  return created;
+}
+
+// ------------------------------
+// Queue 관리
+// ------------------------------
+
+export async function getFactoryQueueItems({ limitCount = 80 } = {}) {
+  const queueQuery = query(
+    collection(db, FACTORY_QUEUE_COLLECTION),
+    orderBy('createdAt', 'desc'),
+    limit(Math.max(limitCount, 20))
+  );
+  const snap = await getDocs(queueQuery);
+  return snap.docs.map(normalizeFactoryQueueDoc);
+}
+
+export async function updateFactoryQueueItems(ids = [], updates = {}) {
+  const validIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  if (validIds.length === 0) {
+    return [];
+  }
+  const payload = { ...updates, updatedAt: serverTimestamp() };
+  if (updates.startedAt instanceof Date) {
+    payload.startedAt = Timestamp.fromDate(updates.startedAt);
+  } else if (updates.startedAt === 'now') {
+    payload.startedAt = serverTimestamp();
+  }
+  if (updates.completedAt instanceof Date) {
+    payload.completedAt = Timestamp.fromDate(updates.completedAt);
+  } else if (updates.completedAt === 'now') {
+    payload.completedAt = serverTimestamp();
+  }
+  await Promise.all(validIds.map((id) => setDoc(doc(db, FACTORY_QUEUE_COLLECTION, id), payload, { merge: true })));
+  return getFactoryQueueItems({ limitCount: validIds.length + 20 });
+}
+
+export async function deleteFactoryQueueItems(ids = []) {
+  const validIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  await Promise.all(validIds.map((id) => deleteDoc(doc(db, FACTORY_QUEUE_COLLECTION, id))));
+  return validIds.length;
+}
+
+// ------------------------------
+// 템플릿 & 스키마
+// ------------------------------
+
+export async function getFactoryTemplates() {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_TEMPLATE_DOC_ID);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    return normalizeFactoryTemplatesDoc({});
+  }
+  return normalizeFactoryTemplatesDoc(snap.data());
+}
+
+export async function saveFactoryTemplate(themeId, template, { schemaPreview, updatedBy } = {}) {
+  if (!themeId) {
+    throw new Error('themeId가 필요합니다.');
+  }
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_TEMPLATE_DOC_ID);
+  const payload = {
+    updatedAt: serverTimestamp(),
+    updatedBy: updatedBy ?? ''
+  };
+  if (schemaPreview !== undefined) {
+    payload.schemaPreview = schemaPreview;
+  }
+  payload[`items.${themeId}`] = {
+    prompt: typeof template?.prompt === 'string' ? template.prompt : '',
+    variables: Array.isArray(template?.variables)
+      ? template.variables.filter((item) => typeof item === 'string')
+      : [],
+    sampleInput: typeof template?.sampleInput === 'string' ? template.sampleInput : ''
+  };
+  await setDoc(ref, payload, { merge: true });
+  const snap = await getDoc(ref);
+  return normalizeFactoryTemplatesDoc(snap.data());
+}
+
+// ------------------------------
+// 결과 & 로그
+// ------------------------------
+
+export async function getFactoryResults({ limitCount = 60 } = {}) {
+  const resultsQuery = query(
+    collection(db, FACTORY_RESULTS_COLLECTION),
+    orderBy('completedAt', 'desc'),
+    limit(Math.max(limitCount, 20))
+  );
+  const snap = await getDocs(resultsQuery);
+  return snap.docs.map(normalizeFactoryResultDoc);
+}
+
+export async function getFactoryLogs({ limitCount = 200 } = {}) {
+  const logsQuery = query(
+    collection(db, FACTORY_LOGS_COLLECTION),
+    orderBy('createdAt', 'desc'),
+    limit(Math.max(limitCount, 50))
+  );
+  const snap = await getDocs(logsQuery);
+  return snap.docs.map(normalizeFactoryLogDoc);
+}
+
+// ------------------------------
+// 빠른 설정 (스케줄/안전/정치균형)
+// ------------------------------
+
+export async function getFactorySchedules() {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_SCHEDULE_DOC_ID);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    return { ...DEFAULT_FACTORY_SCHEDULES };
+  }
+  return normalizeFactorySchedulesDoc(snap.data());
+}
+
+export async function saveFactorySchedules(values, { updatedBy } = {}) {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_SCHEDULE_DOC_ID);
+  await setDoc(
+    ref,
+    {
+      scanCron: typeof values?.scanCron === 'string' ? values.scanCron : DEFAULT_FACTORY_SCHEDULES.scanCron,
+      extractCron:
+        typeof values?.extractCron === 'string' ? values.extractCron : DEFAULT_FACTORY_SCHEDULES.extractCron,
+      convertCron:
+        typeof values?.convertCron === 'string' ? values.convertCron : DEFAULT_FACTORY_SCHEDULES.convertCron,
+      updatedAt: serverTimestamp(),
+      updatedBy: updatedBy ?? ''
+    },
+    { merge: true }
+  );
+  const snap = await getDoc(ref);
+  return normalizeFactorySchedulesDoc(snap.data());
+}
+
+export async function getFactorySafetyOptions() {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_SAFETY_DOC_ID);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    return { ...DEFAULT_FACTORY_SAFETY };
+  }
+  return normalizeFactorySafetyDoc(snap.data());
+}
+
+export async function saveFactorySafetyOptions(values, { updatedBy } = {}) {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_SAFETY_DOC_ID);
+  await setDoc(
+    ref,
+    {
+      requireReviewBeforePublish:
+        values?.requireReviewBeforePublish !== undefined
+          ? Boolean(values.requireReviewBeforePublish)
+          : DEFAULT_FACTORY_SAFETY.requireReviewBeforePublish,
+      dailyMaxPerChannel: ensureNonNegativeInteger(
+        values?.dailyMaxPerChannel,
+        DEFAULT_FACTORY_SAFETY.dailyMaxPerChannel
+      ),
+      updatedAt: serverTimestamp(),
+      updatedBy: updatedBy ?? ''
+    },
+    { merge: true }
+  );
+  const snap = await getDoc(ref);
+  return normalizeFactorySafetyDoc(snap.data());
+}
+
+export async function getFactoryBalanceSettings() {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_BALANCE_DOC_ID);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    return { ...DEFAULT_FACTORY_BALANCE, totalWeight: 100 };
+  }
+  return normalizeFactoryBalanceDoc(snap.data());
+}
+
+export async function saveFactoryBalanceSettings(values, { updatedBy } = {}) {
+  const ref = doc(db, FACTORY_SETTINGS_COLLECTION, FACTORY_BALANCE_DOC_ID);
+  const progressiveWeight = ensureNonNegativeInteger(
+    values?.progressiveWeight,
+    DEFAULT_FACTORY_BALANCE.progressiveWeight
+  );
+  const conservativeWeight = ensureNonNegativeInteger(
+    values?.conservativeWeight,
+    DEFAULT_FACTORY_BALANCE.conservativeWeight
+  );
+  await setDoc(
+    ref,
+    {
+      progressiveWeight,
+      conservativeWeight,
+      autoBalanceEnabled:
+        values?.autoBalanceEnabled !== undefined
+          ? Boolean(values.autoBalanceEnabled)
+          : DEFAULT_FACTORY_BALANCE.autoBalanceEnabled,
+      updatedAt: serverTimestamp(),
+      updatedBy: updatedBy ?? ''
+    },
+    { merge: true }
+  );
+  const snap = await getDoc(ref);
+  return normalizeFactoryBalanceDoc(snap.data());
 }
 
 // TODO: 조회수(metrics) 추적을 원한다면 아래 예시처럼 클라이언트에서 직접 setDoc + increment를 호출하는 방식을 추가로 구현할 수 있다.
