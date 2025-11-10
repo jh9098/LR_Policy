@@ -40,6 +40,8 @@ const formatNumber = (value) => {
 
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
 
+const COOKIE_STORAGE_KEY = 'factory.manualLoginCookieText';
+
 const extractVideoUrl = (item) => {
   if (typeof item?.url === 'string') {
     return item.url;
@@ -116,6 +118,8 @@ export default function FactorySearchTools() {
   const [extractLoading, setExtractLoading] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractResults, setExtractResults] = useState([]);
+  const [cookieInput, setCookieInput] = useState('');
+  const [showCookieGuide, setShowCookieGuide] = useState(false);
 
   const [channelStoreLoading, setChannelStoreLoading] = useState(false);
   const [channelStore, setChannelStore] = useState([]);
@@ -132,6 +136,7 @@ export default function FactorySearchTools() {
   const [loadSelection, setLoadSelection] = useState(() => new Set());
 
   const isCustomRange = timeFilter === 'custom';
+  const hasCookie = cookieInput.trim().length > 0;
 
   useEffect(() => {
     const refresh = async () => {
@@ -150,6 +155,31 @@ export default function FactorySearchTools() {
       refresh();
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = window.localStorage.getItem(COOKIE_STORAGE_KEY);
+      if (stored) {
+        setCookieInput(stored);
+      }
+    } catch (error) {
+      // 로컬 스토리지를 사용할 수 없는 환경일 수 있으므로 무시합니다.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (cookieInput.trim()) {
+        window.localStorage.setItem(COOKIE_STORAGE_KEY, cookieInput);
+      } else {
+        window.localStorage.removeItem(COOKIE_STORAGE_KEY);
+      }
+    } catch (error) {
+      // 사파리 프라이빗 모드 등 로컬 스토리지 비활성화 상황을 대비하여 무시합니다.
+    }
+  }, [cookieInput]);
 
   const uniqueChannelsFromResults = useMemo(() => {
     const map = new Map();
@@ -323,9 +353,22 @@ export default function FactorySearchTools() {
       setExtractError('');
       setFeedbackMessage('');
       setExtractLoading(true);
-      const result = await extractFactoryCaptions({ urls });
+      const payload = { urls };
+      if (cookieInput.trim()) {
+        payload.cookie_text = cookieInput;
+      }
+      const result = await extractFactoryCaptions(payload);
       setExtractResults(result);
-      setFeedbackMessage('자막 추출이 완료되었습니다.');
+      const requiresLogin = result.some((item) =>
+        (item?.warning || '').toLowerCase().includes('sign in to confirm')
+      );
+      if (requiresLogin && !cookieInput.trim()) {
+        setFeedbackMessage(
+          '구글 로그인이 필요한 영상이 있습니다. 아래 "수동 로그인" 안내에 따라 인증 쿠키를 붙여넣어 주세요.'
+        );
+      } else {
+        setFeedbackMessage('자막 추출이 완료되었습니다.');
+      }
     } catch (error) {
       setExtractError(error.message || '자막 추출에 실패했습니다.');
     } finally {
@@ -704,6 +747,61 @@ export default function FactorySearchTools() {
             {extractLoading ? '자막 추출 중...' : '자막 추출 실행'}
           </button>
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">수동 로그인 (쿠키/인증 코드)</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              봇 차단으로 인해 "Sign in to confirm" 오류가 발생하면, 아래 안내에 따라 구글 계정으로 로그인 후 발급한 쿠키 텍스트를 붙여넣어 주세요.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className={hasCookie ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-400'}>
+              {hasCookie ? '인증 정보 적용됨' : '인증 정보 없음'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowCookieGuide((prev) => !prev)}
+              className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              {showCookieGuide ? '안내 닫기' : '안내 보기'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCookieInput('')}
+              className="rounded-md border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/70 dark:text-rose-200 dark:hover:bg-rose-500/10"
+            >
+              초기화
+            </button>
+          </div>
+        </header>
+        {showCookieGuide && (
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            <p className="font-semibold text-slate-800 dark:text-slate-100">쿠키 추출 방법 (예시)</p>
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>Chrome/Edge 등 브라우저에서 <strong>youtube.com</strong>에 로그인합니다.</li>
+              <li>
+                브라우저 확장 프로그램 <strong>Get cookies.txt</strong> (또는 유사 도구)를 이용해 <strong>youtube.com</strong> 쿠키를 내보냅니다.
+              </li>
+              <li>내보낸 텍스트 전체를 아래 입력창에 붙여넣고 저장 없이 창을 닫습니다.</li>
+              <li>다시 자막 추출을 실행하면 로그인 상태가 적용됩니다.</li>
+            </ol>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              입력한 쿠키는 이 브라우저의 로컬 스토리지에만 저장되며 서버로 전송될 때 HTTPS를 사용합니다. 공유 PC에서는 사용 후 반드시 "초기화"를 눌러 삭제하세요.
+            </p>
+          </div>
+        )}
+        <textarea
+          value={cookieInput}
+          onChange={(event) => setCookieInput(event.target.value)}
+          placeholder={
+            '# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/...\n형식으로 된 전체 쿠키 텍스트를 붙여넣으세요.'
+          }
+          rows={6}
+          className="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+        />
       </section>
 
       <section className="space-y-3">
