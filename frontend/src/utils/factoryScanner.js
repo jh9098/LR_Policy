@@ -1,23 +1,8 @@
 // frontend/src/utils/factoryScanner.js
-// YouTube Data API를 호출해 활성 채널의 최신 영상을 수집하는 헬퍼.
+// FastAPI 백엔드를 통해 활성 채널의 최신 영상을 수집하는 헬퍼.
 // Firestore에 저장할 shape만 반환하고, 실제 저장은 firebaseClient의 upsertFactoryExplorerItems가 담당한다.
 
-const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
-
-function parseIsoDurationToSeconds(isoDuration) {
-  if (typeof isoDuration !== 'string' || !isoDuration.startsWith('PT')) {
-    return 0;
-  }
-  const pattern = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
-  const match = isoDuration.match(pattern);
-  if (!match) {
-    return 0;
-  }
-  const hours = Number(match[1] ?? 0);
-  const minutes = Number(match[2] ?? 0);
-  const seconds = Number(match[3] ?? 0);
-  return hours * 3600 + minutes * 60 + seconds;
-}
+import { searchFactoryVideos } from './factoryApi.js';
 
 function toDate(value) {
   if (!value) return null;
@@ -30,71 +15,6 @@ function formatIso(date) {
   const instance = toDate(date);
   if (!instance) return null;
   return new Date(instance.getTime() - 5 * 60 * 1000).toISOString();
-}
-
-async function fetchJson(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    let message = `YouTube API 요청 실패 (${response.status})`;
-    try {
-      const errorBody = await response.json();
-      message = errorBody?.error?.message || message;
-    } catch (error) {
-      // noop
-    }
-    throw new Error(message);
-  }
-  return response.json();
-}
-
-async function fetchChannelVideos({ apiKey, channelId, publishedAfter, maxResults }) {
-  const params = new URLSearchParams({
-    key: apiKey,
-    channelId,
-    part: 'snippet',
-    order: 'date',
-    type: 'video',
-    maxResults: String(Math.max(1, Math.min(maxResults, 50)))
-  });
-  if (publishedAfter) {
-    params.set('publishedAfter', publishedAfter);
-  }
-  const searchData = await fetchJson(`${YOUTUBE_API_BASE}/search?${params.toString()}`);
-  const videoIds = (searchData.items || [])
-    .filter((item) => item.id?.videoId)
-    .map((item) => item.id.videoId);
-  if (videoIds.length === 0) {
-    return [];
-  }
-  const detailParams = new URLSearchParams({
-    key: apiKey,
-    id: videoIds.join(','),
-    part: 'snippet,contentDetails,statistics'
-  });
-  const detailData = await fetchJson(`${YOUTUBE_API_BASE}/videos?${detailParams.toString()}`);
-  return (detailData.items || []).map((item) => {
-    const snippet = item.snippet || {};
-    const contentDetails = item.contentDetails || {};
-    const statistics = item.statistics || {};
-    const publishedAt = toDate(snippet.publishedAt);
-    return {
-      id: item.id,
-      videoId: item.id,
-      title: snippet.title || '',
-      channelTitle: snippet.channelTitle || '',
-      thumbnails: snippet.thumbnails || {},
-      publishedAt,
-      durationSeconds: parseIsoDurationToSeconds(contentDetails.duration),
-      language: snippet.defaultAudioLanguage || snippet.defaultLanguage || '',
-      hasCaptions: contentDetails.caption === 'true',
-      statistics: {
-        viewCount: Number(statistics.viewCount ?? 0),
-        likeCount: Number(statistics.likeCount ?? 0),
-        favoriteCount: Number(statistics.favoriteCount ?? 0),
-        commentCount: Number(statistics.commentCount ?? 0)
-      }
-    };
-  });
 }
 
 function computePublishedAfter(channel, fallbackDate) {
@@ -116,10 +36,7 @@ function computePublishedAfter(channel, fallbackDate) {
   return defaultWindow.toISOString();
 }
 
-export async function scanFactoryChannels({ apiKey, channels, fallbackPublishedAfter, maxResultsPerChannel = 5 }) {
-  if (!apiKey) {
-    throw new Error('YouTube API 키가 설정되지 않았습니다. VITE_YOUTUBE_API_KEY 환경 변수를 확인하세요.');
-  }
+export async function scanFactoryChannels({ channels, fallbackPublishedAfter, maxResultsPerChannel = 5 }) {
   const validChannels = Array.isArray(channels)
     ? channels.filter((channel) => channel?.channelId).map((channel) => ({ ...channel }))
     : [];
@@ -131,33 +48,65 @@ export async function scanFactoryChannels({ apiKey, channels, fallbackPublishedA
   for (const channel of validChannels) {
     try {
       const publishedAfter = computePublishedAfter(channel, fallbackPublishedAfter);
-      const items = await fetchChannelVideos({
-        apiKey,
-        channelId: channel.channelId,
-        publishedAfter,
-        maxResults: maxResultsPerChannel
-      });
-      items
-        .filter((item) => !item.publishedAt || !publishedAfter || item.publishedAt > new Date(publishedAfter))
+      const keywordBase = (channel.channelName || '').trim() || channel.channelId || 'latest';
+      const searchPayload = {
+        keywords: [keywordBase],
+        limit: Math.max(1, Math.min(maxResultsPerChannel, 50)),
+        sort_by: 'date',
+        time_filter: publishedAfter ? 'custom' : 'any',
+        custom_from_iso: publishedAfter || '',
+        custom_to_iso: '',
+        duration_filter: 'any',
+        channel_ids: [channel.channelId],
+        min_views: 0,
+        len_min: null,
+        len_max: null
+      };
+
+      const response = await searchFactoryVideos(searchPayload);
+      const rawItems = Array.isArray(response?.[keywordBase])
+        ? response[keywordBase]
+        : response?.[channel.channelName] || response?.[channel.channelId] || [];
+
+      const publishedAfterBoundary = publishedAfter ? new Date(publishedAfter) : null;
+      rawItems
+        .filter((item) => {
+          if (!publishedAfterBoundary) return true;
+          const publishedAt = toDate(item.published_at_iso);
+          return !publishedAt || publishedAt > publishedAfterBoundary;
+        })
         .forEach((item) => {
+          const thumbnails = item.thumbnails || {};
+          const publishedAt = toDate(item.published_at_iso) || new Date();
+          let videoId = item.video_id || '';
+          if (!videoId && typeof item.url === 'string') {
+            try {
+              videoId = new URL(item.url).searchParams.get('v') || '';
+            } catch (error) {
+              videoId = '';
+            }
+          }
           discovered.push({
-            id: item.videoId,
+            id: videoId || item.url,
             themeId: channel.themeId,
             themeLabel: channel.themeLabel,
             groupId: channel.groupId,
             groupName: channel.groupName,
             channelId: channel.channelId,
-            channelName: item.channelTitle || channel.channelName,
-            videoId: item.videoId,
+            channelName: item.channel_title || channel.channelName,
+            videoId: videoId || item.url,
             videoTitle: item.title,
             thumbnail:
-              item.thumbnails?.high?.url || item.thumbnails?.medium?.url || item.thumbnails?.default?.url || '',
-            publishedAt: item.publishedAt || new Date(),
-            durationSeconds: item.durationSeconds,
-            language: item.language,
-            hasCaptions: item.hasCaptions,
+              thumbnails.high?.url || thumbnails.medium?.url || thumbnails.default?.url || '',
+            publishedAt,
+            durationSeconds: Number(item.dur_seconds || 0),
+            language: item.language || '',
+            hasCaptions: Boolean(item.has_captions),
             meta: {
-              ...item.statistics,
+              viewCount: typeof item.view_count === 'number' ? item.view_count : Number(item.view_count ?? 0) || 0,
+              likeCount: null,
+              favoriteCount: null,
+              commentCount: null,
               scanChannelPriority: channel.priority || '중간'
             }
           });
