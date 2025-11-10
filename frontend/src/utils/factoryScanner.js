@@ -47,54 +47,84 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function fetchChannelVideos({ apiKey, channelId, publishedAfter, maxResults }) {
-  const params = new URLSearchParams({
-    key: apiKey,
-    channelId,
-    part: 'snippet',
-    order: 'date',
-    type: 'video',
-    maxResults: String(Math.max(1, Math.min(maxResults, 50)))
-  });
-  if (publishedAfter) {
-    params.set('publishedAfter', publishedAfter);
-  }
-  const searchData = await fetchJson(`${YOUTUBE_API_BASE}/search?${params.toString()}`);
-  const videoIds = (searchData.items || [])
-    .filter((item) => item.id?.videoId)
-    .map((item) => item.id.videoId);
-  if (videoIds.length === 0) {
-    return [];
-  }
-  const detailParams = new URLSearchParams({
-    key: apiKey,
-    id: videoIds.join(','),
-    part: 'snippet,contentDetails,statistics'
-  });
-  const detailData = await fetchJson(`${YOUTUBE_API_BASE}/videos?${detailParams.toString()}`);
-  return (detailData.items || []).map((item) => {
-    const snippet = item.snippet || {};
-    const contentDetails = item.contentDetails || {};
-    const statistics = item.statistics || {};
-    const publishedAt = toDate(snippet.publishedAt);
-    return {
-      id: item.id,
-      videoId: item.id,
-      title: snippet.title || '',
-      channelTitle: snippet.channelTitle || '',
-      thumbnails: snippet.thumbnails || {},
-      publishedAt,
-      durationSeconds: parseIsoDurationToSeconds(contentDetails.duration),
-      language: snippet.defaultAudioLanguage || snippet.defaultLanguage || '',
-      hasCaptions: contentDetails.caption === 'true',
-      statistics: {
-        viewCount: Number(statistics.viewCount ?? 0),
-        likeCount: Number(statistics.likeCount ?? 0),
-        favoriteCount: Number(statistics.favoriteCount ?? 0),
-        commentCount: Number(statistics.commentCount ?? 0)
-      }
-    };
-  });
+async function fetchChannelVideos({ apiKey, channelId, query, publishedAfter, maxResults }) {
+  const safeMaxResults = Math.max(1, Math.min(Number(maxResults) || 1, 200));
+  const collected = [];
+  const seenVideoIds = new Set();
+  let pageToken = null;
+
+  do {
+    const pageSize = Math.min(50, safeMaxResults - collected.length);
+    const params = new URLSearchParams({
+      key: apiKey,
+      channelId,
+      part: 'snippet',
+      order: 'date',
+      type: 'video',
+      maxResults: String(pageSize)
+    });
+    if (publishedAfter) {
+      params.set('publishedAfter', publishedAfter);
+    }
+    const trimmedQuery = typeof query === 'string' ? query.trim() : '';
+    if (trimmedQuery) {
+      params.set('q', trimmedQuery);
+    }
+    if (pageToken) {
+      params.set('pageToken', pageToken);
+    }
+
+    const searchData = await fetchJson(`${YOUTUBE_API_BASE}/search?${params.toString()}`);
+    const videoIds = (searchData.items || [])
+      .filter((item) => item.id?.videoId)
+      .map((item) => item.id.videoId)
+      .filter((videoId) => {
+        if (seenVideoIds.has(videoId)) {
+          return false;
+        }
+        seenVideoIds.add(videoId);
+        return true;
+      });
+
+    if (videoIds.length > 0) {
+      const detailParams = new URLSearchParams({
+        key: apiKey,
+        id: videoIds.join(','),
+        part: 'snippet,contentDetails,statistics'
+      });
+      const detailData = await fetchJson(`${YOUTUBE_API_BASE}/videos?${detailParams.toString()}`);
+      (detailData.items || []).forEach((item) => {
+        if (!item?.id || collected.length >= safeMaxResults) {
+          return;
+        }
+        const snippet = item.snippet || {};
+        const contentDetails = item.contentDetails || {};
+        const statistics = item.statistics || {};
+        const publishedAt = toDate(snippet.publishedAt);
+        collected.push({
+          id: item.id,
+          videoId: item.id,
+          title: snippet.title || '',
+          channelTitle: snippet.channelTitle || '',
+          thumbnails: snippet.thumbnails || {},
+          publishedAt,
+          durationSeconds: parseIsoDurationToSeconds(contentDetails.duration),
+          language: snippet.defaultAudioLanguage || snippet.defaultLanguage || '',
+          hasCaptions: contentDetails.caption === 'true',
+          statistics: {
+            viewCount: Number(statistics.viewCount ?? 0),
+            likeCount: Number(statistics.likeCount ?? 0),
+            favoriteCount: Number(statistics.favoriteCount ?? 0),
+            commentCount: Number(statistics.commentCount ?? 0)
+          }
+        });
+      });
+    }
+
+    pageToken = searchData.nextPageToken || null;
+  } while (pageToken && collected.length < safeMaxResults);
+
+  return collected.slice(0, safeMaxResults);
 }
 
 function computePublishedAfter(channel, fallbackDate) {
@@ -131,14 +161,18 @@ export async function scanFactoryChannels({ apiKey, channels, fallbackPublishedA
   for (const channel of validChannels) {
     try {
       const publishedAfter = computePublishedAfter(channel, fallbackPublishedAfter);
+      const normalizedChannelName = typeof channel.channelName === 'string' ? channel.channelName.trim() : '';
+      const searchQuery = normalizedChannelName || channel.channelId;
       const items = await fetchChannelVideos({
         apiKey,
         channelId: channel.channelId,
+        query: searchQuery,
         publishedAfter,
         maxResults: maxResultsPerChannel
       });
+      const publishedAfterDate = publishedAfter ? toDate(publishedAfter) : null;
       items
-        .filter((item) => !item.publishedAt || !publishedAfter || item.publishedAt > new Date(publishedAfter))
+        .filter((item) => !item.publishedAt || !publishedAfterDate || item.publishedAt > publishedAfterDate)
         .forEach((item) => {
           discovered.push({
             id: item.videoId,
