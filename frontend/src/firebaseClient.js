@@ -408,7 +408,13 @@ export async function searchIssuesByTheme(themeId, keyword, { limitCount = 80, s
     return baseList;
   }
   return baseList.filter((issue) => {
-    const haystack = [issue.title, issue.summaryCard, issue.easySummary, issue.background]
+    const keywordMatches = Array.isArray(issue.coreKeywords)
+      ? issue.coreKeywords.some((item) => String(item ?? '').toLowerCase().includes(normalizedKeyword))
+      : false;
+    if (keywordMatches) {
+      return true;
+    }
+    const haystack = [issue.title, issue.summaryCard, issue.easySummary, issue.background, issue.category, issue.subcategory]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();

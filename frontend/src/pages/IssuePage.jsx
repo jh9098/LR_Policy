@@ -211,6 +211,14 @@ function IssuePage() {
   const themeLabel = themeInfo?.label ?? '사건/정책';
   const metaTitle = issue ? `${issue.title} - infoall` : 'infoall';
   const metaDescription = issue?.easySummary || issue?.summaryCard || `${themeLabel} 주제의 정보를 제공합니다.`;
+  const coreKeywords = useMemo(() => {
+    if (!Array.isArray(issue?.coreKeywords)) {
+      return [];
+    }
+    return issue.coreKeywords
+      .map((keyword) => (typeof keyword === 'string' ? keyword.trim() : String(keyword ?? '').trim()))
+      .filter(Boolean);
+  }, [issue?.coreKeywords]);
   const easySummary = issue?.easySummary || '';
   const keyPoints = useMemo(() => toArray(issue?.keyPoints), [issue?.keyPoints]);
   const backgroundParagraphs = useMemo(() => toArray(issue?.background), [issue?.background]);
@@ -253,6 +261,17 @@ function IssuePage() {
     };
 
     let themeSpecificContent = '';
+
+    const keywordSection =
+      coreKeywords.length > 0
+        ? `
+    <div class="section">
+      <h2 class="section-title">핵심 키워드</h2>
+      <div class="hashtags">
+        ${coreKeywords.map((keyword) => `<span class="hashtag">#${escapeHtml(keyword)}</span>`).join('')}
+      </div>
+    </div>`
+        : '';
 
     if (issue.theme === 'groupbuy' && shouldShowGroupbuyLink) {
       themeSpecificContent += `
@@ -557,6 +576,8 @@ function IssuePage() {
     .item-card a { color: #3b82f6; text-decoration: none; }
     .item-card a:hover { text-decoration: underline; }
     h3 { margin-top: 1rem; }
+    .hashtags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+    .hashtag { display: inline-flex; align-items: center; background: #eef2ff; color: #4338ca; padding: 0.35rem 0.9rem; border-radius: 9999px; font-weight: 600; font-size: 0.875rem; }
   </style>
 </head>
 <body>
@@ -569,6 +590,7 @@ function IssuePage() {
       <h1 class="title">${escapeHtml(issue.title)}</h1>
       <p class="summary">${escapeHtml(issue.summaryCard)}</p>
     </div>
+    ${keywordSection}
     ${easySummary ? `<div class="section">
       <h2 class="section-title">${escapeHtml(easySummaryHeading)}</h2>
       <p>${escapeHtml(easySummary)}</p>
@@ -836,6 +858,18 @@ function IssuePage() {
               </span>
             </div>
             <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{issue.summaryCard}</p>
+            {coreKeywords.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {coreKeywords.map((keyword, index) => (
+                  <span
+                    key={`${keyword}-${index}`}
+                    className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-100 dark:ring-indigo-400/50"
+                  >
+                    #{keyword}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
               <button
                 type="button"

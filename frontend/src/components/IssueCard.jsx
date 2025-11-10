@@ -48,6 +48,11 @@ function IssueCard({ issue }) {
   const ringClass = THEME_RING_CLASS[theme] || 'focus-visible:ring-indigo-400';
   const summaryText = issue.easySummary || issue.summaryCard || '요약 문장이 아직 입력되지 않았습니다.';
   const href = `/issue/${issue.id}`;
+  const coreKeywords = Array.isArray(issue.coreKeywords)
+    ? issue.coreKeywords
+        .map((keyword) => (typeof keyword === 'string' ? keyword.trim() : String(keyword ?? '').trim()))
+        .filter(Boolean)
+    : [];
 
   return (
     <Link to={href} className={`${BASE_CARD_CLASS} ${ringClass}`} aria-label={`${themeLabel} · ${issue.title || '제목 미상'}`}>
@@ -81,6 +86,18 @@ function IssueCard({ issue }) {
       <p className="mt-3 line-clamp-4 text-[15px] leading-relaxed text-slate-600 dark:text-slate-300 md:line-clamp-3">
         {summaryText}
       </p>
+      {coreKeywords.length > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {coreKeywords.map((keyword, index) => (
+            <span
+              key={`${keyword}-${index}`}
+              className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-600 ring-1 ring-inset ring-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-100 dark:ring-indigo-400/50"
+            >
+              #{keyword}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </Link>
   );
 }
@@ -94,7 +111,8 @@ IssueCard.propTypes = {
     category: PropTypes.string,
     subcategory: PropTypes.string,
     summaryCard: PropTypes.string,
-    easySummary: PropTypes.string
+    easySummary: PropTypes.string,
+    coreKeywords: PropTypes.arrayOf(PropTypes.string)
   }).isRequired
 };
 
