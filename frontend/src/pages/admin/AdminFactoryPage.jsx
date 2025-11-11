@@ -593,7 +593,7 @@ function AdminFactoryPage() {
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[320px,minmax(0,1fr)]">
+      <div className="grid gap-6 lg:grid-cols-[360px,minmax(0,1fr)]">
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <header className="space-y-1">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">테마 구조 관리</h2>
@@ -728,8 +728,7 @@ function AdminFactoryPage() {
           <p className="text-xs text-slate-400 dark:text-slate-500">마지막 저장: {updatedAtLabel}</p>
         </section>
 
-        <div className="space-y-6">
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <header className="space-y-2">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">채널 관리</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -838,16 +837,15 @@ function AdminFactoryPage() {
                 </tbody>
               </table>
             </div>
-          </section>
-
-          <FactorySearchTools
-            onChannelPick={addChannelToTarget}
-            existingChannelIds={existingChannelIds}
-            targetLabel={targetLabel}
-            className="lg:col-span-1"
-          />
-        </div>
+        </section>
       </div>
+
+      <FactorySearchTools
+        onChannelPick={addChannelToTarget}
+        existingChannelIds={existingChannelIds}
+        targetLabel={targetLabel}
+        className="w-full"
+      />
     </div>
   );
 }
