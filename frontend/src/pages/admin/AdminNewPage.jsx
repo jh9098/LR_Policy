@@ -3,6 +3,7 @@
 // 현재 누구나 /admin/new 에 접근하면 issues 컬렉션에 글을 추가할 수 있다. TODO: 프로덕션 단계에서는 접근 제한과 Firestore 보안 규칙 강화를 반드시 적용해야 한다.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
 import LifestyleThemeEditor from '../../components/admin/LifestyleThemeEditor.jsx';
@@ -23,7 +24,7 @@ import {
   isValidSubcategory
 } from '../../constants/categoryStructure.js';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
-import { createIssue } from '../../firebaseClient.js';
+import { createIssue, createScheduledIssues } from '../../firebaseClient.js';
 import { getThemePrompt } from '../../constants/themePrompts.js';
 import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
 import {
@@ -43,6 +44,7 @@ import {
 } from '../../utils/draftSerialization.js';
 import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { formatKoreanDateTime } from '../../utils/dateFormat.js';
 import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
 
 const STORAGE_KEY = 'adminDraftV7';
@@ -99,11 +101,13 @@ function AdminNewPage() {
   const [jsonError, setJsonError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
   const [promptCopyFeedback, setPromptCopyFeedback] = useState('');
   const [promptKeywordInput, setPromptKeywordInput] = useState('');
   const [contentKeywordInput, setContentKeywordInput] = useState('');
   const copyTimeoutRef = useRef(null);
 
+  const navigate = useNavigate();
   const { titles: sectionTitles } = useSectionTitles();
   const { adminRole } = useAuth();
   const isGroupbuyOnly = adminRole === 'groupp';
@@ -300,7 +304,7 @@ function AdminNewPage() {
   };
 
   const handleBulkCreate = async () => {
-    if (isSubmitting) {
+    if (isSubmitting || isScheduling) {
       return;
     }
 
@@ -359,6 +363,63 @@ function AdminNewPage() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleBulkReserve = async () => {
+    if (isScheduling || isSubmitting) {
+      return;
+    }
+
+    const trimmedInput = jsonInput.trim();
+    if (trimmedInput.length === 0) {
+      setJsonError('❌ JSON 입력이 비어 있습니다.');
+      return;
+    }
+
+    const sanitized = sanitizeJsonNewlines(trimmedInput);
+    setJsonInput(sanitized);
+    setJsonError('');
+    setSubmitError('');
+
+    let chunks = [];
+    try {
+      chunks = splitJsonObjects(sanitized);
+    } catch (error) {
+      setJsonError(`❌ ${error.message}`);
+      return;
+    }
+
+    const payloads = [];
+    for (let index = 0; index < chunks.length; index += 1) {
+      try {
+        const draft = parseDraftStrict(chunks[index]);
+        payloads.push({ index: index + 1, payload: buildSubmissionPayload(draft) });
+      } catch (error) {
+        setJsonError(`❌ ${index + 1}번째 JSON 파싱 오류: ${error.message}`);
+        return;
+      }
+    }
+
+    setIsScheduling(true);
+    try {
+      const createdItems = await createScheduledIssues(payloads);
+      if (createdItems.length === 0) {
+        window.alert('예약 목록에 추가된 항목이 없습니다.');
+        return;
+      }
+      const summary = createdItems
+        .map((item) => `#${item.index}: ${item.id} → ${formatKoreanDateTime(item.visibleAt)}`)
+        .join('\n');
+      window.alert(`총 ${createdItems.length}개의 글을 예약 목록에 추가했어요.${summary ? `\n${summary}` : ''}`);
+      console.info('예약 등록 완료:', createdItems);
+      resetDraft();
+      navigate('/admin/reservation-list');
+    } catch (error) {
+      console.error('예약 등록 실패:', error);
+      setSubmitError(error?.message || '예약 등록 중 오류가 발생했습니다. Firestore 권한을 확인하세요.');
+    } finally {
+      setIsScheduling(false);
     }
   };
 
@@ -946,14 +1007,26 @@ function AdminNewPage() {
             <button
               type="button"
               onClick={handleBulkCreate}
-              disabled={isJsonInputEmpty || isSubmitting}
+              disabled={isJsonInputEmpty || isSubmitting || isScheduling}
               className={`inline-flex items-center rounded-lg px-4 py-2 font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                isJsonInputEmpty || isSubmitting
+                isJsonInputEmpty || isSubmitting || isScheduling
                   ? 'cursor-not-allowed bg-indigo-200 text-indigo-100 dark:bg-indigo-900/40 dark:text-indigo-300/50'
                   : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-600'
               }`}
             >
               모두작성
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkReserve}
+              disabled={isJsonInputEmpty || isSubmitting || isScheduling}
+              className={`inline-flex items-center rounded-lg px-4 py-2 font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                isJsonInputEmpty || isSubmitting || isScheduling
+                  ? 'cursor-not-allowed bg-purple-200 text-purple-100 dark:bg-purple-900/40 dark:text-purple-300/50'
+                  : 'bg-purple-500 text-white hover:bg-purple-600 dark:bg-purple-500 dark:hover:bg-purple-600'
+              }`}
+            >
+              예약작성
             </button>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               JSON은 한 줄 문자열이어야 합니다. 오류가 난다면 조정하기 버튼으로 줄바꿈을 제거해 보세요.

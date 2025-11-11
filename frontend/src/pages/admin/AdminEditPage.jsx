@@ -225,7 +225,7 @@ function AdminEditPage() {
       setIsLoading(true);
       setLoadError('');
       try {
-        const data = await getIssueById(id);
+        const data = await getIssueById(id, { includeScheduled: true });
         if (!isMounted) {
           return;
         }
