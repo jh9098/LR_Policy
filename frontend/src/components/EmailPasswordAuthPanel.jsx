@@ -1,47 +1,63 @@
 import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useSignupFormSettings } from '../contexts/SignupFormSettingsContext.jsx';
+import { buildFieldMap, getFieldLabel, resolveAutoComplete } from '../constants/signupFormConfig.js';
 
 const MODE = {
   LOGIN: 'login',
   REGISTER: 'register'
 };
 
-const GENDER_OPTIONS = [
-  { value: '', label: '선택 안 함' },
-  { value: 'female', label: '여성' },
-  { value: 'male', label: '남성' },
-  { value: 'other', label: '기타' }
-];
-
-const INITIAL_FORM = {
-  email: '',
-  confirmEmail: '',
-  password: '',
-  confirmPassword: '',
-  name: '',
-  gender: '',
-  birthYear: '',
-  phone: ''
-};
-
-function InputLabel({ htmlFor, children }) {
+function InputLabel({ htmlFor, children, required }) {
   return (
     <label htmlFor={htmlFor} className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
       {children}
+      {required && <span className="ml-1 text-rose-500">*</span>}
     </label>
   );
 }
 
 InputLabel.propTypes = {
   htmlFor: PropTypes.string.isRequired,
-  children: PropTypes.node.isRequired
+  children: PropTypes.node.isRequired,
+  required: PropTypes.bool
 };
+
+InputLabel.defaultProps = {
+  required: false
+};
+
+function buildInitialValues(fields) {
+  const initial = {};
+  fields.forEach((field) => {
+    if (!field || !field.id) return;
+    initial[field.id] = typeof field.defaultValue === 'string' ? field.defaultValue : '';
+  });
+  return initial;
+}
+
+function mergeInitialValues(fields, prev) {
+  const base = { ...prev };
+  fields.forEach((field) => {
+    if (!field || !field.id) return;
+    if (!(field.id in base)) {
+      base[field.id] = typeof field.defaultValue === 'string' ? field.defaultValue : '';
+    }
+  });
+  return base;
+}
 
 export default function EmailPasswordAuthPanel({ className = '', heading = '이메일 로그인', description = '' }) {
   const { user, login, register, requestPasswordReset, processing, authError, authMessage, clearFeedback } = useAuth();
+  const { config, loading: configLoading, error: configError } = useSignupFormSettings();
   const [mode, setMode] = useState(MODE.LOGIN);
-  const [form, setForm] = useState(INITIAL_FORM);
+  const [form, setForm] = useState(() => buildInitialValues(config.fields));
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    setForm((prev) => mergeInitialValues(config.fields, prev));
+  }, [config.fields]);
 
   useEffect(() => {
     if (user) {
@@ -50,60 +66,305 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
     clearFeedback();
   }, [mode, clearFeedback, user]);
 
+  const fieldMap = useMemo(() => buildFieldMap(config.fields), [config.fields]);
+
+  const loginFieldIds = useMemo(() => {
+    return config.loginLayout.filter((fieldId) => fieldMap[fieldId]?.enabledModes.includes(MODE.LOGIN));
+  }, [config.loginLayout, fieldMap]);
+
+  const registerSections = useMemo(() => {
+    return config.registerLayout
+      .map((section) => ({
+        ...section,
+        fieldIds: section.fieldIds.filter((fieldId) => fieldMap[fieldId]?.enabledModes.includes(MODE.REGISTER))
+      }))
+      .filter((section) => section.fieldIds.length > 0);
+  }, [config.registerLayout, fieldMap]);
+
   const headingText = useMemo(() => {
     if (heading) return heading;
     return mode === MODE.LOGIN ? '이메일 로그인' : '회원가입';
   }, [heading, mode]);
 
-  const onChange = (event) => {
-    const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+  const descriptionText = useMemo(() => {
+    if (description) return description;
+    if (mode === MODE.REGISTER) {
+      const firstSection = registerSections[0];
+      if (firstSection?.description) {
+        return firstSection.description;
+      }
+      return '이메일과 비밀번호를 다시 한 번 입력해 일치 여부를 확인해주세요.';
+    }
+    return '등록된 이메일과 비밀번호를 입력해주세요.';
+  }, [description, mode, registerSections]);
+
+  const disabled = processing || configLoading;
+
+  if (user) {
+    return null;
+  }
+
+  const handleChange = (event) => {
+    const { name, value, type } = event.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === 'number' && value === '' ? '' : value
+    }));
+  };
+
+  const validateFields = (currentMode, fieldIds) => {
+    const nextErrors = {};
+    fieldIds.forEach((fieldId) => {
+      const field = fieldMap[fieldId];
+      if (!field) return;
+      const value = form[fieldId];
+      const trimmedValue = typeof value === 'string' ? value.trim() : value;
+
+      if (field.requiredModes.includes(currentMode)) {
+        const isEmpty =
+          trimmedValue === '' || trimmedValue === undefined || trimmedValue === null || String(trimmedValue).trim() === '';
+        if (isEmpty) {
+          nextErrors[fieldId] = `${getFieldLabel(field)} 항목을 입력해주세요.`;
+          return;
+        }
+      }
+
+      if (typeof trimmedValue === 'string' && trimmedValue.length > 0) {
+        if (field.type === 'email') {
+          const emailRegex = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+          if (!emailRegex.test(trimmedValue)) {
+            nextErrors[fieldId] = '유효한 이메일 주소를 입력해주세요.';
+            return;
+          }
+        }
+        if (field.minLength && trimmedValue.length < field.minLength) {
+          nextErrors[fieldId] = `${field.minLength}자 이상 입력해주세요.`;
+          return;
+        }
+        if (field.maxLength && trimmedValue.length > field.maxLength) {
+          nextErrors[fieldId] = `${field.maxLength}자 이하로 입력해주세요.`;
+          return;
+        }
+        if (field.pattern) {
+          try {
+            const pattern = new RegExp(field.pattern);
+            if (!pattern.test(trimmedValue)) {
+              nextErrors[fieldId] = field.validationMessage || `${getFieldLabel(field)} 형식이 올바르지 않습니다.`;
+              return;
+            }
+          } catch (error) {
+            console.warn('정규식 검사 실패:', error);
+          }
+        }
+      }
+
+      if (field.type === 'number' && trimmedValue !== '' && trimmedValue !== undefined && trimmedValue !== null) {
+        const numericValue = Number(trimmedValue);
+        if (Number.isNaN(numericValue)) {
+          nextErrors[fieldId] = '숫자만 입력해주세요.';
+          return;
+        }
+        if (typeof field.min === 'number' && numericValue < field.min) {
+          nextErrors[fieldId] = `${field.min} 이상 값을 입력해주세요.`;
+          return;
+        }
+        if (typeof field.max === 'number' && numericValue > field.max) {
+          nextErrors[fieldId] = `${field.max} 이하 값을 입력해주세요.`;
+          return;
+        }
+      }
+
+      if (field.matchField) {
+        const targetValue = (form[field.matchField] ?? '').toString().trim();
+        const currentValue = (value ?? '').toString().trim();
+        if (field.requiredModes.includes(currentMode) || currentValue.length > 0) {
+          if (targetValue !== currentValue) {
+            const targetLabel = getFieldLabel(fieldMap[field.matchField]);
+            nextErrors[fieldId] = `${getFieldLabel(field)} 값이 ${targetLabel || '대상 항목'}과(와) 일치하지 않습니다.`;
+          }
+        }
+      }
+    });
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const gatherRegisterFieldIds = () => {
+    const ids = [];
+    registerSections.forEach((section) => {
+      section.fieldIds.forEach((fieldId) => {
+        if (!ids.includes(fieldId)) {
+          ids.push(fieldId);
+        }
+      });
+    });
+    return ids;
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    try {
-      if (mode === MODE.LOGIN) {
-        await login(form.email.trim(), form.password);
-        return;
+
+    if (mode === MODE.LOGIN) {
+      const valid = validateFields(MODE.LOGIN, loginFieldIds);
+      if (!valid) return;
+      const emailFieldId = config.identity.emailFieldId;
+      const passwordFieldId = config.identity.passwordFieldId;
+      const emailValue = (form[emailFieldId] ?? '').trim();
+      const passwordValue = form[passwordFieldId] ?? '';
+      try {
+        await login(emailValue, passwordValue);
+      } catch (error) {
+        console.warn('로그인 실패:', error);
       }
-      await register({
-        email: form.email.trim(),
-        confirmEmail: form.confirmEmail.trim(),
-        password: form.password,
-        confirmPassword: form.confirmPassword,
-        name: form.name,
-        gender: form.gender,
-        birthYear: form.birthYear,
-        phone: form.phone
-      });
+      return;
+    }
+
+    const registerFieldIds = gatherRegisterFieldIds();
+    const valid = validateFields(MODE.REGISTER, registerFieldIds);
+    if (!valid) return;
+
+    try {
+      await register({ values: form, config });
     } catch (error) {
-      console.warn('인증 처리 중 오류가 발생했습니다.', error);
+      console.warn('회원가입 처리 중 오류:', error);
     }
   };
 
   const handlePasswordReset = async () => {
+    const emailFieldId = config.identity.emailFieldId;
+    const emailValue = (form[emailFieldId] ?? '').trim();
     try {
-      await requestPasswordReset(form.email.trim());
+      await requestPasswordReset(emailValue);
     } catch (error) {
       console.warn('비밀번호 재설정 요청 중 오류가 발생했습니다.', error);
     }
   };
 
   const toggleMode = () => {
+    setErrors({});
     setMode((prev) => (prev === MODE.LOGIN ? MODE.REGISTER : MODE.LOGIN));
   };
 
-  const descriptionText = useMemo(() => {
-    if (description) return description;
-    return mode === MODE.LOGIN
-      ? '등록된 이메일과 비밀번호를 입력해주세요.'
-      : '이메일과 비밀번호를 다시 한 번 입력해 일치 여부를 확인해주세요.';
-  }, [description, mode]);
+  const renderFieldInput = (field) => {
+    const value = form[field.id] ?? '';
+    const commonProps = {
+      id: `auth-${field.id}`,
+      name: field.id,
+      value,
+      onChange: handleChange,
+      disabled,
+      className:
+        'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100',
+      placeholder: field.placeholder || undefined,
+      autoComplete: resolveAutoComplete(field, mode)
+    };
 
-  if (user) {
-    return null;
-  }
+    if (field.type === 'textarea') {
+      return <textarea {...commonProps} rows={field.rows || 3} />;
+    }
+
+    if (field.type === 'select') {
+      return (
+        <select {...commonProps}>
+          {(field.options?.length ? field.options : [{ value: '', label: field.placeholder || '선택하세요' }]).map((option) => (
+            <option key={`${field.id}-${option.value ?? 'empty'}`} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    const type = ['email', 'password', 'number', 'tel'].includes(field.type) ? field.type : 'text';
+    const extraProps = {};
+    if (type === 'number') {
+      extraProps.inputMode = 'numeric';
+      if (typeof field.min === 'number') extraProps.min = field.min;
+      if (typeof field.max === 'number') extraProps.max = field.max;
+      if (typeof field.step === 'number') extraProps.step = field.step;
+    }
+    if (field.minLength) extraProps.minLength = field.minLength;
+    if (field.maxLength) extraProps.maxLength = field.maxLength;
+    if (field.pattern) extraProps.pattern = field.pattern;
+
+    return <input {...commonProps} type={type} {...extraProps} />;
+  };
+
+  const renderLoginFields = () => {
+    return loginFieldIds.map((fieldId) => {
+      const field = fieldMap[fieldId];
+      if (!field) return null;
+      const errorMessage = errors[field.id];
+      const required = field.requiredModes.includes(MODE.LOGIN);
+      return (
+        <div key={field.id}>
+          <InputLabel htmlFor={`auth-${field.id}`} required={required}>
+            {getFieldLabel(field)}
+          </InputLabel>
+          {renderFieldInput(field)}
+          {field.helpText && (
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{field.helpText}</p>
+          )}
+          {errorMessage && (
+            <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-300">{errorMessage}</p>
+          )}
+        </div>
+      );
+    });
+  };
+
+  const renderRegisterFields = () => {
+    const renderedIds = new Set();
+    return registerSections.map((section) => {
+      const content = section.fieldIds
+        .map((fieldId) => {
+          if (renderedIds.has(fieldId)) return null;
+          const field = fieldMap[fieldId];
+          if (!field) return null;
+          renderedIds.add(fieldId);
+          const errorMessage = errors[field.id];
+          const required = field.requiredModes.includes(MODE.REGISTER);
+          return (
+            <div key={field.id}>
+              <InputLabel htmlFor={`auth-${field.id}`} required={required}>
+                {getFieldLabel(field)}
+              </InputLabel>
+              {renderFieldInput(field)}
+              {field.helpText && (
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{field.helpText}</p>
+              )}
+              {errorMessage && (
+                <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-300">{errorMessage}</p>
+              )}
+            </div>
+          );
+        })
+        .filter(Boolean);
+
+      if (content.length === 0) {
+        return null;
+      }
+
+      const WrapperTag = section.style === 'card' ? 'div' : 'section';
+      const wrapperClassName =
+        section.style === 'card'
+          ? 'grid gap-2 rounded-lg bg-slate-50/70 p-3 dark:bg-slate-900/50'
+          : 'grid gap-2';
+
+      return (
+        <WrapperTag key={section.id} className={wrapperClassName}>
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{section.title}</p>
+            {section.description && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">{section.description}</p>
+            )}
+          </div>
+          <div className="grid gap-2">{content}</div>
+        </WrapperTag>
+      );
+    });
+  };
 
   return (
     <div
@@ -113,131 +374,13 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
         <div>
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{headingText}</h3>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{descriptionText}</p>
+          {configError && (
+            <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-300">{configError}</p>
+          )}
         </div>
 
         <div className="space-y-2">
-          <div>
-            <InputLabel htmlFor="auth-email">이메일</InputLabel>
-            <input
-              id="auth-email"
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={onChange}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-              placeholder="example@email.com"
-              autoComplete="email"
-            />
-            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">비밀번호 재발급 시 사용할 이메일을 입력해주세요.</p>
-          </div>
-
-          {mode === MODE.REGISTER && (
-            <div>
-              <InputLabel htmlFor="auth-confirm-email">이메일 재입력</InputLabel>
-              <input
-                id="auth-confirm-email"
-                name="confirmEmail"
-                type="email"
-                value={form.confirmEmail}
-                onChange={onChange}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                placeholder="이메일을 한 번 더 입력하세요"
-                autoComplete="email"
-              />
-            </div>
-          )}
-
-          <div>
-            <InputLabel htmlFor="auth-password">비밀번호</InputLabel>
-            <input
-              id="auth-password"
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={onChange}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-              placeholder="비밀번호"
-              autoComplete={mode === MODE.LOGIN ? 'current-password' : 'new-password'}
-            />
-          </div>
-
-          {mode === MODE.REGISTER && (
-            <div>
-              <InputLabel htmlFor="auth-confirm-password">비밀번호 재입력</InputLabel>
-              <input
-                id="auth-confirm-password"
-                name="confirmPassword"
-                type="password"
-                value={form.confirmPassword}
-                onChange={onChange}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                placeholder="비밀번호를 다시 입력하세요"
-                autoComplete="new-password"
-              />
-            </div>
-          )}
-
-          {mode === MODE.REGISTER && (
-            <div className="grid gap-2 rounded-lg bg-slate-50/70 p-3 dark:bg-slate-900/50">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">선택 입력 항목</p>
-              <div>
-                <InputLabel htmlFor="auth-name">이름</InputLabel>
-                <input
-                  id="auth-name"
-                  name="name"
-                  type="text"
-                  value={form.name}
-                  onChange={onChange}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                  placeholder="선택사항"
-                  autoComplete="name"
-                />
-              </div>
-              <div>
-                <InputLabel htmlFor="auth-gender">성별</InputLabel>
-                <select
-                  id="auth-gender"
-                  name="gender"
-                  value={form.gender}
-                  onChange={onChange}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                >
-                  {GENDER_OPTIONS.map((option) => (
-                    <option key={option.value || 'empty'} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <InputLabel htmlFor="auth-birth">출생연도</InputLabel>
-                <input
-                  id="auth-birth"
-                  name="birthYear"
-                  type="number"
-                  min="1900"
-                  max={new Date().getFullYear()}
-                  value={form.birthYear}
-                  onChange={onChange}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                  placeholder="예: 1990"
-                />
-              </div>
-              <div>
-                <InputLabel htmlFor="auth-phone">전화번호</InputLabel>
-                <input
-                  id="auth-phone"
-                  name="phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={onChange}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                  placeholder="선택사항"
-                  autoComplete="tel"
-                />
-              </div>
-            </div>
-          )}
+          {mode === MODE.LOGIN ? renderLoginFields() : renderRegisterFields()}
         </div>
 
         {authError && (
@@ -255,7 +398,7 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
           <button
             type="submit"
             className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-indigo-400 dark:focus-visible:ring-offset-slate-900"
-            disabled={processing}
+            disabled={disabled}
           >
             {mode === MODE.LOGIN ? '로그인' : '회원가입'}
           </button>
@@ -263,7 +406,7 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
             type="button"
             onClick={toggleMode}
             className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/60 dark:focus-visible:ring-offset-slate-900"
-            disabled={processing}
+            disabled={disabled}
           >
             {mode === MODE.LOGIN ? '회원가입 화면으로' : '로그인 화면으로'}
           </button>
@@ -273,7 +416,7 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
           type="button"
           onClick={handlePasswordReset}
           className="text-[11px] text-slate-500 underline-offset-2 transition hover:text-indigo-600 hover:underline dark:text-slate-400 dark:hover:text-indigo-300"
-          disabled={processing}
+          disabled={disabled}
         >
           비밀번호 재설정
         </button>
