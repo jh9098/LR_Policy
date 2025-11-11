@@ -1297,40 +1297,94 @@ function normalizeFactoryChannel(channel) {
   };
 }
 
+const normalizeFactoryKeyword = (value) => (typeof value === 'string' ? value.trim() : '');
+
+function sanitizeKeywordList(list = []) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const seen = new Set();
+  const result = [];
+  list.forEach((value) => {
+    if (typeof value !== 'string') return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const lower = trimmed.toLowerCase();
+    if (seen.has(lower)) return;
+    seen.add(lower);
+    result.push(trimmed);
+  });
+  return result;
+}
+
 function normalizeFactoryChild(child) {
   if (!child || typeof child !== 'object') {
     return {
       id: '',
       name: '',
       description: '',
-      channels: []
+      channels: [],
+      keywords: []
     };
   }
   return {
     id: typeof child.id === 'string' ? child.id : '',
     name: typeof child.name === 'string' ? child.name : '',
     description: typeof child.description === 'string' ? child.description : '',
-    channels: Array.isArray(child.channels) ? child.channels.map(normalizeFactoryChannel) : []
+    channels: Array.isArray(child.channels) ? child.channels.map(normalizeFactoryChannel) : [],
+    keywords: Array.isArray(child.keywords)
+      ? child.keywords
+          .map(normalizeFactoryKeyword)
+          .filter((keyword) => keyword.length > 0)
+      : []
   };
 }
 
 function normalizeFactoryThemeDoc(data) {
   if (!data || typeof data !== 'object') {
-    return { themeId: '', groups: [], updatedAt: null, updatedBy: '' };
+    return { themeId: '', channels: [], keywords: [], groups: [], updatedAt: null, updatedBy: '' };
   }
   return {
     themeId: typeof data.themeId === 'string' ? data.themeId : '',
+    channels: Array.isArray(data.channels) ? data.channels.map(normalizeFactoryChannel) : [],
+    keywords: Array.isArray(data.keywords)
+      ? data.keywords.map(normalizeFactoryKeyword).filter((keyword) => keyword.length > 0)
+      : [],
     groups: Array.isArray(data.groups)
       ? data.groups.map((group) => ({
           id: typeof group?.id === 'string' ? group.id : '',
           name: typeof group?.name === 'string' ? group.name : '',
           description: typeof group?.description === 'string' ? group.description : '',
           channels: Array.isArray(group?.channels) ? group.channels.map(normalizeFactoryChannel) : [],
+          keywords: Array.isArray(group?.keywords)
+            ? group.keywords.map(normalizeFactoryKeyword).filter((keyword) => keyword.length > 0)
+            : [],
           children: Array.isArray(group?.children) ? group.children.map(normalizeFactoryChild) : []
         }))
       : [],
     updatedAt: toDateSafe(data.updatedAt),
     updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : ''
+  };
+}
+
+function sanitizeFactoryChildForSave(child = {}) {
+  return {
+    id: typeof child.id === 'string' ? child.id : '',
+    name: typeof child.name === 'string' ? child.name : '',
+    description: typeof child.description === 'string' ? child.description : '',
+    channels: Array.isArray(child.channels) ? child.channels.map(normalizeFactoryChannel) : [],
+    keywords: sanitizeKeywordList(child.keywords)
+  };
+}
+
+function sanitizeFactoryGroupForSave(group = {}) {
+  return {
+    id: typeof group.id === 'string' ? group.id : '',
+    name: typeof group.name === 'string' ? group.name : '',
+    description: typeof group.description === 'string' ? group.description : '',
+    channels: Array.isArray(group.channels) ? group.channels.map(normalizeFactoryChannel) : [],
+    keywords: sanitizeKeywordList(group.keywords),
+    children: Array.isArray(group.children) ? group.children.map(sanitizeFactoryChildForSave) : []
   };
 }
 
@@ -1576,7 +1630,9 @@ export async function saveFactoryThemeConfig(themeId, config, { updatedBy } = {}
   const ref = doc(db, FACTORY_THEME_COLLECTION, themeId);
   const payload = {
     themeId,
-    groups: Array.isArray(config?.groups) ? config.groups : [],
+    channels: Array.isArray(config?.channels) ? config.channels.map(normalizeFactoryChannel) : [],
+    keywords: sanitizeKeywordList(config?.keywords),
+    groups: Array.isArray(config?.groups) ? config.groups.map(sanitizeFactoryGroupForSave) : [],
     updatedAt: serverTimestamp(),
     updatedBy: updatedBy ?? ''
   };
