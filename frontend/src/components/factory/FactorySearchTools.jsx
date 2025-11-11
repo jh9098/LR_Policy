@@ -204,13 +204,13 @@ export default function FactorySearchTools({
 
   return (
     <section
-      className={`space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 ${className}`}
+      className={`w-full space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 ${className}`}
     >
       <header className="space-y-2">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">YouTube 키워드 검색</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          키워드를 입력하고 조건을 조정한 뒤 검색하면 채널명/채널 ID를 한 번에 확인할 수 있습니다. 행의 "추가" 버튼을
-          사용하면 선택한 테마 위치에 채널을 곧바로 저장할 수 있습니다.
+          키워드를 입력하고 조건을 조정한 뒤 검색하면 채널명과 영상 정보를 한눈에 확인할 수 있습니다. 행의 "추가"
+          버튼을 사용하면 선택한 테마 위치에 채널을 곧바로 저장할 수 있습니다.
         </p>
         {!IS_FACTORY_API_CONFIGURED && (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-200">
@@ -393,12 +393,9 @@ export default function FactorySearchTools({
                   <thead className="bg-slate-50 dark:bg-slate-800">
                     <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       <th className="px-3 py-2">업로드일</th>
-                      <th className="px-3 py-2">채널명</th>
-                      <th className="px-3 py-2">채널 ID</th>
-                      <th className="px-3 py-2">조회수</th>
-                      <th className="px-3 py-2">길이</th>
                       <th className="px-3 py-2">제목</th>
-                      <th className="px-3 py-2">URL</th>
+                      <th className="px-3 py-2 text-right">조회수</th>
+                      <th className="px-3 py-2">길이</th>
                       <th className="px-3 py-2">추가</th>
                     </tr>
                   </thead>
@@ -413,25 +410,24 @@ export default function FactorySearchTools({
                           className="bg-white text-slate-700 transition hover:bg-indigo-50/60 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800/60"
                         >
                           <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.date_fmt || '-'}</td>
-                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.channel_title || '-'}</td>
-                          <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">{channelId || '-'}</td>
-                          <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatNumber(item.view_count)}</td>
-                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.dur_hms || '-'}</td>
                           <td className="px-3 py-2">
                             <p className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {item.has_captions ? '자막 O' : '자막 X'} · {item.language || '언어 정보 없음'}
+                              {item.channel_title || '채널명 없음'} · {item.has_captions ? '자막 O' : '자막 X'} · {item.language || '언어 정보 없음'}
                             </p>
-                          </td>
-                          <td className="px-3 py-2 text-indigo-600 dark:text-indigo-300">
-                            {url ? (
-                              <a href={url} target="_blank" rel="noreferrer" className="underline">
-                                열기
+                            {url && (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-1 inline-flex text-xs font-semibold text-indigo-600 underline dark:text-indigo-300"
+                              >
+                                영상 열기
                               </a>
-                            ) : (
-                              <span className="text-xs text-slate-400">-</span>
                             )}
                           </td>
+                          <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">{formatNumber(item.view_count)}</td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.dur_hms || '-'}</td>
                           <td className="px-3 py-2">
                             <button
                               type="button"
