@@ -20,6 +20,7 @@ import AdvertisingInfoPage from './pages/static/AdvertisingInfoPage.jsx';
 import TermsPage from './pages/static/TermsPage.jsx';
 import PrivacyPolicyPage from './pages/static/PrivacyPolicyPage.jsx';
 import YouthProtectionPolicyPage from './pages/static/YouthProtectionPolicyPage.jsx';
+import AdminReservationListPage from './pages/admin/AdminReservationListPage.jsx';
 
 function PublicLayout() {
   return (
@@ -61,6 +62,7 @@ function App() {
         <Route index element={<Navigate to="new" replace />} />
         <Route path="new" element={<AdminNewPage />} />
         <Route path="list" element={<AdminListPage />} />
+        <Route path="reservation-list" element={<AdminReservationListPage />} />
         <Route path="edit/:id" element={<AdminEditPage />} />
         <Route path="factory" element={<AdminFactoryPage />} />
         <Route path="settings" element={<AdminStaticPagesPage />} />

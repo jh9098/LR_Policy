@@ -62,6 +62,7 @@ import {
   normalizeParentingGuide,
   normalizeStockGuide
 } from './utils/themeDraftDefaults.js';
+import { addMinutes, formatKoreanDateTime } from './utils/dateFormat.js';
 
 // Vite 환경 변수 기반 Firebase 설정을 구성한다.
 // Netlify 등 배포 환경에서도 동일한 키 이름(VITE_FIREBASE_*)으로 등록해야 한다.
@@ -84,6 +85,7 @@ const ISSUE_REACTIONS_COLLECTION = 'issueReactions';
 const USER_SCRAPS_COLLECTION = 'userScraps';
 const TRENDING_SETTINGS_COLLECTION = 'appSettings';
 const TRENDING_SETTINGS_DOC_ID = 'trending';
+const RESERVATION_SETTINGS_DOC_ID = 'reservationSchedule';
 const SECTION_TITLES_DOC_ID = 'sectionTitles';
 const SIGNUP_FORM_DOC_ID = 'signupForm';
 
@@ -104,6 +106,8 @@ const DEFAULT_TRENDING_SETTINGS = {
   withinHours: 24,
   maxItems: 10
 };
+
+const DEFAULT_RESERVATION_INTERVAL_MINUTES = 180;
 
 function normalizeSignupFormDoc(data) {
   const config = normalizeSignupFormConfig(data ?? {});
@@ -326,6 +330,14 @@ function normalizeIssueData(issueId, data) {
       ? data.subcategory
       : '';
 
+  let visibleAfter = null;
+  if (data?.visibleAfter instanceof Timestamp) {
+    visibleAfter = data.visibleAfter.toDate();
+  } else if (data?.visibleAfter && typeof data.visibleAfter === 'object' && data.visibleAfter.seconds) {
+    visibleAfter = new Date(data.visibleAfter.seconds * 1000);
+  }
+  const visibilityMode = data?.visibilityMode === 'scheduled' ? 'scheduled' : 'immediate';
+
   return {
     id: issueId,
     theme,
@@ -359,8 +371,41 @@ function normalizeIssueData(issueId, data) {
     stockGuide: normalizeStockGuide(data?.stockGuide),
     createdAt: data?.createdAt ?? null,
     updatedAt: data?.updatedAt ?? null,
-    views: typeof data?.views === 'number' ? data.views : 0
+    views: typeof data?.views === 'number' ? data.views : 0,
+    visibilityMode,
+    visibleAfter
   };
+}
+
+function isIssueVisible(issue) {
+  if (!issue) return false;
+  if (issue.visibilityMode !== 'scheduled') {
+    return true;
+  }
+  if (!(issue.visibleAfter instanceof Date)) {
+    return false;
+  }
+  return issue.visibleAfter.getTime() <= Date.now();
+}
+
+function filterVisibleIssues(issues) {
+  return issues.filter((item) => isIssueVisible(item));
+}
+
+function ensureVisibleAfterValue({ visibilityMode, visibleAfter }) {
+  if (visibilityMode !== 'scheduled') {
+    return null;
+  }
+  if (visibleAfter instanceof Timestamp) {
+    return visibleAfter;
+  }
+  if (visibleAfter instanceof Date) {
+    return Timestamp.fromDate(visibleAfter);
+  }
+  if (typeof visibleAfter === 'number') {
+    return Timestamp.fromMillis(visibleAfter);
+  }
+  return null;
 }
 
 // 공개 조회 전용. Render 서버를 거치지 않고 Firestore에서 직접 최근 50개의 이슈를 불러온다.
@@ -368,7 +413,8 @@ export async function getRecentIssues(limitCount = 50) {
   const q = query(collection(db, 'issues'), orderBy('date', 'desc'), limit(limitCount));
   const snap = await getDocs(q);
   const baseList = snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
-  return attachStatsToIssues(baseList);
+  const visibleList = filterVisibleIssues(baseList);
+  return attachStatsToIssues(visibleList);
 }
 
 async function fetchIssuesWithFallback(constraints, { fallbackLimit = 80, fallbackFilter = null } = {}) {
@@ -376,7 +422,8 @@ async function fetchIssuesWithFallback(constraints, { fallbackLimit = 80, fallba
     const q = query(collection(db, 'issues'), ...constraints);
     const snap = await getDocs(q);
     const baseList = snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
-    return attachStatsToIssues(baseList);
+    const visibleList = filterVisibleIssues(baseList);
+    return attachStatsToIssues(visibleList);
   } catch (error) {
     console.warn('Firestore 고급 쿼리 실패, 최신 순 결과로 폴백합니다:', error);
     const fallbackList = await getRecentIssues(fallbackLimit);
@@ -459,7 +506,7 @@ export async function searchIssuesAcrossThemes(keyword, { limitPerTheme = 40, so
 }
 
 // 상세 페이지나 /admin/edit/:id 페이지에서 단일 문서를 조회할 때 사용한다.
-export async function getIssueById(issueId) {
+export async function getIssueById(issueId, { includeScheduled = false } = {}) {
   if (!issueId) {
     return null;
   }
@@ -469,16 +516,26 @@ export async function getIssueById(issueId) {
     return null;
   }
   const issue = normalizeIssueData(issueId, snap.data());
+  if (!includeScheduled && !isIssueVisible(issue)) {
+    return null;
+  }
   const stats = await getIssueStats(issueId);
   return { ...issue, stats };
 }
 
 // AdminNewPage에서 직접 호출하여 새 문서를 생성한다. Render 서버를 거치지 않는다.
-export async function createIssue(issueDraft) {
+export async function createIssue(issueDraft, { visibilityMode = 'immediate', visibleAfter = null } = {}) {
+  const timestamp = serverTimestamp();
+  const normalizedVisibleAfter = ensureVisibleAfterValue({ visibilityMode, visibleAfter });
   const docRef = await addDoc(collection(db, 'issues'), {
     ...issueDraft,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    visibilityMode,
+    visibleAfter:
+      visibilityMode === 'scheduled'
+        ? normalizedVisibleAfter ?? Timestamp.fromDate(new Date(Date.now() + 60 * 1000))
+        : normalizedVisibleAfter ?? timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
     views: 0
   });
   // TODO: 프로덕션에서는 인증 없이 누구나 쓰기를 허용하면 안 된다.
@@ -486,15 +543,25 @@ export async function createIssue(issueDraft) {
 }
 
 // AdminEditPage에서 수정 저장 버튼을 누를 때 호출한다.
-export async function updateIssue(issueId, issueDraft) {
+export async function updateIssue(issueId, issueDraft, { visibilityMode, visibleAfter } = {}) {
   if (!issueId) {
     throw new Error('issueId가 필요합니다.');
   }
   const ref = doc(db, 'issues', issueId);
-  await updateDoc(ref, {
+  const updatePayload = {
     ...issueDraft,
     updatedAt: serverTimestamp()
-  });
+  };
+  if (typeof visibilityMode === 'string') {
+    updatePayload.visibilityMode = visibilityMode === 'scheduled' ? 'scheduled' : 'immediate';
+  }
+  if (visibleAfter !== undefined) {
+    updatePayload.visibleAfter = ensureVisibleAfterValue({
+      visibilityMode: updatePayload.visibilityMode ?? visibilityMode ?? 'immediate',
+      visibleAfter
+    });
+  }
+  await updateDoc(ref, updatePayload);
 }
 
 // AdminListPage나 AdminEditPage에서 삭제 버튼을 누르면 Firestore 문서를 직접 삭제한다.
@@ -771,6 +838,196 @@ export async function saveSectionTitles(titles, { updatedBy } = {}) {
     updatedAt: new Date(),
     updatedBy: updatedBy ?? ''
   };
+}
+
+function createDefaultReservationIntervals() {
+  const intervals = {};
+  THEME_CONFIG.forEach((theme) => {
+    intervals[theme.id] = {
+      intervalMinutes: DEFAULT_RESERVATION_INTERVAL_MINUTES,
+      nextVisibleAt: null
+    };
+  });
+  return intervals;
+}
+
+function normalizeReservationSettingsDoc(data) {
+  const baseIntervals = createDefaultReservationIntervals();
+  const rawIntervals = data?.intervals ?? {};
+  THEME_CONFIG.forEach((theme) => {
+    const raw = rawIntervals[theme.id] ?? {};
+    const intervalMinutes = Number(raw.intervalMinutes);
+    let nextVisibleAt = null;
+    if (raw.nextVisibleAt instanceof Timestamp) {
+      nextVisibleAt = raw.nextVisibleAt.toDate();
+    } else if (raw.nextVisibleAt instanceof Date) {
+      nextVisibleAt = new Date(raw.nextVisibleAt.getTime());
+    } else if (raw.nextVisibleAt && typeof raw.nextVisibleAt === 'object' && raw.nextVisibleAt.seconds) {
+      nextVisibleAt = new Date(raw.nextVisibleAt.seconds * 1000);
+    }
+    baseIntervals[theme.id] = {
+      intervalMinutes: Number.isFinite(intervalMinutes) && intervalMinutes >= 0 ? intervalMinutes : DEFAULT_RESERVATION_INTERVAL_MINUTES,
+      nextVisibleAt: nextVisibleAt ?? null
+    };
+  });
+  return {
+    intervals: baseIntervals,
+    updatedAt: data?.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data?.updatedAt ?? null,
+    updatedBy: typeof data?.updatedBy === 'string' ? data.updatedBy : ''
+  };
+}
+
+export async function getReservationSettings() {
+  const settingsRef = doc(db, TRENDING_SETTINGS_COLLECTION, RESERVATION_SETTINGS_DOC_ID);
+  const snap = await getDoc(settingsRef);
+  if (!snap.exists()) {
+    return { intervals: createDefaultReservationIntervals(), updatedAt: null, updatedBy: '' };
+  }
+  return normalizeReservationSettingsDoc(snap.data());
+}
+
+export async function saveReservationSettings(settings, { updatedBy } = {}) {
+  const normalized = normalizeReservationSettingsDoc(settings);
+  const payloadIntervals = {};
+  Object.entries(normalized.intervals).forEach(([themeId, config]) => {
+    payloadIntervals[themeId] = {
+      intervalMinutes: Number.isFinite(config.intervalMinutes) ? config.intervalMinutes : DEFAULT_RESERVATION_INTERVAL_MINUTES,
+      nextVisibleAt: config.nextVisibleAt instanceof Date ? Timestamp.fromDate(config.nextVisibleAt) : null
+    };
+  });
+  const settingsRef = doc(db, TRENDING_SETTINGS_COLLECTION, RESERVATION_SETTINGS_DOC_ID);
+  await setDoc(
+    settingsRef,
+    {
+      intervals: payloadIntervals,
+      updatedAt: serverTimestamp(),
+      updatedBy: updatedBy ?? ''
+    },
+    { merge: true }
+  );
+  return {
+    intervals: normalized.intervals,
+    updatedAt: new Date(),
+    updatedBy: updatedBy ?? ''
+  };
+}
+
+export async function getScheduledIssues({ includeReleased = false } = {}) {
+  try {
+    const scheduledQuery = query(collection(db, 'issues'), where('visibilityMode', '==', 'scheduled'));
+    const snap = await getDocs(scheduledQuery);
+    const items = snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+    items.sort((a, b) => {
+      const aTime = a.visibleAfter instanceof Date ? a.visibleAfter.getTime() : Number.POSITIVE_INFINITY;
+      const bTime = b.visibleAfter instanceof Date ? b.visibleAfter.getTime() : Number.POSITIVE_INFINITY;
+      return aTime - bTime;
+    });
+    if (includeReleased) {
+      return items;
+    }
+    return items.filter((item) => !isIssueVisible(item));
+  } catch (error) {
+    console.warn('예약된 글 목록 조회 실패, 로컬 필터로 대체합니다:', error);
+    const snap = await getDocs(collection(db, 'issues'));
+    const items = snap.docs
+      .map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()))
+      .filter((item) => item.visibilityMode === 'scheduled');
+    items.sort((a, b) => {
+      const aTime = a.visibleAfter instanceof Date ? a.visibleAfter.getTime() : Number.POSITIVE_INFINITY;
+      const bTime = b.visibleAfter instanceof Date ? b.visibleAfter.getTime() : Number.POSITIVE_INFINITY;
+      return aTime - bTime;
+    });
+    if (includeReleased) {
+      return items;
+    }
+    return items.filter((item) => !isIssueVisible(item));
+  }
+}
+
+export async function createScheduledIssues(entries, { actor = '' } = {}) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return [];
+  }
+  const settings = await getReservationSettings();
+  const grouped = new Map();
+  entries.forEach((entry) => {
+    if (!entry || typeof entry !== 'object' || !entry.payload) {
+      return;
+    }
+    const themeId = isValidThemeId(entry.payload.theme) ? entry.payload.theme : DEFAULT_THEME_ID;
+    if (!grouped.has(themeId)) {
+      grouped.set(themeId, []);
+    }
+    grouped.get(themeId).push({ ...entry, theme: themeId });
+  });
+
+  const scheduledQueue = [];
+  const updatedIntervals = { ...settings.intervals };
+  const now = new Date();
+
+  grouped.forEach((list, themeId) => {
+    const themeEntries = [...list].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+    const config = updatedIntervals[themeId] ?? {
+      intervalMinutes: DEFAULT_RESERVATION_INTERVAL_MINUTES,
+      nextVisibleAt: null
+    };
+    const intervalMinutes = Number.isFinite(config.intervalMinutes) && config.intervalMinutes >= 0
+      ? config.intervalMinutes
+      : DEFAULT_RESERVATION_INTERVAL_MINUTES;
+    let cursor = config.nextVisibleAt instanceof Date ? new Date(config.nextVisibleAt.getTime()) : new Date(now.getTime());
+    if (Number.isNaN(cursor.getTime()) || cursor.getTime() < now.getTime()) {
+      cursor = new Date(now.getTime());
+    }
+
+    themeEntries.forEach((entry) => {
+      const visibleAt = new Date(cursor.getTime());
+      const formattedDate = formatKoreanDateTime(visibleAt);
+      scheduledQueue.push({
+        ...entry,
+        theme: themeId,
+        visibleAt,
+        payload: {
+          ...entry.payload,
+          theme: themeId,
+          date: formattedDate
+        }
+      });
+      const advanceMinutes = intervalMinutes > 0 ? intervalMinutes : 1;
+      const nextCursor = addMinutes(visibleAt, advanceMinutes);
+      cursor = nextCursor ?? addMinutes(visibleAt, 1) ?? new Date(visibleAt.getTime() + 60 * 1000);
+    });
+
+    updatedIntervals[themeId] = {
+      intervalMinutes,
+      nextVisibleAt: cursor
+    };
+  });
+
+  scheduledQueue.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+  const created = [];
+  for (const entry of scheduledQueue) {
+    const visibleTimestamp = Timestamp.fromDate(entry.visibleAt);
+    const newId = await createIssue(entry.payload, {
+      visibilityMode: 'scheduled',
+      visibleAfter: visibleTimestamp
+    });
+    created.push({
+      index: entry.index,
+      id: newId,
+      theme: entry.theme,
+      visibleAt: entry.visibleAt,
+      title: entry.payload.title
+    });
+  }
+
+  await saveReservationSettings({
+    intervals: updatedIntervals,
+    updatedAt: settings.updatedAt,
+    updatedBy: settings.updatedBy
+  }, { updatedBy: actor });
+
+  return created;
 }
 
 export async function getSignupFormSettings() {
