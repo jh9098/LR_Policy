@@ -54,6 +54,8 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
   const [mode, setMode] = useState(MODE.LOGIN);
   const [form, setForm] = useState(() => buildInitialValues(config.fields));
   const [errors, setErrors] = useState({});
+  const [agreements, setAgreements] = useState({ privacy: false, terms: false });
+  const [agreementError, setAgreementError] = useState('');
 
   useEffect(() => {
     setForm((prev) => mergeInitialValues(config.fields, prev));
@@ -110,6 +112,15 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
       ...prev,
       [name]: type === 'number' && value === '' ? '' : value
     }));
+  };
+
+  const handleAgreementChange = (event) => {
+    const { name, checked } = event.target;
+    setAgreements((prev) => ({
+      ...prev,
+      [name]: checked
+    }));
+    setAgreementError('');
   };
 
   const validateFields = (currentMode, fieldIds) => {
@@ -224,6 +235,13 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
     const valid = validateFields(MODE.REGISTER, registerFieldIds);
     if (!valid) return;
 
+    if (!agreements.terms || !agreements.privacy) {
+      setAgreementError('필수 약관(이용약관, 개인정보처리방침)에 모두 동의해야 회원가입을 진행할 수 있습니다.');
+      return;
+    }
+
+    setAgreementError('');
+
     try {
       await register({ values: form, config });
     } catch (error) {
@@ -243,6 +261,8 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
 
   const toggleMode = () => {
     setErrors({});
+    setAgreementError('');
+    setAgreements({ privacy: false, terms: false });
     setMode((prev) => (prev === MODE.LOGIN ? MODE.REGISTER : MODE.LOGIN));
   };
 
@@ -366,6 +386,64 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
     });
   };
 
+  const renderAgreementSection = () => {
+    return (
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-600 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-300">
+        <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">필수 동의</p>
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            name="terms"
+            checked={agreements.terms}
+            onChange={handleAgreementChange}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-500"
+            disabled={disabled}
+          />
+          <span>
+            <span className="font-semibold text-slate-700 dark:text-slate-200">[필수]</span>{' '}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-300"
+            >
+              이용약관
+            </a>
+            에 동의합니다.
+          </span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            name="privacy"
+            checked={agreements.privacy}
+            onChange={handleAgreementChange}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-500"
+            disabled={disabled}
+          />
+          <span>
+            <span className="font-semibold text-slate-700 dark:text-slate-200">[필수]</span>{' '}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-300"
+            >
+              개인정보처리방침
+            </a>
+            에 동의합니다.
+          </span>
+        </label>
+        {agreementError && (
+          <p className="text-[11px] text-rose-600 dark:text-rose-300">{agreementError}</p>
+        )}
+      </div>
+    );
+  };
+
+  const registerAgreementsSatisfied = agreements.privacy && agreements.terms;
+  const submitDisabled = disabled || (mode === MODE.REGISTER && !registerAgreementsSatisfied);
+
   return (
     <div
       className={`rounded-2xl border border-slate-200 bg-white/90 p-4 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-800/90 ${className}`}
@@ -380,7 +458,14 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
         </div>
 
         <div className="space-y-2">
-          {mode === MODE.LOGIN ? renderLoginFields() : renderRegisterFields()}
+          {mode === MODE.LOGIN ? (
+            renderLoginFields()
+          ) : (
+            <>
+              {renderRegisterFields()}
+              {renderAgreementSection()}
+            </>
+          )}
         </div>
 
         {authError && (
@@ -398,7 +483,7 @@ export default function EmailPasswordAuthPanel({ className = '', heading = '이�
           <button
             type="submit"
             className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-indigo-400 dark:focus-visible:ring-offset-slate-900"
-            disabled={disabled}
+            disabled={submitDisabled}
           >
             {mode === MODE.LOGIN ? '로그인' : '회원가입'}
           </button>
