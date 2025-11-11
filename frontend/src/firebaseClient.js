@@ -410,11 +410,28 @@ function ensureVisibleAfterValue({ visibilityMode, visibleAfter }) {
 
 // 공개 조회 전용. Render 서버를 거치지 않고 Firestore에서 직접 최근 50개의 이슈를 불러온다.
 export async function getRecentIssues(limitCount = 50) {
-  const q = query(collection(db, 'issues'), orderBy('date', 'desc'), limit(limitCount));
-  const snap = await getDocs(q);
-  const baseList = snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
-  const visibleList = filterVisibleIssues(baseList);
-  return attachStatsToIssues(visibleList);
+  const now = Timestamp.fromDate(new Date());
+  const fetchLimit = Math.max(limitCount * 3, limitCount + 10);
+
+  try {
+    const q = query(
+      collection(db, 'issues'),
+      where('visibleAfter', '<=', now),
+      orderBy('visibleAfter', 'desc'),
+      limit(fetchLimit)
+    );
+    const snap = await getDocs(q);
+    const baseList = snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+    const visibleList = filterVisibleIssues(baseList).slice(0, limitCount);
+    return attachStatsToIssues(visibleList);
+  } catch (error) {
+    console.warn('가시성 기준 최근 글 조회 실패, 날짜 기준으로 폴백합니다:', error);
+    const q = query(collection(db, 'issues'), orderBy('date', 'desc'), limit(fetchLimit));
+    const snap = await getDocs(q);
+    const baseList = snap.docs.map((docSnap) => normalizeIssueData(docSnap.id, docSnap.data()));
+    const visibleList = filterVisibleIssues(baseList).slice(0, limitCount);
+    return attachStatsToIssues(visibleList);
+  }
 }
 
 async function fetchIssuesWithFallback(constraints, { fallbackLimit = 80, fallbackFilter = null } = {}) {
