@@ -453,10 +453,11 @@ async function fetchIssuesWithFallback(constraints, { fallbackLimit = 80, fallba
 
 export async function getTopIssuesByTheme(themeId, limitCount = 10) {
   const validTheme = isValidThemeId(themeId) ? themeId : DEFAULT_THEME_ID;
+  const fetchLimit = Math.max(limitCount * 3, limitCount + 5);
   const list = await fetchIssuesWithFallback(
-    [where('theme', '==', validTheme), orderBy('date', 'desc'), limit(limitCount)],
+    [where('theme', '==', validTheme), orderBy('date', 'desc'), limit(fetchLimit)],
     {
-      fallbackLimit: limitCount * 4,
+      fallbackLimit: fetchLimit,
       fallbackFilter: (issue) => issue.theme === validTheme
     }
   );
