@@ -17,13 +17,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HelmetProvider>
       <BrowserRouter>
         <AuthProvider>
-          <AuthDialogProvider>
+          <SignupFormSettingsProvider>
             <SectionTitlesProvider>
-              <SignupFormSettingsProvider>
+              <AuthDialogProvider>
                 <App />
-              </SignupFormSettingsProvider>
+              </AuthDialogProvider>
             </SectionTitlesProvider>
-          </AuthDialogProvider>
+          </SignupFormSettingsProvider>
         </AuthProvider>
       </BrowserRouter>
     </HelmetProvider>
