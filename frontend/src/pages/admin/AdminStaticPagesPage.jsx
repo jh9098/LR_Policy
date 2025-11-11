@@ -18,6 +18,7 @@ import {
   getDefaultSectionTitleValue,
   setValueAtPath
 } from '../../constants/sectionTitleConfig.js';
+import SignupFormSettingsEditor from '../../components/admin/SignupFormSettingsEditor.jsx';
 
 function buildSectionTitleFormValues(sourceTitles) {
   const merged = mergeSectionTitles(sourceTitles);
@@ -547,6 +548,8 @@ export default function AdminStaticPagesPage() {
           </p>
         ) : null}
       </section>
+
+      <SignupFormSettingsEditor />
 
       <div className="flex flex-wrap gap-2">
         {STATIC_PAGE_ITEMS.map((item) => {

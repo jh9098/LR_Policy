@@ -10,6 +10,7 @@ import './index.css';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { AuthDialogProvider } from './contexts/AuthDialogContext.jsx';
 import { SectionTitlesProvider } from './contexts/SectionTitlesContext.jsx';
+import { SignupFormSettingsProvider } from './contexts/SignupFormSettingsContext.jsx';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -18,7 +19,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <AuthProvider>
           <AuthDialogProvider>
             <SectionTitlesProvider>
-              <App />
+              <SignupFormSettingsProvider>
+                <App />
+              </SignupFormSettingsProvider>
             </SectionTitlesProvider>
           </AuthDialogProvider>
         </AuthProvider>

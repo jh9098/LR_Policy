@@ -53,6 +53,7 @@ import {
 } from 'firebase/firestore';
 import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from './constants/themeConfig.js';
 import { mergeSectionTitles } from './constants/sectionTitleConfig.js';
+import { createDefaultSignupFormConfig, normalizeSignupFormConfig } from './constants/signupFormConfig.js';
 import { getDefaultCategory, isValidCategory, isValidSubcategory } from './constants/categoryStructure.js';
 import { normalizeCoreKeywords } from './utils/draftSerialization.js';
 import {
@@ -84,6 +85,7 @@ const USER_SCRAPS_COLLECTION = 'userScraps';
 const TRENDING_SETTINGS_COLLECTION = 'appSettings';
 const TRENDING_SETTINGS_DOC_ID = 'trending';
 const SECTION_TITLES_DOC_ID = 'sectionTitles';
+const SIGNUP_FORM_DOC_ID = 'signupForm';
 
 const FACTORY_SETTINGS_COLLECTION = 'factorySettings';
 const FACTORY_DASHBOARD_DOC_ID = 'dashboard';
@@ -102,6 +104,15 @@ const DEFAULT_TRENDING_SETTINGS = {
   withinHours: 24,
   maxItems: 10
 };
+
+function normalizeSignupFormDoc(data) {
+  const config = normalizeSignupFormConfig(data ?? {});
+  return {
+    config,
+    updatedAt: data?.updatedAt ?? null,
+    updatedBy: data?.updatedBy ?? ''
+  };
+}
 
 function normalizeSectionTitlesDoc(data) {
   const titles = mergeSectionTitles(data?.titles ?? {});
@@ -760,6 +771,30 @@ export async function saveSectionTitles(titles, { updatedBy } = {}) {
     updatedAt: new Date(),
     updatedBy: updatedBy ?? ''
   };
+}
+
+export async function getSignupFormSettings() {
+  const settingsRef = doc(db, TRENDING_SETTINGS_COLLECTION, SIGNUP_FORM_DOC_ID);
+  const snap = await getDoc(settingsRef);
+  if (!snap.exists()) {
+    return { config: createDefaultSignupFormConfig(), updatedAt: null, updatedBy: '' };
+  }
+  return normalizeSignupFormDoc(snap.data());
+}
+
+export async function saveSignupFormSettings(config, { updatedBy } = {}) {
+  const normalizedConfig = normalizeSignupFormConfig(config ?? {});
+  const settingsRef = doc(db, TRENDING_SETTINGS_COLLECTION, SIGNUP_FORM_DOC_ID);
+  await setDoc(
+    settingsRef,
+    {
+      ...normalizedConfig,
+      updatedAt: serverTimestamp(),
+      updatedBy: updatedBy ?? ''
+    },
+    { merge: true }
+  );
+  return normalizedConfig;
 }
 
 export async function getTrendingIssues() {

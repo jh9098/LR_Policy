@@ -9,6 +9,7 @@ import {
   subscribeAuthState,
   updateAuthProfile
 } from '../firebaseClient.js';
+import { buildFieldMap, getFieldLabel, normalizeSignupFormConfig } from '../constants/signupFormConfig.js';
 
 const AuthContext = createContext({
   user: null,
@@ -129,45 +130,99 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const register = async ({
-    email,
-    confirmEmail,
-    password,
-    confirmPassword,
-    name,
-    gender,
-    birthYear,
-    phone
-  }) => {
+  const register = async ({ values = {}, config }) => {
     clearFeedback();
+
+    const normalizedConfig = normalizeSignupFormConfig(config ?? {});
+    const fieldMap = buildFieldMap(normalizedConfig.fields);
+    const { emailFieldId, confirmEmailFieldId, passwordFieldId, confirmPasswordFieldId, displayNameFieldId } =
+      normalizedConfig.identity;
+
+    if (!emailFieldId || !passwordFieldId) {
+      setAuthError('관리자 설정에 이메일 또는 비밀번호 항목이 지정되지 않았습니다.');
+      return;
+    }
+
+    const email = typeof values[emailFieldId] === 'string' ? values[emailFieldId].trim() : '';
+    const confirmEmail =
+      confirmEmailFieldId && typeof values[confirmEmailFieldId] === 'string'
+        ? values[confirmEmailFieldId].trim()
+        : email;
+    const password = typeof values[passwordFieldId] === 'string' ? values[passwordFieldId] : '';
+    const confirmPassword =
+      confirmPasswordFieldId && typeof values[confirmPasswordFieldId] === 'string'
+        ? values[confirmPasswordFieldId]
+        : password;
+
     if (!email || !password) {
       setAuthError('이메일과 비밀번호를 모두 입력해주세요.');
       return;
     }
     if (email !== confirmEmail) {
-      setAuthError('입력한 이메일이 일치하지 않습니다.');
+      const label = getFieldLabel(fieldMap[confirmEmailFieldId] ?? fieldMap[emailFieldId]);
+      setAuthError(`${label || '이메일 확인'} 값이 이메일과 일치하지 않습니다.`);
       return;
     }
     if (password !== confirmPassword) {
-      setAuthError('입력한 비밀번호가 일치하지 않습니다.');
+      const label = getFieldLabel(fieldMap[confirmPasswordFieldId] ?? fieldMap[passwordFieldId]);
+      setAuthError(`${label || '비밀번호 확인'} 값이 비밀번호와 일치하지 않습니다.`);
+      return;
+    }
+
+    const missingField = normalizedConfig.fields.find((field) => {
+      if (!field.enabledModes.includes('register') || !field.requiredModes.includes('register')) {
+        return false;
+      }
+      const rawValue = values[field.id];
+      if (rawValue === null || rawValue === undefined) {
+        return true;
+      }
+      if (typeof rawValue === 'string') {
+        return rawValue.trim().length === 0;
+      }
+      return String(rawValue).trim().length === 0;
+    });
+
+    if (missingField) {
+      setAuthError(`${getFieldLabel(missingField)} 항목을 입력해주세요.`);
       return;
     }
 
     setProcessing(true);
     try {
       const credential = await registerUserWithEmail(email, password);
+
       const profileData = {
         email,
-        name: name?.trim() || '',
-        gender: gender || '',
-        birthYear: birthYear || '',
-        phone: phone?.trim() || '',
         updatedAt: new Date().toISOString()
       };
+
+      normalizedConfig.fields.forEach((field) => {
+        if (!field.enabledModes.includes('register')) return;
+        if (field.type === 'password') return;
+        if ([emailFieldId, confirmEmailFieldId, passwordFieldId, confirmPasswordFieldId].includes(field.id)) return;
+
+        const rawValue = values[field.id];
+        if (rawValue === undefined || rawValue === null) {
+          profileData[field.id] = '';
+          return;
+        }
+        if (typeof rawValue === 'string') {
+          profileData[field.id] = rawValue.trim();
+        } else {
+          profileData[field.id] = String(rawValue);
+        }
+      });
+
       await saveUserProfile(credential.user.uid, profileData);
-      if (name?.trim()) {
-        await updateAuthProfile(credential.user, { displayName: name.trim() });
+
+      if (displayNameFieldId) {
+        const nameValue = values[displayNameFieldId];
+        if (typeof nameValue === 'string' && nameValue.trim()) {
+          await updateAuthProfile(credential.user, { displayName: nameValue.trim() });
+        }
       }
+
       setAuthMessage('회원가입이 완료되었습니다. 로그인 후 이용해주세요.');
     } catch (error) {
       console.error('회원가입 실패:', error);
