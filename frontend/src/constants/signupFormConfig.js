@@ -192,17 +192,29 @@ function normalizeField(field) {
     defaultValue: typeof field.defaultValue === 'string' ? field.defaultValue : '',
     autoComplete: normalizeAutoComplete(field.autoComplete),
     matchField: typeof field.matchField === 'string' ? field.matchField : '',
-    minLength: Number.isFinite(field.minLength) ? Number(field.minLength) : undefined,
-    maxLength: Number.isFinite(field.maxLength) ? Number(field.maxLength) : undefined,
-    min: Number.isFinite(field.min) ? Number(field.min) : undefined,
-    max: Number.isFinite(field.max) ? Number(field.max) : undefined,
-    step: Number.isFinite(field.step) ? Number(field.step) : undefined,
     pattern: typeof field.pattern === 'string' ? field.pattern : '',
     validationMessage: typeof field.validationMessage === 'string' ? field.validationMessage : ''
   };
 
+  if (Number.isFinite(field.minLength)) {
+    normalized.minLength = Number(field.minLength);
+  }
+  if (Number.isFinite(field.maxLength)) {
+    normalized.maxLength = Number(field.maxLength);
+  }
+  if (Number.isFinite(field.min)) {
+    normalized.min = Number(field.min);
+  }
+  if (Number.isFinite(field.max)) {
+    normalized.max = Number(field.max);
+  }
+  if (Number.isFinite(field.step)) {
+    normalized.step = Number(field.step);
+  }
+
   if (type === 'select') {
-    normalized.options = normalizeOptions(field);
+    const options = normalizeOptions({ ...field, type });
+    normalized.options = Array.isArray(options) ? options : [];
   }
   return normalized;
 }
@@ -273,6 +285,22 @@ function normalizeIdentity(identity, fieldMap) {
   return normalized;
 }
 
+function pruneUndefinedDeep(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => pruneUndefinedDeep(item));
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value).reduce((acc, [key, val]) => {
+      const nextValue = pruneUndefinedDeep(val);
+      if (nextValue !== undefined) {
+        acc[key] = nextValue;
+      }
+      return acc;
+    }, {});
+  }
+  return value === undefined ? undefined : value;
+}
+
 export function normalizeSignupFormConfig(source) {
   const base = source && typeof source === 'object' ? source : {};
   const fieldCandidates = Array.isArray(base.fields) && base.fields.length > 0 ? base.fields : DEFAULT_SIGNUP_FORM_CONFIG.fields;
@@ -285,12 +313,12 @@ export function normalizeSignupFormConfig(source) {
   const registerLayout = normalizeRegisterLayout(base.registerLayout, fieldMap);
   const identity = normalizeIdentity(base.identity, fieldMap);
 
-  return {
+  return pruneUndefinedDeep({
     fields,
     loginLayout,
     registerLayout,
     identity
-  };
+  });
 }
 
 export function createDefaultSignupFormConfig() {

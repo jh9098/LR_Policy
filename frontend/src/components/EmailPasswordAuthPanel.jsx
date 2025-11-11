@@ -219,8 +219,9 @@ export default function EmailPasswordAuthPanel({ className = '', heading = 'ì´ë
     if (mode === MODE.LOGIN) {
       const valid = validateFields(MODE.LOGIN, loginFieldIds);
       if (!valid) return;
-      const emailFieldId = config.identity.emailFieldId;
-      const passwordFieldId = config.identity.passwordFieldId;
+      const identity = config.identity || {};
+      const emailFieldId = identity.emailFieldId || 'email';
+      const passwordFieldId = identity.passwordFieldId || 'password';
       const emailValue = (form[emailFieldId] ?? '').trim();
       const passwordValue = form[passwordFieldId] ?? '';
       try {
@@ -250,7 +251,8 @@ export default function EmailPasswordAuthPanel({ className = '', heading = 'ì´ë
   };
 
   const handlePasswordReset = async () => {
-    const emailFieldId = config.identity.emailFieldId;
+    const identity = config.identity || {};
+    const emailFieldId = identity.emailFieldId || 'email';
     const emailValue = (form[emailFieldId] ?? '').trim();
     try {
       await requestPasswordReset(emailValue);
