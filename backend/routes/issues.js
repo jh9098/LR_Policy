@@ -47,10 +47,23 @@ const THEME_CATEGORY_STRUCTURE = Object.freeze({
       '생애주기 건강': Object.freeze(['소아·청소년 건강', '여성 건강', '남성 건강', '노년 건강']),
       '예방/응급': Object.freeze(['예방접종·검진', '응급 상황 대응', '운동·재활', '영양·식단'])
     })
+  }),
+  ai: Object.freeze({
+    categories: Object.freeze({
+      'AI 기초·트렌드': Object.freeze(['AI 개념 한입 요약', 'AI 용어사전', 'AI 기술·역사 스토리', 'AI 트렌드 브리핑']),
+      'AI 도구·서비스 활용': Object.freeze(['챗봇·텍스트 AI 활용', '이미지·영상·음성 AI', '문서·노트·업무 도구', '국내 AI 서비스 지도']),
+      '업무·생산성·자동화': Object.freeze(['문서·보고서 자동화', '엑셀·데이터 정리 자동화', '직장인 업무루틴 자동화', '고객응대·CS 보조']),
+      '코딩·노코드·워크플로 자동화': Object.freeze(['프롬프트 엔지니어링', '코딩 도우미 활용법', '노코드·로우코드 자동화', 'API·봇 만들기 기초']),
+      'AI 부업·창업·수익화': Object.freeze(['AI 부업 아이디어 모음', '콘텐츠·마케팅 수익화', 'SaaS·서비스 기획', '프리랜서·외주 활용']),
+      '콘텐츠 제작·유튜브·블로그': Object.freeze(['블로그 자동작성·최적화', '유튜브·쇼츠 스크립트 공장', 'SNS·쓰레드 자동화', '카피라이팅·광고 문구']),
+      '교육·육아·자기계발에서의 AI': Object.freeze(['학습 도우미로 쓰는 AI', '유아·육아 AI 활용', '커리어·스킬업 플랜', '멘탈·생산성 관리']),
+      'AI 이슈·윤리·정책': Object.freeze(['국내 AI 정책·규제 동향', '해외 AI 규제·사례', 'AI 윤리·프라이버시', '직장 내 AI 사용 가이드']),
+      'AI 툴·사례 아카이브': Object.freeze(['분야별 AI 툴 지도', '실전 활용 사례 모음', '워크플로 레시피 모음', '템플릿·체크리스트'])
+    })
   })
 });
 const SOURCE_TYPE_OPTIONS = new Set(['official', 'youtube', 'media', 'etc']);
-const THEME_OPTIONS = new Set(['policy', 'parenting', 'lifestyle', 'health']);
+const THEME_OPTIONS = new Set(['policy', 'stocks', 'ai', 'parenting', 'lifestyle', 'health', 'groupbuy', 'support']);
 const DEFAULT_THEME_ID = 'policy';
 
 const PROGRESSIVE_NOTE =

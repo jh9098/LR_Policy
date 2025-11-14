@@ -24,6 +24,25 @@ export const THEME_CONFIG = [
     keyAreas: ['시장 동향', '섹터 분석', '기업 분석', '투자 전략', '공시/뉴스']
   },
   {
+    id: 'ai',
+    label: 'AI 정보',
+    description:
+      'AI 개념 정리부터 도구 활용, 자동화, 수익화, 정책 이슈까지 한 번에 정리합니다.',
+    accent: 'cyan',
+    showPerspectives: false,
+    keyAreas: [
+      'AI 기초·트렌드',
+      'AI 도구·서비스 활용',
+      '업무·생산성·자동화',
+      '코딩·노코드·워크플로 자동화',
+      'AI 부업·창업·수익화',
+      '콘텐츠 제작·유튜브·블로그',
+      '교육·육아·자기계발에서의 AI',
+      'AI 이슈·윤리·정책',
+      'AI 툴·사례 아카이브'
+    ]
+  },
+  {
     id: 'parenting',
     label: '육아정보',
     description:

@@ -11,6 +11,7 @@ const THEME_LABELS = {
   parenting: '육아정보',
   lifestyle: '생활정보',
   health: '건강정보',
+  ai: 'AI 정보',
   groupbuy: '공동구매정보',
   support: '정부지원정보',
   admin: '관리자',

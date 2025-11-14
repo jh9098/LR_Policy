@@ -31,6 +31,7 @@ const THEME_COLOR_CLASSES = {
   parenting: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200',
   lifestyle: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200',
   health: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
+  ai: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200',
   support: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200',
   groupbuy: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200'
 };
