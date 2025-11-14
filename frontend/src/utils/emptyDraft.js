@@ -2,6 +2,7 @@
 import { DEFAULT_THEME_ID } from '../constants/themeConfig.js';
 import { getDefaultCategory } from '../constants/categoryStructure.js';
 import {
+  createAiGuide,
   createEmptyThemeSections,
   createHealthGuide,
   createLifestyleGuide,
@@ -11,7 +12,7 @@ import {
 } from './themeDraftDefaults.js';
 
 export function createEmptyDraft() {
-  const { parentingGuide, healthGuide, lifestyleGuide, stockGuide, supportGuide } = createEmptyThemeSections();
+  const { aiGuide, parentingGuide, healthGuide, lifestyleGuide, stockGuide, supportGuide } = createEmptyThemeSections();
   return {
     theme: DEFAULT_THEME_ID,
     easySummary: '',
@@ -28,6 +29,7 @@ export function createEmptyDraft() {
     conservativeView: null,
     impactToLife: null,
     sources: [],
+    aiGuide,
     parentingGuide,
     healthGuide,
     lifestyleGuide,
@@ -88,6 +90,7 @@ export function createFreshDraft() {
 export function ensureThemeGuides(draft) {
   return {
     ...draft,
+    aiGuide: draft?.aiGuide ?? createAiGuide(),
     parentingGuide: draft?.parentingGuide ?? createParentingGuide(),
     healthGuide: draft?.healthGuide ?? createHealthGuide(),
     lifestyleGuide: draft?.lifestyleGuide ?? createLifestyleGuide(),

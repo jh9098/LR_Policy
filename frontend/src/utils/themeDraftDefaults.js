@@ -1,10 +1,11 @@
 // frontend/src/utils/themeDraftDefaults.js
-// 테마별 초안/정규화/클론 유틸(생활/육아/건강/주식/정부지원)
+// 테마별 초안/정규화/클론 유틸(생활/육아/건강/주식/정부지원/AI)
 // - Lifestyle: createLifestyleItem, createHotItem(호환), createHotDeal, affiliateNotes
 // - Parenting: PARENTING_* 프리셋 + createParentingAgeGroup
 // - Health: HEALTH_* 프리셋 + createHealthCondition
 // - Stocks: STOCK_SECTOR_PRESETS + createSectorHighlight/createCompanyAnalysis/createWatchItem
 // - Support: regionalNotes/faq 제거, commonResources 정착 (+ 프리셋 상수)
+// - AI: 실행 구조/연결 가이드/카테고리별 추천 구조 편집을 위한 createAiGuide
 
 //////////////////////////////
 // 공통 유틸
@@ -17,6 +18,82 @@ export function toStringArray(value) {
 // ✅ null/undefined를 안전하게 객체로
 export function asObject(v, fallback = {}) {
   return v && typeof v === 'object' ? v : fallback;
+}
+
+//////////////////////////////
+// AI (AI 정보)
+//////////////////////////////
+
+const AI_CONNECTION_TYPES = ['parentingGuide', 'lifestyleGuide', 'supportGuide', 'other'];
+
+export function createAiConnection({ type = 'other', label = '', description = '' } = {}) {
+  const normalizedType = AI_CONNECTION_TYPES.includes(type) ? type : 'other';
+  return {
+    type: normalizedType,
+    label: String(label ?? ''),
+    description: String(description ?? '')
+  };
+}
+
+export function createAiBlueprintSection({ title = '', description = '', checklist = [] } = {}) {
+  return {
+    title: String(title ?? ''),
+    description: String(description ?? ''),
+    checklist: toStringArray(checklist)
+  };
+}
+
+export function createAiSubcategoryFocus({ title = '', summary = '', highlights = [] } = {}) {
+  return {
+    title: String(title ?? ''),
+    summary: String(summary ?? ''),
+    highlights: toStringArray(highlights)
+  };
+}
+
+export function createAiGuide() {
+  return {
+    summaryCardBullets: ['반복 업무를 자동화하는 핵심 단계를 이해합니다.', '내 환경에 맞게 AI 도구를 세팅합니다.', '보안/정책 이슈를 피하면서 활용합니다.'],
+    backgroundInsights: ['왜 지금 이 주제가 중요한지, 현업에서 어떤 문제가 반복되는지 적어 주세요.'],
+    keyActionSteps: ['1) 문제 상황을 정의하고, 2) 활용할 AI 도구를 정합니다.'],
+    impact: { targetAudience: '', expectedEffect: '', caution: '' },
+    connectionGuides: [],
+    categoryBlueprint: {
+      overview: '',
+      sections: [],
+      subcategoryFocus: []
+    }
+  };
+}
+
+export function normalizeAiGuide(raw = {}) {
+  const r = asObject(raw, {});
+  return {
+    summaryCardBullets: toStringArray(r.summaryCardBullets ?? []),
+    backgroundInsights: toStringArray(r.backgroundInsights ?? []),
+    keyActionSteps: toStringArray(r.keyActionSteps ?? []),
+    impact: {
+      targetAudience: String(r?.impact?.targetAudience ?? ''),
+      expectedEffect: String(r?.impact?.expectedEffect ?? ''),
+      caution: String(r?.impact?.caution ?? '')
+    },
+    connectionGuides: Array.isArray(r.connectionGuides)
+      ? r.connectionGuides.map((item) => createAiConnection(item))
+      : [],
+    categoryBlueprint: {
+      overview: String(r?.categoryBlueprint?.overview ?? ''),
+      sections: Array.isArray(r?.categoryBlueprint?.sections)
+        ? r.categoryBlueprint.sections.map((section) => createAiBlueprintSection(section))
+        : [],
+      subcategoryFocus: Array.isArray(r?.categoryBlueprint?.subcategoryFocus)
+        ? r.categoryBlueprint.subcategoryFocus.map((focus) => createAiSubcategoryFocus(focus))
+        : []
+    }
+  };
+}
+
+export function cloneAiGuide(raw = {}) {
+  return normalizeAiGuide(raw);
 }
 
 //////////////////////////////
@@ -217,6 +294,7 @@ export function cloneSupportGuide(raw = {}, opts) { return normalizeSupportGuide
 //////////////////////////////
 export function createEmptyThemeSections() {
   return {
+    aiGuide: createAiGuide(),
     parentingGuide: createParentingGuide(),
     healthGuide: createHealthGuide(),
     lifestyleGuide: createLifestyleGuide(),

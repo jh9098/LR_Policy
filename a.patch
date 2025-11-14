@@ -1,552 +1,1968 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/backend/routes/issues.js b/backend/routes/issues.js
-index 83116b1a3d4d9ac0324b898b04e3e2432c3b7487..be0e28e1c4e2dde05265eb6fc7d21816c0d50a1a 100644
---- a/backend/routes/issues.js
-+++ b/backend/routes/issues.js
-@@ -25,54 +25,67 @@ const THEME_CATEGORY_STRUCTURE = Object.freeze({
-     })
-   }),
-   parenting: Object.freeze({
-     categories: Object.freeze({
-       '임신/출산 준비': Object.freeze(['임신 건강관리', '출산 준비물·체크리스트', '산후 회복·케어', '정부 지원·제도']),
-       '0~2세 영아': Object.freeze(['수면·일상 루틴', '모유수유·이유식', '발달 자극 놀이', '예방접종·건강관리']),
-       '3~5세 유아': Object.freeze(['언어·사회성 발달', '놀이·교육 활동', '생활습관·훈육', '어린이집·유치원 준비']),
-       '6세 이상': Object.freeze(['학습 습관·학교생활', '정서·행동 지원', '안전교육·생활기술', '돌봄·방과후 프로그램'])
-     })
-   }),
-   lifestyle: Object.freeze({
-     categories: Object.freeze({
-       '행정/정부 서비스': Object.freeze(['민원·증명서 발급', '복지·지원금 신청', '전입·주거 행정', '교통·운전 절차']),
-       '금융/세무': Object.freeze(['세금·연말정산', '대출·금융상품', '재테크·저축 전략', '보험·보장 점검']),
-       '소비/쇼핑': Object.freeze(['생활필수품 추천', '가전·디지털', '푸드·외식', '여행·문화 할인']),
-       생활관리: Object.freeze(['청소·정리수납', '건강·운동 루틴', '에너지 절약·광열비', '반려동물 케어'])
-     })
-   }),
-   health: Object.freeze({
-     categories: Object.freeze({
-       '만성질환 관리': Object.freeze(['심혈관 질환', '당뇨·대사증후군', '호흡기·알레르기', '근골격계·통증']),
-       정신건강: Object.freeze(['우울·불안 관리', 'ADHD·집중력', '치매·인지장애', '수면·스트레스']),
-       '생애주기 건강': Object.freeze(['소아·청소년 건강', '여성 건강', '남성 건강', '노년 건강']),
-       '예방/응급': Object.freeze(['예방접종·검진', '응급 상황 대응', '운동·재활', '영양·식단'])
-     })
-+  }),
-+  ai: Object.freeze({
-+    categories: Object.freeze({
-+      'AI 기초·트렌드': Object.freeze(['AI 개념 한입 요약', 'AI 용어사전', 'AI 기술·역사 스토리', 'AI 트렌드 브리핑']),
-+      'AI 도구·서비스 활용': Object.freeze(['챗봇·텍스트 AI 활용', '이미지·영상·음성 AI', '문서·노트·업무 도구', '국내 AI 서비스 지도']),
-+      '업무·생산성·자동화': Object.freeze(['문서·보고서 자동화', '엑셀·데이터 정리 자동화', '직장인 업무루틴 자동화', '고객응대·CS 보조']),
-+      '코딩·노코드·워크플로 자동화': Object.freeze(['프롬프트 엔지니어링', '코딩 도우미 활용법', '노코드·로우코드 자동화', 'API·봇 만들기 기초']),
-+      'AI 부업·창업·수익화': Object.freeze(['AI 부업 아이디어 모음', '콘텐츠·마케팅 수익화', 'SaaS·서비스 기획', '프리랜서·외주 활용']),
-+      '콘텐츠 제작·유튜브·블로그': Object.freeze(['블로그 자동작성·최적화', '유튜브·쇼츠 스크립트 공장', 'SNS·쓰레드 자동화', '카피라이팅·광고 문구']),
-+      '교육·육아·자기계발에서의 AI': Object.freeze(['학습 도우미로 쓰는 AI', '유아·육아 AI 활용', '커리어·스킬업 플랜', '멘탈·생산성 관리']),
-+      'AI 이슈·윤리·정책': Object.freeze(['국내 AI 정책·규제 동향', '해외 AI 규제·사례', 'AI 윤리·프라이버시', '직장 내 AI 사용 가이드']),
-+      'AI 툴·사례 아카이브': Object.freeze(['분야별 AI 툴 지도', '실전 활용 사례 모음', '워크플로 레시피 모음', '템플릿·체크리스트'])
+diff --git a/frontend/src/components/admin/AIThemeEditor.jsx b/frontend/src/components/admin/AIThemeEditor.jsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..6bf5295be60de173c5e532bdc4d42006f0ffc278
+--- /dev/null
++++ b/frontend/src/components/admin/AIThemeEditor.jsx
+@@ -0,0 +1,506 @@
++// frontend/src/components/admin/AIThemeEditor.jsx
++import PropTypes from 'prop-types';
++import SimpleListEditor from './SimpleListEditor.jsx';
++import {
++  cloneAiGuide,
++  createAiBlueprintSection,
++  createAiConnection,
++  createAiGuide,
++  createAiSubcategoryFocus
++} from '../../utils/themeDraftDefaults.js';
++
++const CONNECTION_OPTIONS = [
++  { value: 'parentingGuide', label: 'Parenting Guide 연계' },
++  { value: 'lifestyleGuide', label: 'Lifestyle Guide 연계' },
++  { value: 'supportGuide', label: 'Support Guide 연계' },
++  { value: 'other', label: '기타(직접 입력)' }
++];
++
++function AIThemeEditor({ guide, onChange }) {
++  const safeGuide = cloneAiGuide(guide ?? createAiGuide());
++
++  const updateGuide = (updater) => {
++    const draft = cloneAiGuide(guide ?? createAiGuide());
++    updater(draft);
++    onChange(draft);
++  };
++
++  const handleSummaryCardBullets = (items) => {
++    updateGuide((draft) => {
++      draft.summaryCardBullets = items;
++    });
++  };
++
++  const handleBackgroundInsights = (items) => {
++    updateGuide((draft) => {
++      draft.backgroundInsights = items;
++    });
++  };
++
++  const handleKeyActionSteps = (items) => {
++    updateGuide((draft) => {
++      draft.keyActionSteps = items;
++    });
++  };
++
++  const handleImpactField = (field, value) => {
++    updateGuide((draft) => {
++      draft.impact = {
++        ...draft.impact,
++        [field]: value
++      };
++    });
++  };
++
++  const addConnection = () => {
++    updateGuide((draft) => {
++      draft.connectionGuides.push(createAiConnection());
++    });
++  };
++
++  const updateConnectionField = (index, field, value) => {
++    updateGuide((draft) => {
++      if (!draft.connectionGuides[index]) {
++        draft.connectionGuides[index] = createAiConnection();
++      }
++      draft.connectionGuides[index] = {
++        ...draft.connectionGuides[index],
++        [field]: value
++      };
++    });
++  };
++
++  const removeConnection = (index) => {
++    updateGuide((draft) => {
++      draft.connectionGuides.splice(index, 1);
++    });
++  };
++
++  const handleBlueprintOverviewChange = (event) => {
++    const { value } = event.target;
++    updateGuide((draft) => {
++      draft.categoryBlueprint.overview = value;
++    });
++  };
++
++  const addBlueprintSection = () => {
++    updateGuide((draft) => {
++      draft.categoryBlueprint.sections.push(createAiBlueprintSection());
++    });
++  };
++
++  const updateBlueprintSectionField = (index, field, value) => {
++    updateGuide((draft) => {
++      if (!draft.categoryBlueprint.sections[index]) {
++        draft.categoryBlueprint.sections[index] = createAiBlueprintSection();
++      }
++      draft.categoryBlueprint.sections[index] = {
++        ...draft.categoryBlueprint.sections[index],
++        [field]: value
++      };
++    });
++  };
++
++  const updateBlueprintSectionChecklist = (index, items) => {
++    updateGuide((draft) => {
++      if (!draft.categoryBlueprint.sections[index]) {
++        draft.categoryBlueprint.sections[index] = createAiBlueprintSection();
++      }
++      draft.categoryBlueprint.sections[index] = {
++        ...draft.categoryBlueprint.sections[index],
++        checklist: items
++      };
++    });
++  };
++
++  const removeBlueprintSection = (index) => {
++    updateGuide((draft) => {
++      draft.categoryBlueprint.sections.splice(index, 1);
++    });
++  };
++
++  const addSubcategoryFocus = () => {
++    updateGuide((draft) => {
++      draft.categoryBlueprint.subcategoryFocus.push(createAiSubcategoryFocus());
++    });
++  };
++
++  const updateSubcategoryFocusField = (index, field, value) => {
++    updateGuide((draft) => {
++      if (!draft.categoryBlueprint.subcategoryFocus[index]) {
++        draft.categoryBlueprint.subcategoryFocus[index] = createAiSubcategoryFocus();
++      }
++      draft.categoryBlueprint.subcategoryFocus[index] = {
++        ...draft.categoryBlueprint.subcategoryFocus[index],
++        [field]: value
++      };
++    });
++  };
++
++  const updateSubcategoryFocusHighlights = (index, items) => {
++    updateGuide((draft) => {
++      if (!draft.categoryBlueprint.subcategoryFocus[index]) {
++        draft.categoryBlueprint.subcategoryFocus[index] = createAiSubcategoryFocus();
++      }
++      draft.categoryBlueprint.subcategoryFocus[index] = {
++        ...draft.categoryBlueprint.subcategoryFocus[index],
++        highlights: items
++      };
++    });
++  };
++
++  const removeSubcategoryFocus = (index) => {
++    updateGuide((draft) => {
++      draft.categoryBlueprint.subcategoryFocus.splice(index, 1);
++    });
++  };
++
++  return (
++    <section className="space-y-5 rounded-2xl border border-cyan-200 bg-white p-6 shadow-sm dark:border-cyan-500/40 dark:bg-slate-900/40">
++      <header className="space-y-2">
++        <h2 className="text-lg font-semibold text-cyan-700 dark:text-cyan-200">AI 테마 공통 구조</h2>
++        <p className="text-xs text-cyan-700/80 dark:text-cyan-200/80">
++          “어떤 사람에게 어떤 상황에서 무엇을 해결하는지”가 드러나도록 요약/배경/실행 단계를 채워 주세요.
++        </p>
++        <p className="text-xs text-slate-500 dark:text-slate-400">
++          핵심 실행 단위는 “1) ~을 클릭한다”처럼 구체적으로 작성하고, 필요 시 다른 테마 가이드와 연결할 수 있습니다.
++        </p>
++      </header>
++
++      <SimpleListEditor
++        title="요약 카드 Bullet"
++        description="이 글로 할 수 있게 되는 것 3가지 정도를 bullet 형태로 정리하세요."
++        items={safeGuide.summaryCardBullets}
++        onChange={handleSummaryCardBullets}
++        addLabel="요약 항목 추가"
++        itemPlaceholder="예: 반복 보고서를 10분 만에 자동 작성"
++        tone="cyan"
++      />
++
++      <SimpleListEditor
++        title="배경 설명"
++        description="왜 지금 중요한 주제인지, 실제 업무/생활 문제를 2~3 문단으로 적어 주세요."
++        items={safeGuide.backgroundInsights}
++        onChange={handleBackgroundInsights}
++        addLabel="배경 문단 추가"
++        itemPlaceholder="예: 생성형 AI 도입으로 문서 작업 속도가 빨라졌지만, 보안 문제가 남아있다."
++        tone="cyan"
++      />
++
++      <SimpleListEditor
++        title="핵심 실행 단계"
++        description="실행 단위로 1) 2) 형태의 단계를 작성하세요."
++        items={safeGuide.keyActionSteps}
++        onChange={handleKeyActionSteps}
++        addLabel="실행 단계 추가"
++        itemPlaceholder="예: 1) 회사 템플릿을 열고 2) 프롬프트를 붙여넣는다"
++        tone="cyan"
++      />
++
++      <div className="rounded-xl border border-cyan-200 bg-cyan-50/40 p-4 dark:border-cyan-500/40 dark:bg-slate-900/60">
++        <h3 className="text-sm font-semibold text-cyan-800 dark:text-cyan-100">생활/업무 영향</h3>
++        <p className="mt-1 text-xs text-cyan-700/80 dark:text-cyan-200/70">누가 꼭 봐야 하는지, 기대 효과, 주의점을 각각 명시해 주세요.</p>
++        <div className="mt-4 grid gap-4 md:grid-cols-3">
++          <label className="flex flex-col gap-2 text-sm">
++            <span className="font-medium">대상</span>
++            <input
++              type="text"
++              value={safeGuide.impact.targetAudience}
++              onChange={(event) => handleImpactField('targetAudience', event.target.value)}
++              className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++              placeholder="예: 주 3회 보고서를 작성하는 팀장"
++            />
++          </label>
++          <label className="flex flex-col gap-2 text-sm">
++            <span className="font-medium">효과</span>
++            <input
++              type="text"
++              value={safeGuide.impact.expectedEffect}
++              onChange={(event) => handleImpactField('expectedEffect', event.target.value)}
++              className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++              placeholder="예: 매주 2시간 절약, 오류 감소"
++            />
++          </label>
++          <label className="flex flex-col gap-2 text-sm">
++            <span className="font-medium">주의</span>
++            <input
++              type="text"
++              value={safeGuide.impact.caution}
++              onChange={(event) => handleImpactField('caution', event.target.value)}
++              className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++              placeholder="예: 회사 데이터 외부 전송 금지"
++            />
++          </label>
++        </div>
++      </div>
++
++      <section className="space-y-3 rounded-xl border border-cyan-200 bg-white/70 p-4 dark:border-cyan-500/40 dark:bg-slate-900/40">
++        <div className="flex items-center justify-between">
++          <div>
++            <h3 className="text-sm font-semibold text-cyan-800 dark:text-cyan-100">연결 가이드</h3>
++            <p className="text-xs text-cyan-700/80 dark:text-cyan-200/70">다른 테마(Parenting/Lifestyle/Support)와 연결되면 선택 후 설명을 추가하세요.</p>
++          </div>
++          <button
++            type="button"
++            onClick={addConnection}
++            className="inline-flex items-center rounded-lg bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-cyan-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
++          >
++            연결 추가
++          </button>
++        </div>
++        {safeGuide.connectionGuides.length === 0 ? (
++          <p className="rounded-lg border border-dashed border-cyan-200 px-4 py-3 text-center text-xs text-cyan-600 dark:border-cyan-500/40 dark:text-cyan-200/70">
++            아직 연결 가이드가 없습니다. “연결 추가” 버튼을 눌러 다른 테마와의 연관성을 기록하세요.
++          </p>
++        ) : null}
++        <div className="space-y-4">
++          {safeGuide.connectionGuides.map((connection, index) => (
++            <div
++              key={`connection-${index}`}
++              className="space-y-3 rounded-lg border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-500/40 dark:bg-slate-900/60"
++            >
++              <div className="flex flex-col gap-2 text-sm md:flex-row md:items-center md:justify-between">
++                <label className="flex flex-col gap-2 text-sm md:w-1/3">
++                  <span className="font-medium">연결 타입</span>
++                  <select
++                    value={connection.type}
++                    onChange={(event) => updateConnectionField(index, 'type', event.target.value)}
++                    className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++                  >
++                    {CONNECTION_OPTIONS.map((option) => (
++                      <option key={option.value} value={option.value}>
++                        {option.label}
++                      </option>
++                    ))}
++                  </select>
++                </label>
++                <label className="flex flex-1 flex-col gap-2 text-sm">
++                  <span className="font-medium">연결 제목</span>
++                  <input
++                    type="text"
++                    value={connection.label}
++                    onChange={(event) => updateConnectionField(index, 'label', event.target.value)}
++                    className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++                    placeholder="예: 3세 육아 루틴과 연계"
++                  />
++                </label>
++              </div>
++              <label className="flex flex-col gap-2 text-sm">
++                <span className="font-medium">설명</span>
++                <textarea
++                  value={connection.description}
++                  onChange={(event) => updateConnectionField(index, 'description', event.target.value)}
++                  className="min-h-[80px] rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++                  placeholder="예: 육아 루틴 문서에서 일일 학습 프롬프트를 참고할 수 있도록 링크"
++                />
++              </label>
++              <div className="flex justify-end">
++                <button
++                  type="button"
++                  onClick={() => removeConnection(index)}
++                  className="inline-flex items-center rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/60 dark:text-rose-200 dark:hover:bg-rose-500/10"
++                >
++                  연결 삭제
++                </button>
++              </div>
++            </div>
++          ))}
++        </div>
++      </section>
++
++      <section className="space-y-4 rounded-2xl border border-cyan-200 bg-white/80 p-5 dark:border-cyan-500/40 dark:bg-slate-900/50">
++        <header className="space-y-1">
++          <h3 className="text-sm font-semibold text-cyan-800 dark:text-cyan-100">카테고리별 추천 구조</h3>
++          <p className="text-xs text-cyan-700/80 dark:text-cyan-200/70">
++            선택한 상위 카테고리/하위 카테고리 조합에 맞는 구성 요소를 정리하세요.
++          </p>
++        </header>
++        <label className="flex flex-col gap-2 text-sm">
++          <span className="font-medium">전체 개요</span>
++          <textarea
++            value={safeGuide.categoryBlueprint.overview}
++            onChange={handleBlueprintOverviewChange}
++            className="min-h-[100px] rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/40 dark:bg-slate-900 dark:text-slate-100"
++            placeholder="예: AI 기초·트렌드 글에서는 개념 요약 → 중요성 → 타임라인 → 헷갈리는 포인트 → 추가 키워드 순으로 구성"
++          />
++        </label>
++
++        <div className="space-y-3">
++          <div className="flex items-center justify-between">
++            <h4 className="text-xs font-semibold uppercase tracking-wide text-cyan-700 dark:text-cyan-200">상위 카테고리 섹션</h4>
++            <button
++              type="button"
++              onClick={addBlueprintSection}
++              className="inline-flex items-center rounded-lg bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-cyan-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
++            >
++              섹션 추가
++            </button>
++          </div>
++
++          {safeGuide.categoryBlueprint.sections.length === 0 ? (
++            <p className="rounded-lg border border-dashed border-cyan-200 px-4 py-3 text-center text-xs text-cyan-600 dark:border-cyan-500/40 dark:text-cyan-200/70">
++              카테고리 구조를 추가하면 슬라이드/스크립트 추출 시 그대로 활용할 수 있습니다.
++            </p>
++          ) : null}
++
++          <div className="space-y-4">
++            {safeGuide.categoryBlueprint.sections.map((section, index) => (
++              <div
++                key={`blueprint-section-${index}`}
++                className="space-y-3 rounded-lg border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-500/40 dark:bg-slate-900/60"
++              >
++                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
++                  <label className="flex flex-1 flex-col gap-2 text-sm">
++                    <span className="font-medium">섹션 제목</span>
++                    <input
++                      type="text"
++                      value={section.title}
++                      onChange={(event) => updateBlueprintSectionField(index, 'title', event.target.value)}
++                      className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++                      placeholder="예: 개념 한입 요약"
++                    />
++                  </label>
++                  <button
++                    type="button"
++                    onClick={() => removeBlueprintSection(index)}
++                    className="inline-flex items-center justify-center rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/60 dark:text-rose-200 dark:hover:bg-rose-500/10"
++                  >
++                    섹션 삭제
++                  </button>
++                </div>
++                <label className="flex flex-col gap-2 text-sm">
++                  <span className="font-medium">설명</span>
++                  <textarea
++                    value={section.description}
++                    onChange={(event) => updateBlueprintSectionField(index, 'description', event.target.value)}
++                    className="min-h-[80px] rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++                    placeholder="예: 중학생도 이해할 수 있는 수준으로 3~4줄 요약"
++                  />
++                </label>
++                <SimpleListEditor
++                  title="체크리스트"
++                  description="이 섹션에서 반드시 다룰 세부 항목을 적어 주세요."
++                  items={section.checklist}
++                  onChange={(items) => updateBlueprintSectionChecklist(index, items)}
++                  addLabel="항목 추가"
++                  itemPlaceholder="예: 핵심 용어 2~3개 정의"
++                  tone="cyan"
++                />
++              </div>
++            ))}
++          </div>
++        </div>
++
++        <div className="space-y-3">
++          <div className="flex items-center justify-between">
++            <h4 className="text-xs font-semibold uppercase tracking-wide text-cyan-700 dark:text-cyan-200">하위카테고리 포커스</h4>
++            <button
++              type="button"
++              onClick={addSubcategoryFocus}
++              className="inline-flex items-center rounded-lg bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-cyan-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
++            >
++              포커스 추가
++            </button>
++          </div>
++
++          {safeGuide.categoryBlueprint.subcategoryFocus.length === 0 ? (
++            <p className="rounded-lg border border-dashed border-cyan-200 px-4 py-3 text-center text-xs text-cyan-600 dark:border-cyan-500/40 dark:text-cyan-200/70">
++              하위카테고리별로 강조할 포인트(비유, 실생활 예시 등)를 정리하면 콘텐츠 일관성을 유지하기 쉽습니다.
++            </p>
++          ) : null}
++
++          <div className="space-y-4">
++            {safeGuide.categoryBlueprint.subcategoryFocus.map((focus, index) => (
++              <div
++                key={`subcategory-focus-${index}`}
++                className="space-y-3 rounded-lg border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-500/40 dark:bg-slate-900/60"
++              >
++                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
++                  <label className="flex flex-1 flex-col gap-2 text-sm">
++                    <span className="font-medium">포커스 제목</span>
++                    <input
++                      type="text"
++                      value={focus.title}
++                      onChange={(event) => updateSubcategoryFocusField(index, 'title', event.target.value)}
++                      className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++                      placeholder="예: AI 용어사전"
++                    />
++                  </label>
++                  <button
++                    type="button"
++                    onClick={() => removeSubcategoryFocus(index)}
++                    className="inline-flex items-center justify-center rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/60 dark:text-rose-200 dark:hover:bg-rose-500/10"
++                  >
++                    포커스 삭제
++                  </button>
++                </div>
++                <label className="flex flex-col gap-2 text-sm">
++                  <span className="font-medium">요약</span>
++                  <textarea
++                    value={focus.summary}
++                    onChange={(event) => updateSubcategoryFocusField(index, 'summary', event.target.value)}
++                    className="min-h-[80px] rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 dark:border-cyan-500/50 dark:bg-slate-900 dark:text-slate-100"
++                    placeholder="예: 한 줄 정의 + 비유 + 실생활 예시 + 더 파고들 키워드"
++                  />
++                </label>
++                <SimpleListEditor
++                  title="강조 포인트"
++                  description="해당 하위카테고리에서 반드시 언급할 핵심 포인트를 정리하세요."
++                  items={focus.highlights}
++                  onChange={(items) => updateSubcategoryFocusHighlights(index, items)}
++                  addLabel="포인트 추가"
++                  itemPlaceholder="예: 비유 - 'AI는 전기처럼 보이는 곳마다 스며든다'"
++                  tone="cyan"
++                />
++              </div>
++            ))}
++          </div>
++        </div>
++      </section>
++    </section>
++  );
++}
++
++AIThemeEditor.propTypes = {
++  guide: PropTypes.shape({
++    summaryCardBullets: PropTypes.arrayOf(PropTypes.string),
++    backgroundInsights: PropTypes.arrayOf(PropTypes.string),
++    keyActionSteps: PropTypes.arrayOf(PropTypes.string),
++    impact: PropTypes.shape({
++      targetAudience: PropTypes.string,
++      expectedEffect: PropTypes.string,
++      caution: PropTypes.string
++    }),
++    connectionGuides: PropTypes.arrayOf(
++      PropTypes.shape({
++        type: PropTypes.oneOf(['parentingGuide', 'lifestyleGuide', 'supportGuide', 'other']),
++        label: PropTypes.string,
++        description: PropTypes.string
++      })
++    ),
++    categoryBlueprint: PropTypes.shape({
++      overview: PropTypes.string,
++      sections: PropTypes.arrayOf(
++        PropTypes.shape({
++          title: PropTypes.string,
++          description: PropTypes.string,
++          checklist: PropTypes.arrayOf(PropTypes.string)
++        })
++      ),
++      subcategoryFocus: PropTypes.arrayOf(
++        PropTypes.shape({
++          title: PropTypes.string,
++          summary: PropTypes.string,
++          highlights: PropTypes.arrayOf(PropTypes.string)
++        })
++      )
 +    })
-   })
- });
- const SOURCE_TYPE_OPTIONS = new Set(['official', 'youtube', 'media', 'etc']);
--const THEME_OPTIONS = new Set(['policy', 'parenting', 'lifestyle', 'health']);
-+const THEME_OPTIONS = new Set(['policy', 'stocks', 'ai', 'parenting', 'lifestyle', 'health', 'groupbuy', 'support']);
- const DEFAULT_THEME_ID = 'policy';
++  }),
++  onChange: PropTypes.func.isRequired
++};
++
++AIThemeEditor.defaultProps = {
++  guide: undefined
++};
++
++export default AIThemeEditor;
+diff --git a/frontend/src/components/admin/AIThemePreview.jsx b/frontend/src/components/admin/AIThemePreview.jsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..730841421d7de1d89d0f854ddde1f633158c2ca0
+--- /dev/null
++++ b/frontend/src/components/admin/AIThemePreview.jsx
+@@ -0,0 +1,222 @@
++// frontend/src/components/admin/AIThemePreview.jsx
++import PropTypes from 'prop-types';
++import SectionCard from '../SectionCard.jsx';
++import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
++import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
++
++function hasImpactData(impact) {
++  if (!impact) return false;
++  return Boolean(impact.targetAudience || impact.expectedEffect || impact.caution);
++}
++
++function AIThemePreview({ guide }) {
++  if (!guide) {
++    return null;
++  }
++
++  const { titles } = useSectionTitles();
++  const summaryTitle = getSectionTitleValue(titles, 'themes.ai.summaryCard.title');
++  const summaryBadge = getSectionTitleValue(titles, 'themes.ai.summaryCard.badge');
++  const backgroundTitle = getSectionTitleValue(titles, 'themes.ai.background.title');
++  const backgroundBadge = getSectionTitleValue(titles, 'themes.ai.background.badge');
++  const actionTitle = getSectionTitleValue(titles, 'themes.ai.keyActionSteps.title');
++  const actionBadge = getSectionTitleValue(titles, 'themes.ai.keyActionSteps.badge');
++  const impactTitle = getSectionTitleValue(titles, 'themes.ai.impact.title');
++  const impactBadge = getSectionTitleValue(titles, 'themes.ai.impact.badge');
++  const connectionTitle = getSectionTitleValue(titles, 'themes.ai.connectionGuides.title');
++  const connectionBadge = getSectionTitleValue(titles, 'themes.ai.connectionGuides.badge');
++  const blueprintTitle = getSectionTitleValue(titles, 'themes.ai.categoryBlueprint.title');
++  const blueprintBadge = getSectionTitleValue(titles, 'themes.ai.categoryBlueprint.badge');
++  const focusTitle = getSectionTitleValue(titles, 'themes.ai.subcategoryFocus.title');
++  const focusBadge = getSectionTitleValue(titles, 'themes.ai.subcategoryFocus.badge');
++
++  const summaryItems = Array.isArray(guide.summaryCardBullets)
++    ? guide.summaryCardBullets.filter((item) => item && item.trim().length > 0)
++    : [];
++  const backgroundItems = Array.isArray(guide.backgroundInsights)
++    ? guide.backgroundInsights.filter((item) => item && item.trim().length > 0)
++    : [];
++  const actionItems = Array.isArray(guide.keyActionSteps)
++    ? guide.keyActionSteps.filter((item) => item && item.trim().length > 0)
++    : [];
++  const connections = Array.isArray(guide.connectionGuides) ? guide.connectionGuides : [];
++  const sections = Array.isArray(guide?.categoryBlueprint?.sections)
++    ? guide.categoryBlueprint.sections.filter((section) => section && (section.title || section.description || (Array.isArray(section.checklist) && section.checklist.length > 0)))
++    : [];
++  const focuses = Array.isArray(guide?.categoryBlueprint?.subcategoryFocus)
++    ? guide.categoryBlueprint.subcategoryFocus.filter((focus) => focus && (focus.title || focus.summary || (Array.isArray(focus.highlights) && focus.highlights.length > 0)))
++    : [];
++  const overviewText = guide?.categoryBlueprint?.overview;
++
++  return (
++    <div className="space-y-5">
++      {summaryItems.length > 0 ? (
++        <SectionCard title={summaryTitle} tone="neutral" badgeText={summaryBadge}>
++          <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {summaryItems.map((item, index) => (
++              <li key={`ai-summary-${index}`}>{item}</li>
++            ))}
++          </ul>
++        </SectionCard>
++      ) : null}
++
++      {backgroundItems.length > 0 ? (
++        <SectionCard title={backgroundTitle} tone="neutral" badgeText={backgroundBadge}>
++          <div className="space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {backgroundItems.map((item, index) => (
++              <p key={`ai-bg-${index}`}>{item}</p>
++            ))}
++          </div>
++        </SectionCard>
++      ) : null}
++
++      {actionItems.length > 0 ? (
++        <SectionCard title={actionTitle} tone="impact" badgeText={actionBadge}>
++          <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {actionItems.map((item, index) => (
++              <li key={`ai-action-${index}`}>{item}</li>
++            ))}
++          </ol>
++        </SectionCard>
++      ) : null}
++
++      {hasImpactData(guide.impact) ? (
++        <SectionCard title={impactTitle} tone="impact" badgeText={impactBadge}>
++          <ul className="space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {guide.impact?.targetAudience ? (
++              <li>
++                <span className="font-semibold text-cyan-700 dark:text-cyan-200">대상:</span> {guide.impact.targetAudience}
++              </li>
++            ) : null}
++            {guide.impact?.expectedEffect ? (
++              <li>
++                <span className="font-semibold text-cyan-700 dark:text-cyan-200">효과:</span> {guide.impact.expectedEffect}
++              </li>
++            ) : null}
++            {guide.impact?.caution ? (
++              <li>
++                <span className="font-semibold text-cyan-700 dark:text-cyan-200">주의:</span> {guide.impact.caution}
++              </li>
++            ) : null}
++          </ul>
++        </SectionCard>
++      ) : null}
++
++      {connections.length > 0 ? (
++        <SectionCard title={connectionTitle} tone="neutral" badgeText={connectionBadge}>
++          <ul className="space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {connections.map((item, index) => (
++              <li key={`ai-connection-${index}`} className="rounded-lg border border-cyan-100 bg-cyan-50/60 p-4 dark:border-cyan-500/30 dark:bg-slate-900/40">
++                {item.label ? (
++                  <p className="font-semibold text-cyan-700 dark:text-cyan-200">{item.label}</p>
++                ) : null}
++                <p className="text-xs uppercase tracking-wider text-cyan-500 dark:text-cyan-300">{item.type || 'other'}</p>
++                {item.description ? (
++                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">{item.description}</p>
++                ) : null}
++              </li>
++            ))}
++          </ul>
++        </SectionCard>
++      ) : null}
++
++      {(overviewText || sections.length > 0) ? (
++        <SectionCard title={blueprintTitle} tone="neutral" badgeText={blueprintBadge}>
++          <div className="space-y-4">
++            {overviewText ? (
++              <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{overviewText}</p>
++            ) : null}
++            {sections.length > 0 ? (
++              <div className="space-y-3">
++                {sections.map((section, index) => (
++                  <div key={`ai-blueprint-${index}`} className="space-y-2 rounded-lg border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-500/30 dark:bg-slate-900/40">
++                    {section.title ? (
++                      <p className="font-semibold text-cyan-700 dark:text-cyan-200">{section.title}</p>
++                    ) : null}
++                    {section.description ? (
++                      <p className="text-sm text-slate-700 dark:text-slate-200">{section.description}</p>
++                    ) : null}
++                    {Array.isArray(section.checklist) && section.checklist.length > 0 ? (
++                      <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-300">
++                        {section.checklist.map((item, itemIndex) => (
++                          <li key={`ai-blueprint-${index}-item-${itemIndex}`}>{item}</li>
++                        ))}
++                      </ul>
++                    ) : null}
++                  </div>
++                ))}
++              </div>
++            ) : null}
++          </div>
++        </SectionCard>
++      ) : null}
++
++      {focuses.length > 0 ? (
++        <SectionCard title={focusTitle} tone="neutral" badgeText={focusBadge}>
++          <div className="space-y-4">
++            {focuses.map((focus, index) => (
++              <div key={`ai-focus-${index}`} className="space-y-2 rounded-lg border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-500/30 dark:bg-slate-900/40">
++                {focus.title ? (
++                  <p className="font-semibold text-cyan-700 dark:text-cyan-200">{focus.title}</p>
++                ) : null}
++                {focus.summary ? (
++                  <p className="text-sm text-slate-700 dark:text-slate-200">{focus.summary}</p>
++                ) : null}
++                {Array.isArray(focus.highlights) && focus.highlights.length > 0 ? (
++                  <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-300">
++                    {focus.highlights.map((item, itemIndex) => (
++                      <li key={`ai-focus-${index}-item-${itemIndex}`}>{item}</li>
++                    ))}
++                  </ul>
++                ) : null}
++              </div>
++            ))}
++          </div>
++        </SectionCard>
++      ) : null}
++    </div>
++  );
++}
++
++AIThemePreview.propTypes = {
++  guide: PropTypes.shape({
++    summaryCardBullets: PropTypes.arrayOf(PropTypes.string),
++    backgroundInsights: PropTypes.arrayOf(PropTypes.string),
++    keyActionSteps: PropTypes.arrayOf(PropTypes.string),
++    impact: PropTypes.shape({
++      targetAudience: PropTypes.string,
++      expectedEffect: PropTypes.string,
++      caution: PropTypes.string
++    }),
++    connectionGuides: PropTypes.arrayOf(
++      PropTypes.shape({
++        type: PropTypes.string,
++        label: PropTypes.string,
++        description: PropTypes.string
++      })
++    ),
++    categoryBlueprint: PropTypes.shape({
++      overview: PropTypes.string,
++      sections: PropTypes.arrayOf(
++        PropTypes.shape({
++          title: PropTypes.string,
++          description: PropTypes.string,
++          checklist: PropTypes.arrayOf(PropTypes.string)
++        })
++      ),
++      subcategoryFocus: PropTypes.arrayOf(
++        PropTypes.shape({
++          title: PropTypes.string,
++          summary: PropTypes.string,
++          highlights: PropTypes.arrayOf(PropTypes.string)
++        })
++      )
++    })
++  })
++};
++
++AIThemePreview.defaultProps = {
++  guide: undefined
++};
++
++export default AIThemePreview;
+diff --git a/frontend/src/components/admin/SimpleListEditor.jsx b/frontend/src/components/admin/SimpleListEditor.jsx
+index 6a8edc338652f43aa54dc8b35fdaa5e2de751eb9..a31cdf425e92ee930308c1859d52ffc3c31e69b0 100644
+--- a/frontend/src/components/admin/SimpleListEditor.jsx
++++ b/frontend/src/components/admin/SimpleListEditor.jsx
+@@ -1,39 +1,40 @@
+ // frontend/src/components/admin/SimpleListEditor.jsx
+ // 문자열 배열을 편집하기 위한 공통 컴포넌트.
+ // 개선: tone prop(선택)으로 버튼/포커스 색상을 테마에 맞게 변경 가능. 기본값은 emerald.
+ 
+ import PropTypes from 'prop-types';
+ 
+ const TONE = {
+   emerald: { btn: 'bg-emerald-500 hover:bg-emerald-600 focus-visible:ring-emerald-400', ring: 'focus-visible:ring-emerald-500' },
+   amber: { btn: 'bg-amber-500 hover:bg-amber-600 focus-visible:ring-amber-400', ring: 'focus-visible:ring-amber-500' },
+   violet: { btn: 'bg-violet-600 hover:bg-violet-700 focus-visible:ring-violet-400', ring: 'focus-visible:ring-violet-500' },
+   sky: { btn: 'bg-sky-600 hover:bg-sky-700 focus-visible:ring-sky-400', ring: 'focus-visible:ring-sky-500' },
+   indigo: { btn: 'bg-indigo-600 hover:bg-indigo-700 focus-visible:ring-indigo-400', ring: 'focus-visible:ring-indigo-500' },
+   purple: { btn: 'bg-purple-600 hover:bg-purple-700 focus-visible:ring-purple-400', ring: 'focus-visible:ring-purple-500' },
+-  slate: { btn: 'bg-slate-700 hover:bg-slate-800 focus-visible:ring-slate-400', ring: 'focus-visible:ring-slate-500' }
++  slate: { btn: 'bg-slate-700 hover:bg-slate-800 focus-visible:ring-slate-400', ring: 'focus-visible:ring-slate-500' },
++  cyan: { btn: 'bg-cyan-500 hover:bg-cyan-600 focus-visible:ring-cyan-400', ring: 'focus-visible:ring-cyan-500' }
+ };
+ 
+ function cls(base, extra) {
+   return [base, extra].filter(Boolean).join(' ');
+ }
+ 
+ function SimpleListEditor({
+   title,
+   description,
+   items,
+   onChange,
+   addLabel,
+   itemPlaceholder,
+   tone
+ }) {
+   const safeItems = Array.isArray(items) ? items : [];
+   const tc = TONE[tone] ?? TONE.emerald;
+ 
+   const handleItemChange = (index, value) => {
+     const next = [...safeItems];
+     next[index] = value;
+     onChange(next);
+   };
+ 
+   const handleAdd = () => {
+@@ -80,37 +81,37 @@ function SimpleListEditor({
+               )}
+               placeholder={itemPlaceholder}
+             />
+             <button
+               type="button"
+               onClick={() => handleRemove(index)}
+               className="mt-1 inline-flex items-center justify-center rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/60 dark:hover:bg-rose-500/10"
+             >
+               삭제
+             </button>
+           </div>
+         ))}
+       </div>
+     </div>
+   );
+ }
+ 
+ SimpleListEditor.propTypes = {
+   title: PropTypes.string.isRequired,
+   description: PropTypes.string,
+   items: PropTypes.arrayOf(PropTypes.string),
+   onChange: PropTypes.func.isRequired,
+   addLabel: PropTypes.string,
+   itemPlaceholder: PropTypes.string,
+   // 선택: 테마 톤 (emerald/amber/violet/sky/indigo/purple/slate)
+-  tone: PropTypes.oneOf(['emerald', 'amber', 'violet', 'sky', 'indigo', 'purple', 'slate'])
++  tone: PropTypes.oneOf(['emerald', 'amber', 'violet', 'sky', 'indigo', 'purple', 'slate', 'cyan'])
+ };
+ 
+ SimpleListEditor.defaultProps = {
+   description: '',
+   items: [],
+   addLabel: '항목 추가',
+   itemPlaceholder: '',
+   tone: 'emerald'
+ };
+ 
+ export default SimpleListEditor;
+diff --git a/frontend/src/components/issue/AIGuideView.jsx b/frontend/src/components/issue/AIGuideView.jsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..31db91726245ccf95db0d6fc49452c25f537d046
+--- /dev/null
++++ b/frontend/src/components/issue/AIGuideView.jsx
+@@ -0,0 +1,261 @@
++// frontend/src/components/issue/AIGuideView.jsx
++import PropTypes from 'prop-types';
++import SectionCard from '../SectionCard.jsx';
++import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
++import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
++
++function normalizeList(items) {
++  if (!Array.isArray(items)) return [];
++  return items
++    .map((item) => (typeof item === 'string' ? item.trim() : String(item ?? '').trim()))
++    .filter((item) => item.length > 0);
++}
++
++function getConnections(list) {
++  if (!Array.isArray(list)) return [];
++  return list
++    .map((item) => ({
++      type: typeof item?.type === 'string' ? item.type : 'other',
++      label: typeof item?.label === 'string' ? item.label.trim() : '',
++      description: typeof item?.description === 'string' ? item.description.trim() : ''
++    }))
++    .filter((item) => item.label || item.description);
++}
++
++function getSections(sections) {
++  if (!Array.isArray(sections)) return [];
++  return sections
++    .map((section) => ({
++      title: typeof section?.title === 'string' ? section.title.trim() : '',
++      description: typeof section?.description === 'string' ? section.description.trim() : '',
++      checklist: normalizeList(section?.checklist)
++    }))
++    .filter((section) => section.title || section.description || section.checklist.length > 0);
++}
++
++function getFocuses(focuses) {
++  if (!Array.isArray(focuses)) return [];
++  return focuses
++    .map((focus) => ({
++      title: typeof focus?.title === 'string' ? focus.title.trim() : '',
++      summary: typeof focus?.summary === 'string' ? focus.summary.trim() : '',
++      highlights: normalizeList(focus?.highlights)
++    }))
++    .filter((focus) => focus.title || focus.summary || focus.highlights.length > 0);
++}
++
++function hasImpactData(impact) {
++  if (!impact) return false;
++  return Boolean(impact.targetAudience || impact.expectedEffect || impact.caution);
++}
++
++const CONNECTION_LABELS = {
++  parentingGuide: 'Parenting Guide',
++  lifestyleGuide: 'Lifestyle Guide',
++  supportGuide: 'Support Guide',
++  other: '기타'
++};
++
++function AIGuideView({ guide }) {
++  if (!guide) return null;
++
++  const { titles } = useSectionTitles();
++  const summaryTitle = getSectionTitleValue(titles, 'themes.ai.summaryCard.title');
++  const summaryBadge = getSectionTitleValue(titles, 'themes.ai.summaryCard.badge');
++  const backgroundTitle = getSectionTitleValue(titles, 'themes.ai.background.title');
++  const backgroundBadge = getSectionTitleValue(titles, 'themes.ai.background.badge');
++  const actionTitle = getSectionTitleValue(titles, 'themes.ai.keyActionSteps.title');
++  const actionBadge = getSectionTitleValue(titles, 'themes.ai.keyActionSteps.badge');
++  const impactTitle = getSectionTitleValue(titles, 'themes.ai.impact.title');
++  const impactBadge = getSectionTitleValue(titles, 'themes.ai.impact.badge');
++  const connectionTitle = getSectionTitleValue(titles, 'themes.ai.connectionGuides.title');
++  const connectionBadge = getSectionTitleValue(titles, 'themes.ai.connectionGuides.badge');
++  const blueprintTitle = getSectionTitleValue(titles, 'themes.ai.categoryBlueprint.title');
++  const blueprintBadge = getSectionTitleValue(titles, 'themes.ai.categoryBlueprint.badge');
++  const focusTitle = getSectionTitleValue(titles, 'themes.ai.subcategoryFocus.title');
++  const focusBadge = getSectionTitleValue(titles, 'themes.ai.subcategoryFocus.badge');
++
++  const summaryItems = normalizeList(guide.summaryCardBullets);
++  const backgroundItems = normalizeList(guide.backgroundInsights);
++  const actionItems = normalizeList(guide.keyActionSteps);
++  const connections = getConnections(guide.connectionGuides);
++  const sections = getSections(guide?.categoryBlueprint?.sections);
++  const focuses = getFocuses(guide?.categoryBlueprint?.subcategoryFocus);
++  const overviewText = typeof guide?.categoryBlueprint?.overview === 'string'
++    ? guide.categoryBlueprint.overview.trim()
++    : '';
++
++  return (
++    <div className="space-y-5">
++      {summaryItems.length > 0 ? (
++        <SectionCard title={summaryTitle} tone="neutral" badgeText={summaryBadge}>
++          <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {summaryItems.map((item, index) => (
++              <li key={`ai-summary-${index}`}>{item}</li>
++            ))}
++          </ul>
++        </SectionCard>
++      ) : null}
++
++      {backgroundItems.length > 0 ? (
++        <SectionCard title={backgroundTitle} tone="neutral" badgeText={backgroundBadge}>
++          <div className="space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {backgroundItems.map((item, index) => (
++              <p key={`ai-background-${index}`}>{item}</p>
++            ))}
++          </div>
++        </SectionCard>
++      ) : null}
++
++      {actionItems.length > 0 ? (
++        <SectionCard title={actionTitle} tone="impact" badgeText={actionBadge}>
++          <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {actionItems.map((item, index) => (
++              <li key={`ai-action-${index}`}>{item}</li>
++            ))}
++          </ol>
++        </SectionCard>
++      ) : null}
++
++      {hasImpactData(guide.impact) ? (
++        <SectionCard title={impactTitle} tone="impact" badgeText={impactBadge}>
++          <ul className="space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {guide.impact?.targetAudience ? (
++              <li>
++                <span className="font-semibold text-cyan-700 dark:text-cyan-200">대상:</span> {guide.impact.targetAudience}
++              </li>
++            ) : null}
++            {guide.impact?.expectedEffect ? (
++              <li>
++                <span className="font-semibold text-cyan-700 dark:text-cyan-200">효과:</span> {guide.impact.expectedEffect}
++              </li>
++            ) : null}
++            {guide.impact?.caution ? (
++              <li>
++                <span className="font-semibold text-cyan-700 dark:text-cyan-200">주의:</span> {guide.impact.caution}
++              </li>
++            ) : null}
++          </ul>
++        </SectionCard>
++      ) : null}
++
++      {connections.length > 0 ? (
++        <SectionCard title={connectionTitle} tone="neutral" badgeText={connectionBadge}>
++          <ul className="space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
++            {connections.map((item, index) => (
++              <li key={`ai-connection-${index}`} className="rounded-lg border border-cyan-100 bg-cyan-50/60 p-4 dark:border-cyan-500/30 dark:bg-slate-900/40">
++                {item.label ? (
++                  <p className="font-semibold text-cyan-700 dark:text-cyan-200">{item.label}</p>
++                ) : null}
++                <p className="text-xs uppercase tracking-wider text-cyan-500 dark:text-cyan-300">
++                  {CONNECTION_LABELS[item.type] || CONNECTION_LABELS.other}
++                </p>
++                {item.description ? (
++                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">{item.description}</p>
++                ) : null}
++              </li>
++            ))}
++          </ul>
++        </SectionCard>
++      ) : null}
++
++      {(overviewText || sections.length > 0) ? (
++        <SectionCard title={blueprintTitle} tone="neutral" badgeText={blueprintBadge}>
++          <div className="space-y-4">
++            {overviewText ? (
++              <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{overviewText}</p>
++            ) : null}
++            {sections.length > 0 ? (
++              <div className="space-y-3">
++                {sections.map((section, index) => (
++                  <div key={`ai-section-${index}`} className="space-y-2 rounded-lg border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-500/30 dark:bg-slate-900/40">
++                    {section.title ? (
++                      <p className="font-semibold text-cyan-700 dark:text-cyan-200">{section.title}</p>
++                    ) : null}
++                    {section.description ? (
++                      <p className="text-sm text-slate-700 dark:text-slate-200">{section.description}</p>
++                    ) : null}
++                    {section.checklist.length > 0 ? (
++                      <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-300">
++                        {section.checklist.map((item, itemIndex) => (
++                          <li key={`ai-section-${index}-item-${itemIndex}`}>{item}</li>
++                        ))}
++                      </ul>
++                    ) : null}
++                  </div>
++                ))}
++              </div>
++            ) : null}
++          </div>
++        </SectionCard>
++      ) : null}
++
++      {focuses.length > 0 ? (
++        <SectionCard title={focusTitle} tone="neutral" badgeText={focusBadge}>
++          <div className="space-y-4">
++            {focuses.map((focus, index) => (
++              <div key={`ai-focus-${index}`} className="space-y-2 rounded-lg border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-500/30 dark:bg-slate-900/40">
++                {focus.title ? (
++                  <p className="font-semibold text-cyan-700 dark:text-cyan-200">{focus.title}</p>
++                ) : null}
++                {focus.summary ? (
++                  <p className="text-sm text-slate-700 dark:text-slate-200">{focus.summary}</p>
++                ) : null}
++                {focus.highlights.length > 0 ? (
++                  <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-300">
++                    {focus.highlights.map((item, itemIndex) => (
++                      <li key={`ai-focus-${index}-item-${itemIndex}`}>{item}</li>
++                    ))}
++                  </ul>
++                ) : null}
++              </div>
++            ))}
++          </div>
++        </SectionCard>
++      ) : null}
++    </div>
++  );
++}
++
++AIGuideView.propTypes = {
++  guide: PropTypes.shape({
++    summaryCardBullets: PropTypes.arrayOf(PropTypes.string),
++    backgroundInsights: PropTypes.arrayOf(PropTypes.string),
++    keyActionSteps: PropTypes.arrayOf(PropTypes.string),
++    impact: PropTypes.shape({
++      targetAudience: PropTypes.string,
++      expectedEffect: PropTypes.string,
++      caution: PropTypes.string
++    }),
++    connectionGuides: PropTypes.arrayOf(
++      PropTypes.shape({
++        type: PropTypes.string,
++        label: PropTypes.string,
++        description: PropTypes.string
++      })
++    ),
++    categoryBlueprint: PropTypes.shape({
++      overview: PropTypes.string,
++      sections: PropTypes.arrayOf(
++        PropTypes.shape({
++          title: PropTypes.string,
++          description: PropTypes.string,
++          checklist: PropTypes.arrayOf(PropTypes.string)
++        })
++      ),
++      subcategoryFocus: PropTypes.arrayOf(
++        PropTypes.shape({
++          title: PropTypes.string,
++          summary: PropTypes.string,
++          highlights: PropTypes.arrayOf(PropTypes.string)
++        })
++      )
++    })
++  })
++};
++
++AIGuideView.defaultProps = {
++  guide: null
++};
++
++export default AIGuideView;
+diff --git a/frontend/src/constants/sectionTitleConfig.js b/frontend/src/constants/sectionTitleConfig.js
+index e92e7f9fdf678e62ec3ea18ec59539466c6e008a..b558d5b1c4970b8296840b1626c700434b0933d8 100644
+--- a/frontend/src/constants/sectionTitleConfig.js
++++ b/frontend/src/constants/sectionTitleConfig.js
+@@ -1,50 +1,59 @@
+ // frontend/src/constants/sectionTitleConfig.js
+ // 상세 페이지 섹션 제목/배지 기본값과 편집 UI 구성을 정의한다.
+ // Firestore에 저장된 사용자 정의 문구가 없다면 여기 정의된 기본값을 사용한다.
+ 
+ import { THEME_CONFIG } from './themeConfig.js';
+ 
+ // THEME_CONFIG에서 id -> label 매핑을 만들어 UI에서 재사용한다.
+ const THEME_LABEL_MAP = THEME_CONFIG.reduce((acc, theme) => {
+   acc[theme.id] = theme.label;
+   return acc;
+ }, {});
+ 
+ // 기본 소제목/배지 문구. Firestore 저장 시 이 구조를 그대로 사용한다.
+ export const DEFAULT_SECTION_TITLES = Object.freeze({
+   general: {
+     easySummary: { title: '쉬운 요약' },
+     background: { title: '무슨 일이 있었나요?' },
+     keyPoints: { title: '핵심 쟁점 정리' },
+     progressiveView: { title: '진보 성향에서 보는 전망', badge: '진보 시각' },
+     conservativeView: { title: '보수 성향에서 보는 전망', badge: '보수 시각' },
+     impactToLife: { title: '생활에 어떤 영향이 있나요?', badge: '체감 영향' },
+     sources: { title: '근거 자료' },
+     relatedLinks: { title: '관련 링크' }
+   },
+   themes: {
++    ai: {
++      summaryCard: { title: '요약 카드', badge: '요약' },
++      background: { title: '배경 설명', badge: '배경' },
++      keyActionSteps: { title: '핵심 실행 단계', badge: '실행' },
++      impact: { title: '생활/업무 영향', badge: '영향' },
++      connectionGuides: { title: '연결 가이드', badge: '연결' },
++      categoryBlueprint: { title: '카테고리별 추천 구조', badge: '구조' },
++      subcategoryFocus: { title: '하위카테고리 포커스', badge: '포커스' }
++    },
+     parenting: {
+       overview: { title: '육아 테마 개요' },
+       generalTips: { title: '전체 공통 팁', badge: 'TIP' },
+       ageGroupFallback: { title: '연령대' },
+       ageGroups: { badge: '육아' },
+       emergencyContacts: { title: '긴급/상담 연락처', badge: '긴급' }
+     },
+     health: {
+       overview: { title: '건강 테마 개요' },
+       lifestyleTips: { title: '생활 습관 팁', badge: '생활' },
+       conditionFallback: { title: '건강 주제' },
+       conditions: { badge: '건강' },
+       emergencyGuide: { title: '긴급 대응 가이드', badge: '긴급' }
+     },
+     lifestyle: {
+       overview: { title: '생활정보 개요' },
+       quickTips: { title: '생활 꿀팁', badge: 'TIP' },
+       hotItems: { title: '추천 아이템', badge: '아이템' },
+       hotDeals: { title: '핫딜 정보', badge: '딜' },
+       affiliateNotes: { title: '제휴/운영 노트', badge: '운영' }
+     },
+     stocks: {
+       overview: { title: '주식정보 개요' },
+       marketSummary: { title: '시장 요약' },
+       sectorHighlights: { title: '섹터 하이라이트', badge: '섹터' },
+@@ -104,50 +113,127 @@ export const SECTION_TITLE_FIELD_GROUPS = [
+         label: '보수 시각 배지 문구',
+         placeholder: DEFAULT_SECTION_TITLES.general.conservativeView.badge
+       },
+       {
+         path: 'general.impactToLife.title',
+         label: '생활 영향 섹션 제목',
+         placeholder: DEFAULT_SECTION_TITLES.general.impactToLife.title
+       },
+       {
+         path: 'general.impactToLife.badge',
+         label: '생활 영향 배지 문구',
+         placeholder: DEFAULT_SECTION_TITLES.general.impactToLife.badge
+       },
+       {
+         path: 'general.sources.title',
+         label: '근거 자료 섹션 제목',
+         placeholder: DEFAULT_SECTION_TITLES.general.sources.title
+       },
+       {
+         path: 'general.relatedLinks.title',
+         label: '관련 링크 섹션 제목',
+         placeholder: DEFAULT_SECTION_TITLES.general.relatedLinks.title
+       }
+     ]
+   },
++  {
++    id: 'ai',
++    label: `${THEME_LABEL_MAP.ai || 'AI 정보'} 테마`,
++    description: 'AI 테마 전용 카드 제목과 배지 문구입니다.',
++    fields: [
++      {
++        path: 'themes.ai.summaryCard.title',
++        label: '요약 카드 제목',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.summaryCard.title
++      },
++      {
++        path: 'themes.ai.summaryCard.badge',
++        label: '요약 카드 배지',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.summaryCard.badge
++      },
++      {
++        path: 'themes.ai.background.title',
++        label: '배경 설명 제목',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.background.title
++      },
++      {
++        path: 'themes.ai.background.badge',
++        label: '배경 설명 배지',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.background.badge
++      },
++      {
++        path: 'themes.ai.keyActionSteps.title',
++        label: '핵심 실행 단계 제목',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.keyActionSteps.title
++      },
++      {
++        path: 'themes.ai.keyActionSteps.badge',
++        label: '핵심 실행 단계 배지',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.keyActionSteps.badge
++      },
++      {
++        path: 'themes.ai.impact.title',
++        label: '생활/업무 영향 제목',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.impact.title
++      },
++      {
++        path: 'themes.ai.impact.badge',
++        label: '생활/업무 영향 배지',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.impact.badge
++      },
++      {
++        path: 'themes.ai.connectionGuides.title',
++        label: '연결 가이드 제목',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.connectionGuides.title
++      },
++      {
++        path: 'themes.ai.connectionGuides.badge',
++        label: '연결 가이드 배지',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.connectionGuides.badge
++      },
++      {
++        path: 'themes.ai.categoryBlueprint.title',
++        label: '카테고리별 추천 구조 제목',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.categoryBlueprint.title
++      },
++      {
++        path: 'themes.ai.categoryBlueprint.badge',
++        label: '카테고리별 추천 구조 배지',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.categoryBlueprint.badge
++      },
++      {
++        path: 'themes.ai.subcategoryFocus.title',
++        label: '하위카테고리 포커스 제목',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.subcategoryFocus.title
++      },
++      {
++        path: 'themes.ai.subcategoryFocus.badge',
++        label: '하위카테고리 포커스 배지',
++        placeholder: DEFAULT_SECTION_TITLES.themes.ai.subcategoryFocus.badge
++      }
++    ]
++  },
+   {
+     id: 'parenting',
+     label: `${THEME_LABEL_MAP.parenting || '육아정보'} 테마`,
+     description: '육아 테마 전용 카드 제목과 배지 문구입니다.',
+     fields: [
+       {
+         path: 'themes.parenting.overview.title',
+         label: '개요 섹션 제목',
+         placeholder: DEFAULT_SECTION_TITLES.themes.parenting.overview.title
+       },
+       {
+         path: 'themes.parenting.generalTips.title',
+         label: '전체 공통 팁 제목',
+         placeholder: DEFAULT_SECTION_TITLES.themes.parenting.generalTips.title
+       },
+       {
+         path: 'themes.parenting.generalTips.badge',
+         label: '전체 공통 팁 배지',
+         placeholder: DEFAULT_SECTION_TITLES.themes.parenting.generalTips.badge
+       },
+       {
+         path: 'themes.parenting.ageGroupFallback.title',
+         label: '연령대 카드 기본 제목',
+         placeholder: DEFAULT_SECTION_TITLES.themes.parenting.ageGroupFallback.title
+       },
+diff --git a/frontend/src/pages/IssuePage.jsx b/frontend/src/pages/IssuePage.jsx
+index ecab555107f0313afece2f2ed2992c40492a5093..4dd963a6bf3e2e8511ad4a6f3e68545352454f77 100644
+--- a/frontend/src/pages/IssuePage.jsx
++++ b/frontend/src/pages/IssuePage.jsx
+@@ -1,32 +1,33 @@
+ // frontend/src/pages/IssuePage.jsx
+ import { useCallback, useEffect, useMemo, useState } from 'react';
+ import { useParams } from 'react-router-dom';
+ import IntensityBar from '../components/IntensityBar.jsx';
+ import MetaTags from '../components/MetaTags.jsx';
+ import SectionCard from '../components/SectionCard.jsx';
+ import ParentingGuideView from '../components/issue/ParentingGuideView.jsx';
++import AIGuideView from '../components/issue/AIGuideView.jsx';
+ import LifestyleGuideView from '../components/issue/LifestyleGuideView.jsx';
+ import HealthGuideView from '../components/issue/HealthGuideView.jsx';
+ import StockGuideView from '../components/issue/StockGuideView.jsx';
+ import SupportGuideView from '../components/issue/SupportGuideView.jsx';
+ import { getThemeById } from '../constants/themeConfig.js';
+ import {
+   addIssueComment,
+   getIssueById,
+   getIssueComments,
+   getIssueUserState,
+   submitIssueVote,
+   toggleIssueScrap
+ } from '../firebaseClient.js';
+ import { useAuth } from '../contexts/AuthContext.jsx';
+ import { useAuthDialog } from '../contexts/AuthDialogContext.jsx';
+ import { useSectionTitles } from '../contexts/SectionTitlesContext.jsx';
+ import { getSectionTitleValue } from '../constants/sectionTitleConfig.js';
  
  const PROGRESSIVE_NOTE =
-   '아래 내용은 일부 진보적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+   '아래 내용은 일부 진보측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
  const CONSERVATIVE_NOTE =
-   '아래 내용은 일부 보수적 시각 채널/논객의 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
+   '아래 내용은 일부 보수측 주장과 전망이며, 확실하지 않은 사실일 수 있습니다.';
  const IMPACT_NOTE = '이 섹션은 중립적 해석과 체감 영향을 요약한 설명입니다. (ChatGPT의 의견)';
  
- function getThemeCategoryMap(themeId) {
-   const key = themeId && THEME_CATEGORY_STRUCTURE[themeId] ? themeId : DEFAULT_THEME_ID;
-   return THEME_CATEGORY_STRUCTURE[key]?.categories ?? null;
- }
+ const INITIAL_STATS = { upVotes: 0, downVotes: 0, scrapCount: 0, commentCount: 0 };
+@@ -958,50 +959,54 @@ function IssuePage() {
+                   <p className="text-xs text-rose-700/80 dark:text-rose-200/80">{conservativeView.note}</p>
+                 </div>
+                 {conservativeView.bullets.length > 0 ? (
+                   <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-rose-900 dark:text-rose-100">
+                     {conservativeView.bullets.map((bullet, index) => (
+                       <li key={index}>{bullet}</li>
+                     ))}
+                   </ul>
+                 ) : null}
+                 {typeof conservativeView.intensity === 'number' && conservativeView.intensity >= 0 ? (
+                   <IntensityBar intensity={conservativeView.intensity} />
+                 ) : (
+                   <p className="text-xs text-rose-700/70 dark:text-rose-200/80">강도 정보가 제공되지 않았습니다.</p>
+                 )}
+               </div>
+             </SectionCard>
+           )}
  
- function getCategoryOptions(themeId) {
-   const map = getThemeCategoryMap(themeId);
-   if (!map) {
-     return [];
-   }
-   return Object.keys(map);
- }
+           {impactToLife && (
+             <SectionCard title={impactHeading} tone="impact" badgeText={impactBadge}>
+               <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{impactToLife.text}</p>
+               <p className="text-xs text-slate-500 dark:text-slate-400">{impactToLife.note || IMPACT_NOTE}</p>
+             </SectionCard>
+           )}
  
- function getDefaultCategory(themeId) {
-   const options = getCategoryOptions(themeId);
-   return options.length > 0 ? options[0] : '';
- }
-diff --git a/frontend/src/components/IssueCard.jsx b/frontend/src/components/IssueCard.jsx
-index 3b4ed078eb5415eed7cd1186925979aa5ba8d1c2..2a970a4b3596f8bedfa3fcf193c2184252d6efdc 100644
---- a/frontend/src/components/IssueCard.jsx
-+++ b/frontend/src/components/IssueCard.jsx
-@@ -1,64 +1,67 @@
- // frontend/src/components/IssueCard.jsx
- // 홈 카드: 테마 뱃지/포커스 링을 테마별로 적용 (support=violet 통일)
- import PropTypes from 'prop-types';
- import { Link } from 'react-router-dom';
- import { getThemeLabel } from '../constants/themeConfig.js';
++          {issue.theme === 'ai' && issue.aiGuide ? (
++            <AIGuideView guide={issue.aiGuide} />
++          ) : null}
++
+           {issue.theme === 'parenting' && parentingGuide ? (
+             <ParentingGuideView guide={parentingGuide} />
+           ) : null}
  
- const BASE_CARD_CLASS = [
-   'group block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition sm:p-6',
-   'hover:-translate-y-1 hover:shadow-lg',
-   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-   'dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600 dark:focus-visible:ring-offset-slate-900'
- ].join(' ');
+           {issue.theme === 'lifestyle' && lifestyleGuide ? (
+             <LifestyleGuideView guide={lifestyleGuide} />
+           ) : null}
  
- // 테마별 뱃지 클래스
- const THEME_PILL_CLASS = {
-   policy:
-     'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-200 dark:ring-indigo-400/50',
-   stocks:
-     'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/20 dark:text-amber-200 dark:ring-amber-400/50',
-   parenting:
-     'bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200 dark:bg-sky-500/20 dark:text-sky-200 dark:ring-sky-400/50',
-   lifestyle:
-     'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-400/50',
-   health:
-     'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-400/50',
-+  ai:
-+    'bg-cyan-50 text-cyan-700 ring-1 ring-inset ring-cyan-200 dark:bg-cyan-500/20 dark:text-cyan-200 dark:ring-cyan-400/50',
-   groupbuy:
-     'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-200 dark:ring-rose-400/50',
-   // ✅ support 테마를 violet로 통일
-   support:
-     'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-400/50'
- };
+           {issue.theme === 'health' && healthGuide ? (
+             <HealthGuideView guide={healthGuide} />
+           ) : null}
  
- // 테마별 포커스 링 (Tailwind 정적 클래스 매핑)
- const THEME_RING_CLASS = {
-   policy: 'focus-visible:ring-indigo-400',
-   stocks: 'focus-visible:ring-amber-400',
-   parenting: 'focus-visible:ring-sky-400',
-   lifestyle: 'focus-visible:ring-violet-400',
-   health: 'focus-visible:ring-emerald-400',
-+  ai: 'focus-visible:ring-cyan-400',
-   groupbuy: 'focus-visible:ring-rose-400',
-   support: 'focus-visible:ring-violet-400'
- };
+           {issue.theme === 'stocks' && stockGuide ? (
+             <StockGuideView guide={stockGuide} />
+           ) : null}
+           
+           {issue.theme === 'support' && supportGuide ? (
+             <SupportGuideView guide={supportGuide} />
+           ) : null}
  
- function IssueCard({ issue }) {
-   const theme = issue.theme || 'policy';
-   const themeLabel = getThemeLabel(theme);
-   const themePill = THEME_PILL_CLASS[theme] || 'bg-slate-900/10 text-slate-700 dark:bg-slate-100/10 dark:text-slate-200';
-   const ringClass = THEME_RING_CLASS[theme] || 'focus-visible:ring-indigo-400';
-   const summaryText = issue.easySummary || issue.summaryCard || '요약 문장이 아직 입력되지 않았습니다.';
-   const href = `/issue/${issue.id}`;
-   const coreKeywords = Array.isArray(issue.coreKeywords)
-     ? issue.coreKeywords
-         .map((keyword) => (typeof keyword === 'string' ? keyword.trim() : String(keyword ?? '').trim()))
-         .filter(Boolean)
+           <SectionCard title={sourcesHeading} tone="neutral">
+             {Array.isArray(issue.sources) && issue.sources.length > 0 ? (
+               <ul className="space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                 {issue.sources.map((source, index) => (
+                   <li key={`${source.channelName}-${index}`} className="rounded-lg border border-slate-200 bg-white/60 p-4 dark:border-slate-600 dark:bg-slate-900/40">
+diff --git a/frontend/src/pages/admin/AdminNewPage.jsx b/frontend/src/pages/admin/AdminNewPage.jsx
+index cf973c1ca4ba1a7df4b44da371737b0f2bd29bf5..320bbdb2a930507533d95f713ea785d4b209db28 100644
+--- a/frontend/src/pages/admin/AdminNewPage.jsx
++++ b/frontend/src/pages/admin/AdminNewPage.jsx
+@@ -1,55 +1,58 @@
+ // frontend/src/pages/admin/AdminNewPage.jsx
+ // 이 페이지는 완전히 클라이언트 사이드에서 Firestore Web SDK를 사용해 새 문서를 생성한다.
+ // 현재 누구나 /admin/new 에 접근하면 issues 컬렉션에 글을 추가할 수 있다. TODO: 프로덕션 단계에서는 접근 제한과 Firestore 보안 규칙 강화를 반드시 적용해야 한다.
+ 
+ import { useEffect, useMemo, useRef, useState } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import IntensityBar from '../../components/IntensityBar.jsx';
+ import SectionCard from '../../components/SectionCard.jsx';
++import AIThemeEditor from '../../components/admin/AIThemeEditor.jsx';
++import AIThemePreview from '../../components/admin/AIThemePreview.jsx';
+ import LifestyleThemeEditor from '../../components/admin/LifestyleThemeEditor.jsx';
+ import LifestyleThemePreview from '../../components/admin/LifestyleThemePreview.jsx';
+ import ParentingThemeEditor from '../../components/admin/ParentingThemeEditor.jsx';
+ import ParentingThemePreview from '../../components/admin/ParentingThemePreview.jsx';
+ import HealthThemeEditor from '../../components/admin/HealthThemeEditor.jsx';
+ import HealthThemePreview from '../../components/admin/HealthThemePreview.jsx';
+ import StockThemeEditor from '../../components/admin/StockThemeEditor.jsx';
+ import StockThemePreview from '../../components/admin/StockThemePreview.jsx';
+ import SupportThemeEditor from '../../components/admin/SupportThemeEditor.jsx';
+ import SupportThemePreview from '../../components/admin/SupportThemePreview.jsx';
+ import {
+   getCategoryOptions,
+   getDefaultCategory,
+   getSubcategoryOptions,
+   isValidCategory,
+   isValidSubcategory
+ } from '../../constants/categoryStructure.js';
+ import { DEFAULT_THEME_ID, THEME_CONFIG, isValidThemeId } from '../../constants/themeConfig.js';
+ import { createIssue, createScheduledIssues } from '../../firebaseClient.js';
+ import { getThemePrompt } from '../../constants/themePrompts.js';
+ import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
+ import {
++  createAiGuide,
+   createHealthGuide,
+   createLifestyleGuide,
+   createParentingGuide,
+   createSupportGuide
+ } from '../../utils/themeDraftDefaults.js';
+ import {
+   buildSubmissionPayload,
+   normalizeCoreKeywords,
+   parseDraftFromJson,
+   parseDraftStrict,
+   sanitizeJsonNewlines,
+   splitJsonObjects,
+   withDefaultDate
+ } from '../../utils/draftSerialization.js';
+ import { useSectionTitles } from '../../contexts/SectionTitlesContext.jsx';
+ import { useAuth } from '../../contexts/AuthContext.jsx';
+ import { formatKoreanDateTime } from '../../utils/dateFormat.js';
+ import { getSectionTitleValue } from '../../constants/sectionTitleConfig.js';
+ 
+ const STORAGE_KEY = 'adminDraftV7';
+ const SOURCE_TYPE_OPTIONS = [
+   { value: 'official', label: '공식 발표' },
+   { value: 'youtube', label: '유튜브' },
+   { value: 'media', label: '언론/매체' },
+   { value: 'etc', label: '기타' }
+@@ -574,67 +577,72 @@ function AdminNewPage() {
+         subcategory: nextSubcategory
+       };
+     });
+   };
+ 
+   const handleSubcategoryChange = (event) => {
+     const { value } = event.target;
+     setIssueDraft((prev) => ({
+       ...prev,
+       subcategory: isValidSubcategory(selectedTheme, prev.category, value) ? value : ''
+     }));
+   };
+ 
+   const handleThemeChange = (event) => {
+     const { value } = event.target;
+     if (isGroupbuyOnly && value !== 'groupbuy') {
+       return;
+     }
+     const nextTheme = isValidThemeId(value) ? value : DEFAULT_THEME_ID;
+     setIssueDraft((prev) => {
+       const base = ensureThemeGuides(prev);
+       const nextThemeMeta = THEME_CONFIG.find((item) => item.id === nextTheme);
+       const draft = {
+         ...base,
+         theme: nextTheme,
++        aiGuide: base.aiGuide ?? createAiGuide(),
+         parentingGuide: base.parentingGuide ?? createParentingGuide(),
+         healthGuide: base.healthGuide ?? createHealthGuide(),
+         lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide(),
+         supportGuide: base.supportGuide ?? createSupportGuide()
+       };
+       const defaultCategory = getDefaultCategory(nextTheme);
+       draft.category = isValidCategory(nextTheme, base.category) ? base.category : defaultCategory;
+       const allowedSubcategories = getSubcategoryOptions(nextTheme, draft.category);
+       draft.subcategory = allowedSubcategories.includes(base.subcategory) ? base.subcategory : '';
+       if (!nextThemeMeta?.showPerspectives) {
+         draft.progressiveView = null;
+         draft.conservativeView = null;
+       }
+       return draft;
+     });
+   };
+ 
++  const handleAiGuideChange = (nextGuide) => {
++    setIssueDraft((prev) => ({ ...prev, aiGuide: nextGuide }));
++  };
++
+   const handleParentingGuideChange = (nextGuide) => {
+     setIssueDraft((prev) => ({ ...prev, parentingGuide: nextGuide }));
+   };
+ 
+   const handleHealthGuideChange = (nextGuide) => {
+     setIssueDraft((prev) => ({ ...prev, healthGuide: nextGuide }));
+   };
+ 
+   const handleLifestyleGuideChange = (nextGuide) => {
+     setIssueDraft((prev) => ({ ...prev, lifestyleGuide: nextGuide }));
+   };
+ 
+   const handleStockGuideChange = (nextGuide) => {
+     setIssueDraft((prev) => ({ ...prev, stockGuide: nextGuide }));
+   };
+ 
+   const handleSupportGuideChange = (nextGuide) => {
+     setIssueDraft((prev) => ({ ...prev, supportGuide: nextGuide }));
+   };
+ 
+   const addKeyPoint = () => {
+     setIssueDraft((prev) => ({
+       ...prev,
+       keyPoints: [...(Array.isArray(prev.keyPoints) ? prev.keyPoints : []), '']
+     }));
+@@ -1196,50 +1204,54 @@ function AdminNewPage() {
+                 {issueDraft.keyPoints.length === 0 ? (
+                   <p className="rounded-lg border border-dashed border-slate-300 px-4 py-4 text-center text-xs text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                     bullet을 추가해 핵심 쟁점을 정리하세요.
+                   </p>
+                 ) : null}
+                 {issueDraft.keyPoints.map((point, index) => (
+                   <div key={`key-point-${index}`} className="flex gap-3">
+                     <textarea
+                       value={point}
+                       onChange={(event) => updateKeyPoint(index, event.target.value)}
+                       className="min-h-[80px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                       placeholder={`bullet ${index + 1}`}
+                     />
+                     <button
+                       type="button"
+                       onClick={() => removeKeyPoint(index)}
+                       className="mt-1 inline-flex items-center justify-center rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-500/60 dark:hover:bg-rose-500/10"
+                     >
+                       삭제
+                     </button>
+                   </div>
+                 ))}
+             </div>
+           </div>
+ 
++          {selectedTheme === 'ai' ? (
++            <AIThemeEditor guide={issueDraft.aiGuide} onChange={handleAiGuideChange} />
++          ) : null}
++
+           {selectedTheme === 'parenting' ? (
+             <ParentingThemeEditor
+               guide={issueDraft.parentingGuide}
+               onChange={handleParentingGuideChange}
+             />
+           ) : null}
+ 
+           {selectedTheme === 'health' ? (
+             <HealthThemeEditor guide={issueDraft.healthGuide} onChange={handleHealthGuideChange} />
+           ) : null}
+ 
+           {selectedTheme === 'lifestyle' ? (
+             <LifestyleThemeEditor guide={issueDraft.lifestyleGuide} onChange={handleLifestyleGuideChange} />
+           ) : null}
+ 
+           {selectedTheme === 'stocks' ? (
+             <StockThemeEditor guide={issueDraft.stockGuide} onChange={handleStockGuideChange} />
+           ) : null}
+           
+           {selectedTheme === 'support' ? (
+             <SupportThemeEditor guide={issueDraft.supportGuide} onChange={handleSupportGuideChange} />
+           ) : null}
+ 
+           {showPerspectiveSections ? (
+             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+@@ -1637,50 +1649,54 @@ function AdminNewPage() {
+ 
+             <SectionCard title={backgroundHeading} tone="neutral">
+               {previewBackground.length > 0 ? (
+                 <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                   {previewBackground.map((paragraph, index) => (
+                     <li key={`bg-${index}`}>{paragraph}</li>
+                   ))}
+                 </ul>
+               ) : (
+                 <p className="text-xs text-slate-500 dark:text-slate-400">배경 설명이 비어 있습니다.</p>
+               )}
+             </SectionCard>
+ 
+             <SectionCard title={keyPointsHeading} tone="neutral">
+               {previewKeyPoints.length > 0 ? (
+                 <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                   {previewKeyPoints.map((point, index) => (
+                     <li key={`preview-key-${index}`}>{point}</li>
+                   ))}
+                 </ul>
+               ) : (
+                 <p className="text-xs text-slate-500 dark:text-slate-400">핵심 bullet을 입력하면 여기에 표시됩니다.</p>
+               )}
+             </SectionCard>
+ 
++            {selectedTheme === 'ai' ? (
++              <AIThemePreview guide={issueDraft.aiGuide} />
++            ) : null}
++
+             {selectedTheme === 'parenting' ? (
+               <ParentingThemePreview guide={issueDraft.parentingGuide} />
+             ) : null}
+ 
+             {selectedTheme === 'health' ? (
+               <HealthThemePreview guide={issueDraft.healthGuide} />
+             ) : null}
+ 
+             {selectedTheme === 'lifestyle' ? (
+               <LifestyleThemePreview guide={issueDraft.lifestyleGuide} />
+             ) : null}
+ 
+             {selectedTheme === 'stocks' ? (
+               <StockThemePreview guide={issueDraft.stockGuide} />
+             ) : null}
+             
+             {selectedTheme === 'support' ? (
+               <SupportThemePreview guide={issueDraft.supportGuide} />
+             ) : null}
+ 
+             {issueDraft.progressiveView ? (
+               <SectionCard title={progressiveHeading} tone="progressive" badgeText={progressiveBadge}>
+                 <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">{issueDraft.progressiveView.headline}</p>
+                 <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">{issueDraft.progressiveView.note}</p>
+                 <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-emerald-900 dark:text-emerald-100">
+diff --git a/frontend/src/utils/draftSerialization.js b/frontend/src/utils/draftSerialization.js
+index 01731be8aaf33a6fbd997f90e111490df56e042d..d7eff8973ea6977431571191f3e581cdb976cf59 100644
+--- a/frontend/src/utils/draftSerialization.js
++++ b/frontend/src/utils/draftSerialization.js
+@@ -174,32 +174,33 @@ export function buildSubmissionPayload(draft) {
+         sourceDate: typeof source?.sourceDate === 'string' ? source.sourceDate : '',
+         timestamp: typeof source?.timestamp === 'string' ? source.timestamp : '',
+         note: typeof source?.note === 'string' ? source.note : ''
+       }))
      : [];
+   const normalizedCoreKeywords = normalizeCoreKeywords(ensured.coreKeywords);
+   const normalizedGroupbuyLink =
+     typeof ensured.groupbuyLink === 'string' ? ensured.groupbuyLink.trim() : '';
  
-   return (
-     <Link to={href} className={`${BASE_CARD_CLASS} ${ringClass}`} aria-label={`${themeLabel} · ${issue.title || '제목 미상'}`}>
-       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] text-slate-500 dark:text-slate-300">
-         <div className="flex items-center gap-2">
-           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ring-1 ring-inset ${themePill}`}>
-             {themeLabel}
-           </span>
-           <span className="font-medium uppercase tracking-wide text-slate-600 dark:text-slate-200">{issue.date || '정보 부족'}</span>
-diff --git a/frontend/src/components/RecentSection.jsx b/frontend/src/components/RecentSection.jsx
-index 6eb0505e20df619eaf92f3e789605cbf2446fccc..a47d2700c4c9025ca88dced6fd9a77507697499f 100644
---- a/frontend/src/components/RecentSection.jsx
-+++ b/frontend/src/components/RecentSection.jsx
-@@ -1,38 +1,39 @@
- import { Link } from 'react-router-dom';
- import { THEME_LABEL_MAP } from "../constants/themeConfig.js"; // { policy: "사건/정책", ... }
- const themeLabel = THEME_LABEL_MAP[item.theme] ?? "기타";
- const displayTitle = `${themeLabel} | ${item.title}`;
- <Link to={`/issue/${item.id}`} className="...">{displayTitle}</Link>
+   return {
+     ...ensured,
+     date: ensured.date,
+     theme,
+     category,
+     subcategory,
+     keyPoints: normalizedKeyPoints,
+     sources: normalizedSources,
+     coreKeywords: normalizedCoreKeywords,
+     groupbuyLink: theme === 'groupbuy' ? normalizedGroupbuyLink : '',
+     progressiveView: allowPerspectives ? ensured.progressiveView : null,
+     conservativeView: allowPerspectives ? ensured.conservativeView : null,
+     parentingGuide: theme === 'parenting' ? ensured.parentingGuide : null,
+     healthGuide: theme === 'health' ? ensured.healthGuide : null,
+     lifestyleGuide: theme === 'lifestyle' ? ensured.lifestyleGuide : null,
+     stockGuide: theme === 'stocks' ? ensured.stockGuide : null,
++    aiGuide: theme === 'ai' ? ensured.aiGuide : null,
+     supportGuide: theme === 'support' ? ensured.supportGuide : null
+   };
+ }
  
- // 테마 키 → 보기 이름 매핑 (필요에 맞게 수정/추가)
- const THEME_LABELS = {
-   policy: '사건/정책',
-   stocks: '주식정보',
-   parenting: '육아정보',
-   lifestyle: '생활정보',
-   health: '건강정보',
-+  ai: 'AI 정보',
-   groupbuy: '공동구매정보',
-   support: '정부지원정보',
-   admin: '관리자',
- };
+ export function stringifyDraftForClipboard(draft) {
+   return JSON.stringify(buildSubmissionPayload(draft));
+ }
+diff --git a/frontend/src/utils/emptyDraft.js b/frontend/src/utils/emptyDraft.js
+index b212648170d2e8f2583ec6b60ba82843945e9357..e8faf4b857e594bbedea7e2fd1cbee1a962caf38 100644
+--- a/frontend/src/utils/emptyDraft.js
++++ b/frontend/src/utils/emptyDraft.js
+@@ -1,55 +1,57 @@
+ // frontend/src/utils/emptyDraft.js
+ import { DEFAULT_THEME_ID } from '../constants/themeConfig.js';
+ import { getDefaultCategory } from '../constants/categoryStructure.js';
+ import {
++  createAiGuide,
+   createEmptyThemeSections,
+   createHealthGuide,
+   createLifestyleGuide,
+   createParentingGuide,
+   createStockGuide,
+   createSupportGuide
+ } from './themeDraftDefaults.js';
  
- // theme, title, id, createdAt 형태를 가정
- // createdAt은 문자열(YYYY-MM-DD HH:mm) 또는 Date → 표시용 포맷 함수로 변환
- function formatDate(d) {
-   if (!d) return '';
-   if (typeof d === 'string') return d;
+ export function createEmptyDraft() {
+-  const { parentingGuide, healthGuide, lifestyleGuide, stockGuide, supportGuide } = createEmptyThemeSections();
++  const { aiGuide, parentingGuide, healthGuide, lifestyleGuide, stockGuide, supportGuide } = createEmptyThemeSections();
+   return {
+     theme: DEFAULT_THEME_ID,
+     easySummary: '',
+     title: '',
+     date: '',
+     groupbuyLink: '',
+     category: getDefaultCategory(DEFAULT_THEME_ID),
+     subcategory: '',
+     summaryCard: '',
+     background: '',
+     keyPoints: [],
+     coreKeywords: [],
+     progressiveView: null,
+     conservativeView: null,
+     impactToLife: null,
+     sources: [],
++    aiGuide,
+     parentingGuide,
+     healthGuide,
+     lifestyleGuide,
+     stockGuide,
+     supportGuide // ✅ 추가
+   };
+ }
+ 
+ export const emptyDraft = createEmptyDraft();
+ 
+ export function getCurrentKoreanDateTimeString() {
    try {
-     const dt = d.toDate ? d.toDate() : d;
-     return new Intl.DateTimeFormat('ko-KR', {
+     const now = new Date();
+     const formatter = new Intl.DateTimeFormat('ko-KR', {
+       timeZone: 'Asia/Seoul',
        year: 'numeric',
        month: '2-digit',
        day: '2-digit',
        hour: '2-digit',
        minute: '2-digit',
-     })
-       .format(dt)
-       .replace(/\./g, '-')
-       .replace(/\s/g, ' ')
-       .replace(/- /g, '-')
-       .replace(/ $/, '');
-   } catch {
-diff --git a/frontend/src/constants/categoryStructure.js b/frontend/src/constants/categoryStructure.js
-index 62f5582f7c1acb83ecbc20724ba528c1eb269a41..577204652c052ca8a94bf571dcf5c7ff791c5529 100644
---- a/frontend/src/constants/categoryStructure.js
-+++ b/frontend/src/constants/categoryStructure.js
-@@ -74,50 +74,109 @@ export const THEME_CATEGORY_STRUCTURE = Object.freeze({
-         '보안·양자',
-         '정책·국산화·매크로',
-         'IPO·SPAC·개별기업'
-       ]),
-       '기업/실적': Object.freeze([
-         '실적발표',
-         '가이던스/IR',
-         '신사업/M&A',
-         '규제/리스크'
-       ]),
-       '거시/정책': Object.freeze([
-         '금리/통화정책',
-         '재정/세제',
-         '산업정책/보조금',
-         '무역/지정학'
-       ]),
-       투자전략: Object.freeze([
-         '밸류/퀄리티',
-         '성장/모멘텀',
-         '배당/리츠',
-         '퀀트/리밸런싱'
-       ])
-     })
-   }),
+       hourCycle: 'h23' // ← 24시간제로 강제
+     });
  
-+  ai: Object.freeze({
-+    categories: Object.freeze({
-+      'AI 기초·트렌드': Object.freeze([
-+        'AI 개념 한입 요약',
-+        'AI 용어사전',
-+        'AI 기술·역사 스토리',
-+        'AI 트렌드 브리핑'
-+      ]),
-+      'AI 도구·서비스 활용': Object.freeze([
-+        '챗봇·텍스트 AI 활용',
-+        '이미지·영상·음성 AI',
-+        '문서·노트·업무 도구',
-+        '국내 AI 서비스 지도'
-+      ]),
-+      '업무·생산성·자동화': Object.freeze([
-+        '문서·보고서 자동화',
-+        '엑셀·데이터 정리 자동화',
-+        '직장인 업무루틴 자동화',
-+        '고객응대·CS 보조'
-+      ]),
-+      '코딩·노코드·워크플로 자동화': Object.freeze([
-+        '프롬프트 엔지니어링',
-+        '코딩 도우미 활용법',
-+        '노코드·로우코드 자동화',
-+        'API·봇 만들기 기초'
-+      ]),
-+      'AI 부업·창업·수익화': Object.freeze([
-+        'AI 부업 아이디어 모음',
-+        '콘텐츠·마케팅 수익화',
-+        'SaaS·서비스 기획',
-+        '프리랜서·외주 활용'
-+      ]),
-+      '콘텐츠 제작·유튜브·블로그': Object.freeze([
-+        '블로그 자동작성·최적화',
-+        '유튜브·쇼츠 스크립트 공장',
-+        'SNS·쓰레드 자동화',
-+        '카피라이팅·광고 문구'
-+      ]),
-+      '교육·육아·자기계발에서의 AI': Object.freeze([
-+        '학습 도우미로 쓰는 AI',
-+        '유아·육아 AI 활용',
-+        '커리어·스킬업 플랜',
-+        '멘탈·생산성 관리'
-+      ]),
-+      'AI 이슈·윤리·정책': Object.freeze([
-+        '국내 AI 정책·규제 동향',
-+        '해외 AI 규제·사례',
-+        'AI 윤리·프라이버시',
-+        '직장 내 AI 사용 가이드'
-+      ]),
-+      'AI 툴·사례 아카이브': Object.freeze([
-+        '분야별 AI 툴 지도',
-+        '실전 활용 사례 모음',
-+        '워크플로 레시피 모음',
-+        '템플릿·체크리스트'
-+      ])
-+    })
-+  }),
-+
-   parenting: Object.freeze({
-     categories: Object.freeze({
-       '임신/출산준비': Object.freeze([
-         '산전검사 & 임신주차별 체크리스트',
-         '임산부 영양 & 안전 식품/피해야 할 것',
-         '운동/체중관리 & 통증관리(골반통, 부종 등)',
-         '분만 선택 가이드(자연분만/무통/제왕절개)',
-         '출산 준비물 & 병원/조리원 체크리스트',
-         '산후회복(산후우울, 골반케어, 모유 수유 시작)',
-         '태아 발달 & 태동·검사 수치 이해',
-         '정부지원/제도(국가바우처, 출산지원금, 모자보건)',
-         '보험/재정(임신·출산 관련 실손 청구, 태아보험 기본)',
-         '출생신고/행정 절차 & 예방접종 시작 안내'
-       ]),
-       '영유아(0~7세)': Object.freeze([
-         '수유/이유식/알레르기 가이드',
-         '수면 루틴 & 야간 각성 해결',
-         '배변훈련 & 위생습관',
-         '발달 이정표(운동·언어·사회성) & 발달검사',
-         '흔한 질환/응급(돌발열·장염·중이염·해열제 용량)',
-         '예방접종 일정 & 부작용 대처',
-         '놀이/감각통합/장난감 선택(월령별)',
-         '안전/사고예방(가정·차량·외출)',
-         '어린이집/유치원 적응 & 준비물',
-         '부모 멘탈케어(부부역할·육아휴직·워라밸)',
-diff --git a/frontend/src/constants/themeConfig.js b/frontend/src/constants/themeConfig.js
-index ac06af17055d4f19f25d88320730b21900b51a57..bd8d65cac09ec3093a17f393e79fc58df8bb52e6 100644
---- a/frontend/src/constants/themeConfig.js
-+++ b/frontend/src/constants/themeConfig.js
-@@ -1,50 +1,69 @@
- // frontend/src/constants/themeConfig.js
- // infoall 서비스에서 사용하는 테마 정의를 한곳에 모은다.
- // Firestore `issues` 문서에는 theme 필드를 저장하며, 이 파일이 단일 진실(Single Source of Truth)이다.
+     const parts = formatter.formatToParts(now).reduce((acc, part) => {
+       if (part.type !== 'literal') {
+@@ -66,32 +68,33 @@ export function getCurrentKoreanDateTimeString() {
  
- export const DEFAULT_THEME_ID = 'policy';
- 
- export const THEME_CONFIG = [
-   {
-     id: 'policy',
-     label: '사건/정책',
-     description:
-       '주요 정책 변화와 사회적 사건을 요약하고 진보/보수 시각을 비교합니다.',
-     accent: 'indigo',
-     showPerspectives: true,
-     keyAreas: ['핵심 요약', '진보 시각', '보수 시각', '생활 영향', '공식/언론 출처']
-   },
-   {
-     id: 'stocks',
-     label: '주식정보',
-     description:
-       '최신 시장 동향, 섹터/기업 분석, 그리고 투자 전략까지.',
-     accent: 'amber',
-     showPerspectives: false,
-     keyAreas: ['시장 동향', '섹터 분석', '기업 분석', '투자 전략', '공시/뉴스']
-   },
-+  {
-+    id: 'ai',
-+    label: 'AI 정보',
-+    description:
-+      'AI 개념 정리부터 도구 활용, 자동화, 수익화, 정책 이슈까지 한 번에 정리합니다.',
-+    accent: 'cyan',
-+    showPerspectives: false,
-+    keyAreas: [
-+      'AI 기초·트렌드',
-+      'AI 도구·서비스 활용',
-+      '업무·생산성·자동화',
-+      '코딩·노코드·워크플로 자동화',
-+      'AI 부업·창업·수익화',
-+      '콘텐츠 제작·유튜브·블로그',
-+      '교육·육아·자기계발에서의 AI',
-+      'AI 이슈·윤리·정책',
-+      'AI 툴·사례 아카이브'
-+    ]
-+  },
-   {
-     id: 'parenting',
-     label: '육아정보',
-     description:
-       '임신·출산부터 학령기까지 연령대별 가이드와 체크리스트를 제공합니다.',
-     accent: 'sky',
-     showPerspectives: false,
-     // 합의된 개편 반영: 0~7세 통합, 학령 구간 정리
-     keyAreas: ['임신/출산준비', '영유아(0~7세)', '초등학생', '중학생', '고등학생', '긴급 연락처']
-   },
-   {
-     id: 'lifestyle',
-     label: '생활정보',
-     description:
-       '일상에 바로 쓰는 행정·금융·소비·생활관리부터 주거·교통·법률·직장·교육·디지털·여행·반려·식생활·환경·로컬·문화까지 전 생활 영역을 단계별로 안내합니다.',
-     accent: 'violet',
-     showPerspectives: false,
-     // 카테고리 스펙 그대로 키 영역에 노출(탭/필터 등에 활용)
-     keyAreas: [
-       '행정/정부 서비스',
-       '금융/세무',
-       '소비/쇼핑',
-       '생활관리',
-       '주거/부동산',
-       '교통/운전',
-diff --git a/frontend/src/constants/themePrompts.js b/frontend/src/constants/themePrompts.js
-index 3593715097e6569a6f21b301291f411a8be21073..9667fa2cca0f11448c4131c6fba3ad0f72bf83c3 100644
---- a/frontend/src/constants/themePrompts.js
-+++ b/frontend/src/constants/themePrompts.js
-@@ -44,50 +44,110 @@ export const THEME_PROMPTS = {
-     {
-       "type": "official" | "youtube" | "media" | "etc",
-       "channelName": string,
-       "sourceDate": string,
-       "timestamp": string,
-       "note": string
-     }
-   ],
-   "parentingGuide": null,
-   "healthGuide": null,
-   "lifestyleGuide": null
+     return `${year}-${month}-${day} ${hour}:${minute}`;
+   } catch (error) {
+     console.warn('한국 시간 문자열 생성 실패, UTC 기준으로 대체합니다:', error);
+     const fallback = new Date().toISOString(); // 2025-11-07T00:12:34.000Z
+     // ISO는 UTC라서 일단 자르고 공백으로 바꿔서 시:분까지만
+     return fallback.replace('T', ' ').slice(0, 16);
+   }
  }
  
- 카테고리 규칙:
- - category 값은 사건/정책 테마 전용 목록에서만 선택한다.
-   - "부동산": 주거·주택공급 정책, 전월세·임대차 제도, 재건축·재개발·도시정비, 부동산 세제·규제
-   - "노동/노조": 임금·근로조건 정책, 노사협상·파업 이슈, 고용·산재·안전 규제, 산업별 노동 현안
-   - "사법/검찰": 수사·기소·사건 처리, 법원 판결·양형 논쟁, 사법개혁·제도개편, 감찰·징계·인사
-   - "외교/안보": 정상외교·국제협력, 군사·방위 정책, 동맹 현안, 대북·통일 정책
-   - "기타": 국회·정당·정치개혁, 복지·보건·교육 정책, 과학·디지털·규제 혁신, 환경·에너지 전환
- - subcategory는 선택한 category의 하위 목록 중 하나를 그대로 사용한다.
+ export function createFreshDraft() {
+   const draft = createEmptyDraft();
+   return {
+     ...draft,
+     date: getCurrentKoreanDateTimeString(),
+     groupbuyLink: draft.groupbuyLink,
+     keyPoints: [...draft.keyPoints],
+     sources: [...draft.sources],
+     coreKeywords: [...draft.coreKeywords]
+   };
+ }
  
- 세부 규칙:
- 1) easySummary는 쉬운 한 줄, 2) background는 사실 위주, 3) progressive/conservative로 관점 분리(의견임을 명시), 4) 정보 없으면 null, 5) 모든 문자열 한 줄, 6) coreKeywords 배열에는 최소 3개 최대 5개의 핵심키워드를 넣고 각 요소는 한 줄 문자열, 7) 최종 출력은 JSON 한 줄.`,
+ export function ensureThemeGuides(draft) {
+   return {
+     ...draft,
++    aiGuide: draft?.aiGuide ?? createAiGuide(),
+     parentingGuide: draft?.parentingGuide ?? createParentingGuide(),
+     healthGuide: draft?.healthGuide ?? createHealthGuide(),
+     lifestyleGuide: draft?.lifestyleGuide ?? createLifestyleGuide(),
+     stockGuide: draft?.stockGuide ?? createStockGuide(),
+     supportGuide: draft?.supportGuide ?? createSupportGuide() // ✅ 추가
+   };
+ }
+diff --git a/frontend/src/utils/loadDraftFromJson.js b/frontend/src/utils/loadDraftFromJson.js
+index ec173354c67875ca6cec46161a3df6fa6fc7fb22..0652608c372d0102a69a81eba9e6767ba69042fd 100644
+--- a/frontend/src/utils/loadDraftFromJson.js
++++ b/frontend/src/utils/loadDraftFromJson.js
+@@ -1,34 +1,37 @@
+ // frontend/src/utils/loadDraftFromJson.js
+ import { isValidThemeId } from '../constants/themeConfig.js';
+ import { createEmptyDraft } from './emptyDraft.js';
+ import {
++  normalizeAiGuide,
+   normalizeParentingGuide,
+   normalizeHealthGuide,
+   normalizeLifestyleGuide,
+   normalizeSupportGuide
+ } from './themeDraftDefaults.js';
  
-+  ai: `아래 명령어에 따라서 json글을 생성해주되, 여러 주제면 여러 줄로 출력하되, 각 줄은 하나의 완전한 JSON 객체여야 한다.
+ export function loadDraftFromJson(jsonText) {
+   let parsed = {};
+   try {
+     parsed = JSON.parse(jsonText);
+   } catch {
+     parsed = {};
+   }
+ 
+   const themeId = isValidThemeId(parsed?.theme) ? parsed.theme : createEmptyDraft().theme;
+   const merged = { ...parsed, theme: themeId };
+ 
+-  if (themeId === 'parenting') {
++  if (themeId === 'ai') {
++    merged.aiGuide = normalizeAiGuide(parsed.aiGuide ?? {});
++  } else if (themeId === 'parenting') {
+     merged.parentingGuide = normalizeParentingGuide(parsed.parentingGuide ?? {}, { withPresets: true });
+   } else if (themeId === 'health') {
+     merged.healthGuide = normalizeHealthGuide(parsed.healthGuide ?? {}, { withPresets: true });
+   } else if (themeId === 'lifestyle') {
+     merged.lifestyleGuide = normalizeLifestyleGuide(parsed.lifestyleGuide ?? {});
+   } else if (themeId === 'support') {
+     // ✅ 정부지원 테마 정규화
+     merged.supportGuide = normalizeSupportGuide(parsed.supportGuide ?? {}, { withPresets: true });
+   }
+ 
+   return merged;
+ }
+diff --git a/frontend/src/utils/themeDraftDefaults.js b/frontend/src/utils/themeDraftDefaults.js
+index 81c2575285b7bc834ceff9a47dd639965d212815..f559941adbc38bf8412f39f04c3d5217968fc76c 100644
+--- a/frontend/src/utils/themeDraftDefaults.js
++++ b/frontend/src/utils/themeDraftDefaults.js
+@@ -1,46 +1,123 @@
+ // frontend/src/utils/themeDraftDefaults.js
+-// 테마별 초안/정규화/클론 유틸(생활/육아/건강/주식/정부지원)
++// 테마별 초안/정규화/클론 유틸(생활/육아/건강/주식/정부지원/AI)
+ // - Lifestyle: createLifestyleItem, createHotItem(호환), createHotDeal, affiliateNotes
+ // - Parenting: PARENTING_* 프리셋 + createParentingAgeGroup
+ // - Health: HEALTH_* 프리셋 + createHealthCondition
+ // - Stocks: STOCK_SECTOR_PRESETS + createSectorHighlight/createCompanyAnalysis/createWatchItem
+ // - Support: regionalNotes/faq 제거, commonResources 정착 (+ 프리셋 상수)
++// - AI: 실행 구조/연결 가이드/카테고리별 추천 구조 편집을 위한 createAiGuide
+ 
+ //////////////////////////////
+ // 공통 유틸
+ //////////////////////////////
+ export function toStringArray(value) {
+   if (!value) return [];
+   if (Array.isArray(value)) return value.map((v) => String(v ?? '').trim()).filter(Boolean);
+   return String(value).split(/\n+/).map((s) => s.trim()).filter(Boolean);
+ }
+ // ✅ null/undefined를 안전하게 객체로
+ export function asObject(v, fallback = {}) {
+   return v && typeof v === 'object' ? v : fallback;
+ }
+ 
++//////////////////////////////
++// AI (AI 정보)
++//////////////////////////////
 +
-+당신은 'infoall'의 AI 테마용 편집 도우미다. 출력은 반드시 issueDraft JSON 객체 **하나**뿐이어야 하며, JSON 외 텍스트·주석·코드펜스·출처표시·인용부호·링크를 절대 추가하지 않는다.
-+모든 문자열은 한 줄로 작성하고 줄바꿈(\\n)을 넣지 않는다.
++const AI_CONNECTION_TYPES = ['parentingGuide', 'lifestyleGuide', 'supportGuide', 'other'];
 +
-+⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다.
-+오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
-+항상 "coreKeywords" 배열에 최소 3개 최대 5개의 핵심키워드를 넣어라.
-+**혹시 내용이 너무 방대하면 json을 여러개 생성해도된다.**
-+“반드시 RFC 8259 표준의 유효한 JSON 한 객체만 ‘한 줄’로 출력하고, 주석·후행 쉼표·단일따옴표·키 중복·NaN/Infinity를 금지하며, 모든 문자열은 한 줄(개행·탭 금지, 필요시 공백 대체). 큰따옴표는 \"로 이스케이프.. JSON 외 텍스트는 절대 출력하지 마라.”
-+
-+필드 순서는 다음과 같다.
-+
-+{
-+  "theme": "ai",
-+  "easySummary": string,
-+  "title": string,
-+  "date": string,                    // "YYYY-MM-DD HH:MM" 현재한국시간으로 답변
-+  "category": string,
-+  "subcategory": string,
-+  "summaryCard": string,
-+  "background": string,
-+  "coreKeywords": [ string, ... ],       // 최소 3개 최대 5개의 핵심키워드
-+  "keyPoints": [ string, ... ],
-+  "progressiveView": null,
-+  "conservativeView": null,
-+  "impactToLife": null,
-+  "sources": [
-+    {
-+      "type": "official" | "youtube" | "media" | "etc",
-+      "channelName": string,
-+      "sourceDate": string,
-+      "timestamp": string,
-+      "note": string
-+    }
-+  ],
-+  "parentingGuide": null,
-+  "healthGuide": null,
-+  "lifestyleGuide": null,
-+  "stockGuide": null,
-+  "supportGuide": null
++export function createAiConnection({ type = 'other', label = '', description = '' } = {}) {
++  const normalizedType = AI_CONNECTION_TYPES.includes(type) ? type : 'other';
++  return {
++    type: normalizedType,
++    label: String(label ?? ''),
++    description: String(description ?? '')
++  };
 +}
 +
-+카테고리 규칙:
-+- category 값은 AI 테마 전용 목록에서만 선택한다.
-+  - "AI 기초·트렌드": "AI 개념 한입 요약", "AI 용어사전", "AI 기술·역사 스토리", "AI 트렌드 브리핑"
-+  - "AI 도구·서비스 활용": "챗봇·텍스트 AI 활용", "이미지·영상·음성 AI", "문서·노트·업무 도구", "국내 AI 서비스 지도"
-+  - "업무·생산성·자동화": "문서·보고서 자동화", "엑셀·데이터 정리 자동화", "직장인 업무루틴 자동화", "고객응대·CS 보조"
-+  - "코딩·노코드·워크플로 자동화": "프롬프트 엔지니어링", "코딩 도우미 활용법", "노코드·로우코드 자동화", "API·봇 만들기 기초"
-+  - "AI 부업·창업·수익화": "AI 부업 아이디어 모음", "콘텐츠·마케팅 수익화", "SaaS·서비스 기획", "프리랜서·외주 활용"
-+  - "콘텐츠 제작·유튜브·블로그": "블로그 자동작성·최적화", "유튜브·쇼츠 스크립트 공장", "SNS·쓰레드 자동화", "카피라이팅·광고 문구"
-+  - "교육·육아·자기계발에서의 AI": "학습 도우미로 쓰는 AI", "유아·육아 AI 활용", "커리어·스킬업 플랜", "멘탈·생산성 관리"
-+  - "AI 이슈·윤리·정책": "국내 AI 정책·규제 동향", "해외 AI 규제·사례", "AI 윤리·프라이버시", "직장 내 AI 사용 가이드"
-+  - "AI 툴·사례 아카이브": "분야별 AI 툴 지도", "실전 활용 사례 모음", "워크플로 레시피 모음", "템플릿·체크리스트"
-+- subcategory는 선택한 category의 하위 목록 중 하나를 그대로 사용한다.
++export function createAiBlueprintSection({ title = '', description = '', checklist = [] } = {}) {
++  return {
++    title: String(title ?? ''),
++    description: String(description ?? ''),
++    checklist: toStringArray(checklist)
++  };
++}
 +
-+세부 규칙:
-+1) easySummary는 한 줄 핵심 요약, 2) summaryCard는 실전 활용 포인트, 3) background는 근거 중심 설명, 4) keyPoints는 실행 팁·활용 아이디어 3~5개, 5) 관점/생활 영향 섹션은 기본적으로 null 유지, 6) coreKeywords 배열에는 최소 3개 최대 5개의 핵심키워드를 넣고 각 요소는 한 줄 문자열, 7) 최종 출력은 JSON 한 줄.
-+`,
++export function createAiSubcategoryFocus({ title = '', summary = '', highlights = [] } = {}) {
++  return {
++    title: String(title ?? ''),
++    summary: String(summary ?? ''),
++    highlights: toStringArray(highlights)
++  };
++}
 +
-   parenting: `아래 명령어에 따라서 json글을 생성해주되, 여러 주제면 여러 줄로 출력하되, 각 줄은 하나의 완전한 JSON 객체여야 한다.
++export function createAiGuide() {
++  return {
++    summaryCardBullets: ['반복 업무를 자동화하는 핵심 단계를 이해합니다.', '내 환경에 맞게 AI 도구를 세팅합니다.', '보안/정책 이슈를 피하면서 활용합니다.'],
++    backgroundInsights: ['왜 지금 이 주제가 중요한지, 현업에서 어떤 문제가 반복되는지 적어 주세요.'],
++    keyActionSteps: ['1) 문제 상황을 정의하고, 2) 활용할 AI 도구를 정합니다.'],
++    impact: { targetAudience: '', expectedEffect: '', caution: '' },
++    connectionGuides: [],
++    categoryBlueprint: {
++      overview: '',
++      sections: [],
++      subcategoryFocus: []
++    }
++  };
++}
++
++export function normalizeAiGuide(raw = {}) {
++  const r = asObject(raw, {});
++  return {
++    summaryCardBullets: toStringArray(r.summaryCardBullets ?? []),
++    backgroundInsights: toStringArray(r.backgroundInsights ?? []),
++    keyActionSteps: toStringArray(r.keyActionSteps ?? []),
++    impact: {
++      targetAudience: String(r?.impact?.targetAudience ?? ''),
++      expectedEffect: String(r?.impact?.expectedEffect ?? ''),
++      caution: String(r?.impact?.caution ?? '')
++    },
++    connectionGuides: Array.isArray(r.connectionGuides)
++      ? r.connectionGuides.map((item) => createAiConnection(item))
++      : [],
++    categoryBlueprint: {
++      overview: String(r?.categoryBlueprint?.overview ?? ''),
++      sections: Array.isArray(r?.categoryBlueprint?.sections)
++        ? r.categoryBlueprint.sections.map((section) => createAiBlueprintSection(section))
++        : [],
++      subcategoryFocus: Array.isArray(r?.categoryBlueprint?.subcategoryFocus)
++        ? r.categoryBlueprint.subcategoryFocus.map((focus) => createAiSubcategoryFocus(focus))
++        : []
++    }
++  };
++}
++
++export function cloneAiGuide(raw = {}) {
++  return normalizeAiGuide(raw);
++}
++
+ //////////////////////////////
+ // Lifestyle (생활정보)
+ //////////////////////////////
  
- 당신은 'infoall'의 육아정보 테마용 편집 도우미다. 출력은 반드시 issueDraft JSON 객체 **하나**뿐이어야 하며, JSON 외 텍스트·주석·코드펜스·출처표시·인용부호·링크를 절대 추가하지 않는다. 
- 모든 문자열은 한 줄로 작성하고 줄바꿈(\\n)을 넣지 않는다. 
- 
- ⚠️ 주의: 파일 출처, 인용표시( 등), 또는 참고문구를 절대 포함하지 않는다. 
- 오직 JSON 필드만 남기며, "sources" 필드의 값은 항상 빈 배열([])로 둔다.
- 항상 "coreKeywords" 배열에 최소 3개 최대 5개의 핵심키워드를 넣어라.
- 
- 필드 순서는 다음과 같다.
- 
- {
-   "theme": "parenting",
-   "easySummary": string,
-   "title": string,
-   "date": string,                    // "YYYY-MM-DD HH:MM" 현재한국시간으로 답변"
-   "category": string,
-   "subcategory": string,
-   "summaryCard": string,
-   "background": string,
-   "coreKeywords": [ string, ... ],       // 최소 3개 최대 5개의 핵심키워드
-   "keyPoints": [ string, ... ],
-   "progressiveView": null,
-   "conservativeView": null,
-   "impactToLife": null,
-diff --git a/frontend/src/pages/HomePage.jsx b/frontend/src/pages/HomePage.jsx
-index 4f5602a512702e59d2bc50d8b6ba313851b2375d..dafd77bc1fc0a0819b925469c4385406d3fad25b 100644
---- a/frontend/src/pages/HomePage.jsx
-+++ b/frontend/src/pages/HomePage.jsx
-@@ -9,50 +9,51 @@ import {
-   searchIssuesAcrossThemes,
-   getTrendingIssues,
-   getUserScraps
- } from '../firebaseClient.js';
- import { useAuth } from '../contexts/AuthContext.jsx';
- 
- function createEmptyBuckets() {
-   return THEME_CONFIG.reduce((acc, theme) => {
-     acc[theme.id] = [];
-     return acc;
-   }, {});
+ export function createLifestyleItem(name = '', category = '', highlight = '', link = '') {
+   return { name: String(name ?? ''), category: String(category ?? ''), highlight: String(highlight ?? ''), link: String(link ?? '') };
  }
- 
- function getThemeLabel(themeId) {
-   const t = THEME_CONFIG.find((x) => x.id === themeId);
-   return t?.label ?? themeId ?? '기타';
+ export function createHotItem(name = '', highlight = '', link = '') {
+   return createLifestyleItem(name, '', highlight, link);
  }
+ export function createHotDeal(title = '', category = '', description = '', link = '', priceInfo = '', couponCode = '', expiresAt = '') {
+   return { title: String(title ?? ''), category: String(category ?? ''), description: String(description ?? ''), link: String(link ?? ''), priceInfo: String(priceInfo ?? ''), couponCode: String(couponCode ?? ''), expiresAt: String(expiresAt ?? '') };
+ }
+ export function createLifestyleGuide() {
+   return { overview: '', quickTips: [], hotItems: [], hotDeals: [], affiliateNotes: [] };
+ }
+ export function normalizeLifestyleGuide(raw = {}) {
+   const r = asObject(raw, {});
+   return {
+     overview: String(r.overview ?? ''),
+     quickTips: toStringArray(r.quickTips),
+     hotItems: Array.isArray(r.hotItems) ? r.hotItems.map((x) => ({
+       name: String(x?.name ?? ''), category: String(x?.category ?? ''), highlight: String(x?.highlight ?? ''), link: String(x?.link ?? '')
+     })) : [],
+     hotDeals: Array.isArray(r.hotDeals) ? r.hotDeals.map((x) => ({
+@@ -195,32 +272,33 @@ export const SUPPORT_COMMON_RESOURCES_PRESETS = [
+ ];
+ export function createSupportProgram(name = '') {
+   return { name, summary: '', eligibility: [], benefits: [], requiredDocs: [], applicationProcess: [] };
+ }
+ export function createSupportGuide({ withPresets = true } = {}) {
+   return { overview: '', programs: withPresets ? [createSupportProgram('대표 지원 프로그램')] : [], commonResources: withPresets ? [...SUPPORT_COMMON_RESOURCES_PRESETS] : [] };
+ }
+ export function normalizeSupportGuide(raw = {}, { withPresets = false } = {}) {
+   const base = createSupportGuide({ withPresets });
+   const r = asObject(raw, {});
+   return {
+     overview: String(r.overview ?? ''),
+     programs: Array.isArray(r.programs) ? r.programs.map((p) => ({
+       name: String(p?.name ?? ''), summary: String(p?.summary ?? ''), eligibility: toStringArray(p?.eligibility), benefits: toStringArray(p?.benefits), requiredDocs: toStringArray(p?.requiredDocs), applicationProcess: toStringArray(p?.applicationProcess)
+     })) : base.programs,
+     commonResources: toStringArray(r.commonResources ?? base.commonResources)
+   };
+ }
+ export function cloneSupportGuide(raw = {}, opts) { return normalizeSupportGuide(raw, opts); }
  
- // 테마별 색상 클래스 매핑 (일관 팔레트)
- const THEME_COLOR_CLASSES = {
-   policy: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',
-   stocks: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
-   parenting: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200',
-   lifestyle: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200',
-   health: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
-+  ai: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200',
-   support: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200',
-   groupbuy: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200'
- };
- 
- // 제목 한 줄 리스트 아이템
- function TitleItem({ to, title, date, theme, commentCount = 0 }) {
-   const themeLabel = theme ? getThemeLabel(theme) : null;
-   const themeColorClass = theme ? (THEME_COLOR_CLASSES[theme] || 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200') : '';
-   const normalizedCommentCount = Number.isFinite(Number(commentCount)) ? Math.max(Number(commentCount), 0) : 0;
- 
-   return (
-     <li className="flex items-center justify-between gap-3">
-       <Link
-         to={to}
-         className="flex min-w-0 flex-1 items-center gap-2 text-sm hover:text-indigo-600 dark:hover:text-indigo-200"
-         title={themeLabel ? `${themeLabel} | ${title || '제목 없음'}` : (title || '제목 없음')}
-       >
-         {themeLabel && (
-           <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${themeColorClass}`}>
-             {themeLabel}
-           </span>
-         )}
-         <span className="truncate text-slate-800 dark:text-slate-100">{title || '제목 없음'}</span>
-         <span className="ml-2 shrink-0 text-[11px] font-bold text-rose-600 dark:text-rose-300">[{normalizedCommentCount}]</span>
-       </Link>
+ //////////////////////////////
+ // 묶음: 빈 섹션 일괄 생성
+ //////////////////////////////
+ export function createEmptyThemeSections() {
+   return {
++    aiGuide: createAiGuide(),
+     parentingGuide: createParentingGuide(),
+     healthGuide: createHealthGuide(),
+     lifestyleGuide: createLifestyleGuide(),
+     stockGuide: createStockGuide(),
+     supportGuide: createSupportGuide()
+   };
+ }
  
 EOF
 )

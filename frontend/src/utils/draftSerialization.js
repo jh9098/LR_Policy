@@ -196,6 +196,7 @@ export function buildSubmissionPayload(draft) {
     healthGuide: theme === 'health' ? ensured.healthGuide : null,
     lifestyleGuide: theme === 'lifestyle' ? ensured.lifestyleGuide : null,
     stockGuide: theme === 'stocks' ? ensured.stockGuide : null,
+    aiGuide: theme === 'ai' ? ensured.aiGuide : null,
     supportGuide: theme === 'support' ? ensured.supportGuide : null
   };
 }

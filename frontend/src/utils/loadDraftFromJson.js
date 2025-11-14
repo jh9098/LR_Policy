@@ -2,6 +2,7 @@
 import { isValidThemeId } from '../constants/themeConfig.js';
 import { createEmptyDraft } from './emptyDraft.js';
 import {
+  normalizeAiGuide,
   normalizeParentingGuide,
   normalizeHealthGuide,
   normalizeLifestyleGuide,
@@ -19,7 +20,9 @@ export function loadDraftFromJson(jsonText) {
   const themeId = isValidThemeId(parsed?.theme) ? parsed.theme : createEmptyDraft().theme;
   const merged = { ...parsed, theme: themeId };
 
-  if (themeId === 'parenting') {
+  if (themeId === 'ai') {
+    merged.aiGuide = normalizeAiGuide(parsed.aiGuide ?? {});
+  } else if (themeId === 'parenting') {
     merged.parentingGuide = normalizeParentingGuide(parsed.parentingGuide ?? {}, { withPresets: true });
   } else if (themeId === 'health') {
     merged.healthGuide = normalizeHealthGuide(parsed.healthGuide ?? {}, { withPresets: true });

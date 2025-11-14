@@ -5,6 +5,7 @@ import IntensityBar from '../components/IntensityBar.jsx';
 import MetaTags from '../components/MetaTags.jsx';
 import SectionCard from '../components/SectionCard.jsx';
 import ParentingGuideView from '../components/issue/ParentingGuideView.jsx';
+import AIGuideView from '../components/issue/AIGuideView.jsx';
 import LifestyleGuideView from '../components/issue/LifestyleGuideView.jsx';
 import HealthGuideView from '../components/issue/HealthGuideView.jsx';
 import StockGuideView from '../components/issue/StockGuideView.jsx';
@@ -979,6 +980,10 @@ function IssuePage() {
               <p className="text-xs text-slate-500 dark:text-slate-400">{impactToLife.note || IMPACT_NOTE}</p>
             </SectionCard>
           )}
+
+          {issue.theme === 'ai' && issue.aiGuide ? (
+            <AIGuideView guide={issue.aiGuide} />
+          ) : null}
 
           {issue.theme === 'parenting' && parentingGuide ? (
             <ParentingGuideView guide={parentingGuide} />

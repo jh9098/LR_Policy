@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import IntensityBar from '../../components/IntensityBar.jsx';
 import SectionCard from '../../components/SectionCard.jsx';
+import AIThemeEditor from '../../components/admin/AIThemeEditor.jsx';
+import AIThemePreview from '../../components/admin/AIThemePreview.jsx';
 import LifestyleThemeEditor from '../../components/admin/LifestyleThemeEditor.jsx';
 import LifestyleThemePreview from '../../components/admin/LifestyleThemePreview.jsx';
 import ParentingThemeEditor from '../../components/admin/ParentingThemeEditor.jsx';
@@ -28,6 +30,7 @@ import { createIssue, createScheduledIssues } from '../../firebaseClient.js';
 import { getThemePrompt } from '../../constants/themePrompts.js';
 import { createFreshDraft, ensureThemeGuides } from '../../utils/emptyDraft.js';
 import {
+  createAiGuide,
   createHealthGuide,
   createLifestyleGuide,
   createParentingGuide,
@@ -596,6 +599,7 @@ function AdminNewPage() {
       const draft = {
         ...base,
         theme: nextTheme,
+        aiGuide: base.aiGuide ?? createAiGuide(),
         parentingGuide: base.parentingGuide ?? createParentingGuide(),
         healthGuide: base.healthGuide ?? createHealthGuide(),
         lifestyleGuide: base.lifestyleGuide ?? createLifestyleGuide(),
@@ -611,6 +615,10 @@ function AdminNewPage() {
       }
       return draft;
     });
+  };
+
+  const handleAiGuideChange = (nextGuide) => {
+    setIssueDraft((prev) => ({ ...prev, aiGuide: nextGuide }));
   };
 
   const handleParentingGuideChange = (nextGuide) => {
@@ -1218,6 +1226,10 @@ function AdminNewPage() {
             </div>
           </div>
 
+          {selectedTheme === 'ai' ? (
+            <AIThemeEditor guide={issueDraft.aiGuide} onChange={handleAiGuideChange} />
+          ) : null}
+
           {selectedTheme === 'parenting' ? (
             <ParentingThemeEditor
               guide={issueDraft.parentingGuide}
@@ -1658,6 +1670,10 @@ function AdminNewPage() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">핵심 bullet을 입력하면 여기에 표시됩니다.</p>
               )}
             </SectionCard>
+
+            {selectedTheme === 'ai' ? (
+              <AIThemePreview guide={issueDraft.aiGuide} />
+            ) : null}
 
             {selectedTheme === 'parenting' ? (
               <ParentingThemePreview guide={issueDraft.parentingGuide} />

@@ -11,7 +11,8 @@ const TONE = {
   sky: { btn: 'bg-sky-600 hover:bg-sky-700 focus-visible:ring-sky-400', ring: 'focus-visible:ring-sky-500' },
   indigo: { btn: 'bg-indigo-600 hover:bg-indigo-700 focus-visible:ring-indigo-400', ring: 'focus-visible:ring-indigo-500' },
   purple: { btn: 'bg-purple-600 hover:bg-purple-700 focus-visible:ring-purple-400', ring: 'focus-visible:ring-purple-500' },
-  slate: { btn: 'bg-slate-700 hover:bg-slate-800 focus-visible:ring-slate-400', ring: 'focus-visible:ring-slate-500' }
+  slate: { btn: 'bg-slate-700 hover:bg-slate-800 focus-visible:ring-slate-400', ring: 'focus-visible:ring-slate-500' },
+  cyan: { btn: 'bg-cyan-500 hover:bg-cyan-600 focus-visible:ring-cyan-400', ring: 'focus-visible:ring-cyan-500' }
 };
 
 function cls(base, extra) {
@@ -102,7 +103,7 @@ SimpleListEditor.propTypes = {
   addLabel: PropTypes.string,
   itemPlaceholder: PropTypes.string,
   // 선택: 테마 톤 (emerald/amber/violet/sky/indigo/purple/slate)
-  tone: PropTypes.oneOf(['emerald', 'amber', 'violet', 'sky', 'indigo', 'purple', 'slate'])
+  tone: PropTypes.oneOf(['emerald', 'amber', 'violet', 'sky', 'indigo', 'purple', 'slate', 'cyan'])
 };
 
 SimpleListEditor.defaultProps = {

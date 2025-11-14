@@ -23,6 +23,15 @@ export const DEFAULT_SECTION_TITLES = Object.freeze({
     relatedLinks: { title: '관련 링크' }
   },
   themes: {
+    ai: {
+      summaryCard: { title: '요약 카드', badge: '요약' },
+      background: { title: '배경 설명', badge: '배경' },
+      keyActionSteps: { title: '핵심 실행 단계', badge: '실행' },
+      impact: { title: '생활/업무 영향', badge: '영향' },
+      connectionGuides: { title: '연결 가이드', badge: '연결' },
+      categoryBlueprint: { title: '카테고리별 추천 구조', badge: '구조' },
+      subcategoryFocus: { title: '하위카테고리 포커스', badge: '포커스' }
+    },
     parenting: {
       overview: { title: '육아 테마 개요' },
       generalTips: { title: '전체 공통 팁', badge: 'TIP' },
@@ -123,6 +132,83 @@ export const SECTION_TITLE_FIELD_GROUPS = [
         path: 'general.relatedLinks.title',
         label: '관련 링크 섹션 제목',
         placeholder: DEFAULT_SECTION_TITLES.general.relatedLinks.title
+      }
+    ]
+  },
+  {
+    id: 'ai',
+    label: `${THEME_LABEL_MAP.ai || 'AI 정보'} 테마`,
+    description: 'AI 테마 전용 카드 제목과 배지 문구입니다.',
+    fields: [
+      {
+        path: 'themes.ai.summaryCard.title',
+        label: '요약 카드 제목',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.summaryCard.title
+      },
+      {
+        path: 'themes.ai.summaryCard.badge',
+        label: '요약 카드 배지',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.summaryCard.badge
+      },
+      {
+        path: 'themes.ai.background.title',
+        label: '배경 설명 제목',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.background.title
+      },
+      {
+        path: 'themes.ai.background.badge',
+        label: '배경 설명 배지',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.background.badge
+      },
+      {
+        path: 'themes.ai.keyActionSteps.title',
+        label: '핵심 실행 단계 제목',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.keyActionSteps.title
+      },
+      {
+        path: 'themes.ai.keyActionSteps.badge',
+        label: '핵심 실행 단계 배지',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.keyActionSteps.badge
+      },
+      {
+        path: 'themes.ai.impact.title',
+        label: '생활/업무 영향 제목',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.impact.title
+      },
+      {
+        path: 'themes.ai.impact.badge',
+        label: '생활/업무 영향 배지',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.impact.badge
+      },
+      {
+        path: 'themes.ai.connectionGuides.title',
+        label: '연결 가이드 제목',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.connectionGuides.title
+      },
+      {
+        path: 'themes.ai.connectionGuides.badge',
+        label: '연결 가이드 배지',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.connectionGuides.badge
+      },
+      {
+        path: 'themes.ai.categoryBlueprint.title',
+        label: '카테고리별 추천 구조 제목',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.categoryBlueprint.title
+      },
+      {
+        path: 'themes.ai.categoryBlueprint.badge',
+        label: '카테고리별 추천 구조 배지',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.categoryBlueprint.badge
+      },
+      {
+        path: 'themes.ai.subcategoryFocus.title',
+        label: '하위카테고리 포커스 제목',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.subcategoryFocus.title
+      },
+      {
+        path: 'themes.ai.subcategoryFocus.badge',
+        label: '하위카테고리 포커스 배지',
+        placeholder: DEFAULT_SECTION_TITLES.themes.ai.subcategoryFocus.badge
       }
     ]
   },
